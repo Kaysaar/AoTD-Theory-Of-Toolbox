@@ -1,0 +1,21 @@
+package data.kaysaar.aotd.tot.scripts.coreui.listeners;
+
+import com.fs.starfarer.api.campaign.econ.MarketAPI;
+import com.fs.starfarer.api.ui.UIPanelAPI;
+
+
+public final class IndustryPanelContextUI {
+    public final UIPanelAPI panelOfOtherInfo;
+    public final UIPanelAPI mainColonyPanel;
+    public final MarketAPI market;
+    public final UIPanelAPI stabAccessPanel;
+    public final boolean grandColoniesLayout;
+
+    public IndustryPanelContextUI(MarketAPI market, UIPanelAPI panelOfOtherInfo, UIPanelAPI mainColonyPanel, boolean grandColoniesLayout, UIPanelAPI stabAccessPanel) {
+        this.market = market;
+        this.stabAccessPanel = stabAccessPanel;
+        this.panelOfOtherInfo = panelOfOtherInfo;
+        this.mainColonyPanel = mainColonyPanel;
+        this.grandColoniesLayout = grandColoniesLayout;
+    }
+}

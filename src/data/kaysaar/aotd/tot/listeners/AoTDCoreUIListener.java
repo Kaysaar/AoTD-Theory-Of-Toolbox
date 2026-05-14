@@ -1,0 +1,37 @@
+package data.kaysaar.aotd.tot.listeners;
+
+import com.fs.starfarer.api.EveryFrameScript;
+import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.CoreUITabId;
+import com.fs.starfarer.api.campaign.listeners.CoreUITabListener;
+import com.fs.starfarer.api.util.IntervalUtil;
+
+public class AoTDCoreUIListener implements CoreUITabListener, EveryFrameScript {
+    public static boolean isInCore = false;
+    public float frames = 0;
+    public IntervalUtil util = new IntervalUtil(1f,1f);
+    @Override
+    public void reportAboutToOpenCoreTab(CoreUITabId tab, Object param) {
+        isInCore = true;
+    }
+
+    @Override
+    public boolean isDone() {
+        return false;
+    }
+
+    @Override
+    public boolean runWhilePaused() {
+        return false;
+    }
+
+    @Override
+    public void advance(float amount) {
+        util.advance(amount);
+        if(util.intervalElapsed()){
+            isInCore = Global.getSector().getCampaignUI().getCurrentCoreTab() != null;
+
+        }
+
+    }
+}
