@@ -1,10 +1,7 @@
 package data.kaysaar.aotd.tot.scripts.economy;
 
 import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
-import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
-import com.fs.starfarer.api.campaign.econ.EconomyAPI;
-import com.fs.starfarer.api.campaign.econ.MarketAPI;
+import com.fs.starfarer.api.campaign.econ.*;
 import com.fs.starfarer.api.impl.campaign.econ.CommodityIconCounts;
 import com.fs.starfarer.campaign.econ.CommodityOnMarket;
 import com.fs.starfarer.campaign.econ.Economy;
@@ -54,7 +51,11 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             MarketAPI market = markets.get(marketIndex);
             pruneCommoditiesThatMightAppear((Market) market);
             market.reapplyConditions();
-            market.reapplyIndustries();
+            for (Industry industry : market.getIndustries()) {
+                if(!AoTDIndustryData.getInstance(industry.getMarket()).isPending(industry.getId())){
+                    industry.reapply();;
+                }
+            }
             marketIndex++;
             ReflectionUtilis.setPrivateVariableFromSuperclass("marketIndex",this,marketIndex);
             return;

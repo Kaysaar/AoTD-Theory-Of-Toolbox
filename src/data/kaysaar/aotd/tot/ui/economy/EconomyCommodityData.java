@@ -38,6 +38,7 @@ public class EconomyCommodityData implements ExtendedUIPanelPlugin {
     GraphPeriodChosenButton btGraph;
     String currFactionId = Factions.PLAYER;
     int months = 1;
+    boolean needsReplacement  =false;
 
     public void setMonths(int months) {
 
@@ -95,8 +96,10 @@ public class EconomyCommodityData implements ExtendedUIPanelPlugin {
         }
         table.currCommodityChecked = currCommodityId;
         //Remember to add 3 buttons later under table
+        needsReplacement = true;
         createUIDetailed();
         contentPanel.addComponent(table.mainPanel).inTL(0, 0);
+
         mainPanel.addComponent(contentPanel).inTL(0, 0);
 
     }
@@ -110,8 +113,14 @@ public class EconomyCommodityData implements ExtendedUIPanelPlugin {
         if (detailedCommodityPanel == null && currCommodityId != null) {
             detailedCommodityPanel = new AoTDDetailedCommodityPanel(widthOfSecondSection, contentPanel.getPosition().getHeight() - 75, currCommodityId, currFactionId);
             contentPanel.addComponent(detailedCommodityPanel.getMainPanel()).inTL(AoTDCommodityProductionDataTable.getWidth() + 10, -1);
+            needsReplacement = false;
         } else if (currCommodityId != null) {
             detailedCommodityPanel.setCurrCommodityId(currCommodityId);
+            if(needsReplacement){
+                needsReplacement = false;
+                contentPanel.addComponent(detailedCommodityPanel.getMainPanel()).inTL(AoTDCommodityProductionDataTable.getWidth() + 10, -1);
+
+            }
         }
 
     }

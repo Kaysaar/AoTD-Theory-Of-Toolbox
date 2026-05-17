@@ -6,6 +6,7 @@ import com.fs.starfarer.api.campaign.econ.Industry;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDIndustryData;
 import data.kaysaar.aotd.tot.ui.commoditypanel.AoTDCommodityShortPanelCombined;
 
 import java.util.Iterator;
@@ -60,7 +61,11 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
         TooltipMakerAPI tooltipHeight = mainPanel.createUIElement(mainPanel.getPosition().getWidth(), 10000, false);
         TooltipMakerAPI firstHalf = mainPanel.createUIElement(mainPanel.getPosition().getWidth(), 100000, true);
         ind.getMarket().reapplyConditions();
-        ind.getMarket().reapplyIndustries();
+        for (Industry industry : ind.getMarket().getIndustries()) {
+            if(!AoTDIndustryData.getInstance(industry.getMarket()).isPending(industry.getId())){
+                industry.reapply();
+            }
+        }
         ind.createTooltip(mode, firstHalf, expanded);
         boolean needToAddIndustry = !ind.getMarket().hasIndustry(ind.getId());
         //addDialogMode = true;

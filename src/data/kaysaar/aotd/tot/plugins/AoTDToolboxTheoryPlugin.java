@@ -40,6 +40,7 @@ import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
 import data.kaysaar.aotd.tot.scripts.coreui.IndustryTooltipPlacer;
 import data.kaysaar.aotd.tot.scripts.coreui.listeners.ColonyUIListener;
 import data.kaysaar.aotd.tot.scripts.coreui.listeners.MarketContextListenerInjector;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDIndustryData;
 import data.kaysaar.aotd.tot.scripts.submarket.aotd.AoTDBlackMarketPlugin;
 import data.kaysaar.aotd.tot.scripts.submarket.aotd.AoTDLocalResourcesSubmarketPlugin;
 import data.kaysaar.aotd.tot.scripts.submarket.aotd.AoTDMilitarySubmarketPlugin;
@@ -283,7 +284,11 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         if(newGame){
             for (MarketAPI marketAPI : Global.getSector().getEconomy().getMarketsCopy()) {
                 marketAPI.reapplyConditions();
-                marketAPI.reapplyIndustries();
+                for (Industry industry : marketAPI.getIndustries()) {
+                    if(!AoTDIndustryData.getInstance(industry.getMarket()).isPending(industry.getId())){
+                        industry.reapply();
+                    }
+                }
             }
         }
         Global.getSector().getListenerManager().addListener(new BMOWonderBlockerListener(),true);
