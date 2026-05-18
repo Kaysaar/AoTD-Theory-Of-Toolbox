@@ -117,34 +117,12 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         CivilianSupplyProgram creatorAPI4 = new CivilianSupplyProgram();
         AoTDPlayerContractCreatorManager.addCreator(creatorAPI4.getBaseIdForContract(),creatorAPI4);
 
-        if(Global.getSettings().getGameVersion().contains("0.98a")){
-            if(!Global.getSettings().getGameVersion().equals("0.98a-RC8")){
-                throw  new RuntimeException("AoTD Theory of Toolbox: This version of mod for 0.98a game can only be run at exactly 0.98a-RC8 version ");
-            }
-            MarketAPI test = Global.getFactory().createMarket("test","test",3);
-            test.addIndustry(Industries.HEAVYBATTERIES);
-            test.addIndustry(Industries.REFINING);
 
-            Industry first =test.getIndustry( getIndustryStringBasedOnOrder(0,Industries.HEAVYBATTERIES,Industries.REFINING));
-            Industry second =test.getIndustry( getIndustryStringBasedOnOrder(1,Industries.HEAVYBATTERIES,Industries.REFINING));
-
-
-            first.getDemand(Commodities.ALPHA_CORE).getQuantity().modifyFlat("test",20);
-            second.getDemand(Commodities.ALPHA_CORE).getQuantity().modifyFlat("test",40);
-            test.getCommodityData(Commodities.ALPHA_CORE).getAvailableStat().modifyFlat("test",21);
-
-            int firstDeficit = first.getMaxDeficit(Commodities.ALPHA_CORE).two;
-            int secondDeficit = second.getMaxDeficit(Commodities.ALPHA_CORE).two;
-
-            if(secondDeficit!=39){
-                throw new RuntimeException("WARNING : AoTD Theory of Toolbox: Market Test Failed. You must replace the 'starfarer.api.jar' file within the game's core folder with a copy that is located in the AoTD-Theory of Toolbox mod folder named '0.98a/starfarer.api.jar'.\nYou only need to replace it once, and you won't need to replace it again when you disable the mod.");
-
-            }
-        }
 
 
 
     }
+
     public String getIndustryStringBasedOnOrder(int positionOnList, String... ids) {
         if (ids == null || ids.length == 0) return null;
 
@@ -171,6 +149,30 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
 
     @Override
     public void onAboutToStartGeneratingCodex() {
+        if(Global.getSettings().getGameVersion().contains("0.98a")){
+            if(!Global.getSettings().getGameVersion().equals("0.98a-RC8")){
+                throw  new RuntimeException("AoTD Theory of Toolbox: This version of mod for 0.98a game can only be run at exactly 0.98a-RC8 version ");
+            }
+            MarketAPI test = Global.getFactory().createMarket("test","test",3);
+            test.addIndustry(Industries.HEAVYBATTERIES);
+            test.addIndustry(Industries.REFINING);
+
+            Industry first =test.getIndustry( getIndustryStringBasedOnOrder(0,Industries.HEAVYBATTERIES,Industries.REFINING));
+            Industry second =test.getIndustry( getIndustryStringBasedOnOrder(1,Industries.HEAVYBATTERIES,Industries.REFINING));
+
+
+            first.getDemand(Commodities.ALPHA_CORE).getQuantity().modifyFlat("test",20);
+            second.getDemand(Commodities.ALPHA_CORE).getQuantity().modifyFlat("test",40);
+            test.getCommodityData(Commodities.ALPHA_CORE).getAvailableStat().modifyFlat("test",21);
+
+            int firstDeficit = first.getMaxDeficit(Commodities.ALPHA_CORE).two;
+            int secondDeficit = second.getMaxDeficit(Commodities.ALPHA_CORE).two;
+
+            if(secondDeficit!=39){
+                throw new RuntimeException("WARNING : AoTD Theory of Toolbox: Market Test Failed. You must replace the 'starfarer.api.jar' file within the game's core folder with a copy that is located in the AoTD-Theory of Toolbox mod folder named '0.98a/starfarer.api.jar'.\nYou only need to replace it once, and you won't need to replace it again when you disable the mod.");
+
+            }
+        }
         AoTDCommodityEconSpecManager.loadSpecs();
         Economy econ = (Economy) Global.getSector().getEconomy();
         ReflectionUtilis.setPrivateVariableFromSuperclass("economy", Global.getSector(), new AoTDEconomy(econ.isSimMode(), econ));
