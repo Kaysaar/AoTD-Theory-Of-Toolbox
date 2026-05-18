@@ -82,11 +82,20 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
         if (supply > 0) {
             tooltip.addPara("Current production of %s: %s.", 3f, Color.ORANGE, spec.getName(), Misc.getWithDGS(supply));
             tooltip.setBulletedListMode(BaseIntelPlugin.BULLET);
+            int unknown = 0;
             for (Industry industry : market.getIndustries()) {
                 int raw = com.getSupplyDemandData().getRawSupplyFromIndustry(industry);
+                if(industry.isHidden()){
+                    unknown+=raw;
+                    continue;
+                }
                 if (raw > 0) {
                     tooltip.addPara(industry.getCurrentName() + ": %s", 3f, Misc.getPositiveHighlightColor(), "+" + Misc.getWithDGS(raw));
                 }
+            }
+            if (unknown > 0) {
+                tooltip.addPara("No Data: %s", 3f, Misc.getPositiveHighlightColor(), "+" + Misc.getWithDGS(unknown));
+
             }
             tooltip.setBulletedListMode(null);
 
@@ -107,13 +116,21 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
         }
 
         if (demand > 0) {
+            int unknown = 0;
             tooltip.addPara("Current demand of %s: %s.", 3f, Color.ORANGE, spec.getName(), Misc.getWithDGS(demand));
             tooltip.setBulletedListMode(BaseIntelPlugin.BULLET);
             for (Industry industry : market.getIndustries()) {
                 int raw = com.getSupplyDemandData().getRawDemandFromIndustry(industry);
+                if(industry.isHidden()){
+                    unknown+=raw;
+                    continue;
+                }
                 if (raw > 0) {
                     tooltip.addPara(industry.getCurrentName() + " : %s", 3f, Misc.getNegativeHighlightColor(), "-" + Misc.getWithDGS(raw));
                 }
+            }
+            if (unknown > 0) {
+                tooltip.addPara("No Data: %s", 3f, Misc.getNegativeHighlightColor(), "-" + Misc.getWithDGS(unknown));
             }
             tooltip.setBulletedListMode(null);
 
