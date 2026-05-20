@@ -24,12 +24,11 @@ public class AoTDSupplyDemandData {
     }
 
     public transient AoTDCommodityEconSpec ecSpec;
-    public int supply, demand,available;
+    public int supply, demand, available;
     public MutableStatWithTempMods additionalProduction = new MutableStatWithTempMods(0f);
-    public MutableStatWithTempMods additionalDemand     = new MutableStatWithTempMods(0f);
-    public MutableStatWithTempMods additionalImport     = new MutableStatWithTempMods(0f);
-    public MutableStatWithTempMods additionalExport     = new MutableStatWithTempMods(0f);
-
+    public MutableStatWithTempMods additionalDemand = new MutableStatWithTempMods(0f);
+    public MutableStatWithTempMods additionalImport = new MutableStatWithTempMods(0f);
+    public MutableStatWithTempMods additionalExport = new MutableStatWithTempMods(0f);
 
 
     public AoTDCommodityEconSpec getEconSpec() {
@@ -38,15 +37,19 @@ public class AoTDSupplyDemandData {
         }
         return ecSpec;
     }
-    public int getExport(CommodityOnMarketAPI commodity){
-        return getTotalRawUnitsFromSupply()-getTotalRawUnitsFromDemand();
+
+    public int getExport(CommodityOnMarketAPI commodity) {
+        return getTotalRawUnitsFromSupply() - getTotalRawUnitsFromDemand();
     }
-    public int getImportsExcludingDeficits(){
+
+    public int getImportsExcludingDeficits() {
         return -getExportExcludingDeficit();
     }
-    public int getExportExcludingDeficit(){
-        return getTotalRawUnitsFromSupply()-getTotalRawUnitsFromDemand();
+
+    public int getExportExcludingDeficit() {
+        return getTotalRawUnitsFromSupply() - getTotalRawUnitsFromDemand();
     }
+
     public boolean doesHaveSupplyOrDemand() {
         int sup = getTotalRawUnitsFromSupply();
         int dem = getTotalRawUnitsFromDemand();
@@ -54,41 +57,54 @@ public class AoTDSupplyDemandData {
     }
 
     public void updateSupplyDemandData(MarketAPI market) {
-        demandUnitsFromIndustries.clear();
-        supplyUnitsFromIndustries.clear();
+        LinkedHashMap<String, MutableStat> demandUnitsFromIndustriesCopy = new LinkedHashMap<>();
+        LinkedHashMap<String, MutableStat> supplyUnitsFromIndustriesCopy = new LinkedHashMap<>();
+
+        try {
+            for (Industry industry : market.getIndustries()) {
+                demandUnitsFromIndustriesCopy.put(industry.getId(), industry.getDemand(commodityID).getQuantity());
+                supplyUnitsFromIndustriesCopy.put(industry.getId(), industry.getSupply(commodityID).getQuantity());
+
+            }
+        } catch (Exception e) {
+            return;
+        }
         supply = 0;
         demand = 0;
-        for (Industry industry : market.getIndustries()) {
-            demandUnitsFromIndustries.put(industry.getId(), industry.getDemand(commodityID).getQuantity());
-            supplyUnitsFromIndustries.put(industry.getId(), industry.getSupply(commodityID).getQuantity());
-
-        }
+        demandUnitsFromIndustries.clear();
+        supplyUnitsFromIndustries.clear();
+        demandUnitsFromIndustries.putAll(demandUnitsFromIndustriesCopy);
+        supplyUnitsFromIndustries.putAll(supplyUnitsFromIndustriesCopy);
         for (Map.Entry<String, MutableStat> entry : supplyUnitsFromIndustries.entrySet()) {
-            supply += getEconSpec().getCalculationScript().getRawUnitsFromSupply(entry.getValue(), null, commodityID,market.getIndustry(entry.getKey()));
+            supply += getEconSpec().getCalculationScript().getRawUnitsFromSupply(entry.getValue(), null, commodityID, market.getIndustry(entry.getKey()));
         }
         for (Map.Entry<String, MutableStat> entry : demandUnitsFromIndustries.entrySet()) {
-            demand += getEconSpec().getCalculationScript().getRawUnitsFromDemand(entry.getValue(), null, commodityID,market.getIndustry(entry.getKey()));
+            demand += getEconSpec().getCalculationScript().getRawUnitsFromDemand(entry.getValue(), null, commodityID, market.getIndustry(entry.getKey()));
         }
-        if(supply!=0||demand!=0){
+        if (supply != 0 || demand != 0) {
             AoTDTradeManager.getInstance().getPossibleCommoditiesDemandedOrSupplied().add(commodityID);
         }
     }
+
     public int getDemandExceptPendingIndustries(MarketAPI market) {
         int total = 0;
         for (Industry s : market.getIndustries()) {
-            if(!AoTDIndustryData.getInstance(market).isPending(s.getId())){
-                total += getEconSpec().getCalculationScript().getRawUnitsFromDemand(s.getDemand(commodityID).getQuantity(), null, commodityID,s);
+            if (!AoTDIndustryData.getInstance(market).isPending(s.getId())) {
+                total += getEconSpec().getCalculationScript().getRawUnitsFromDemand(s.getDemand(commodityID).getQuantity(), null, commodityID, s);
             }
         }
         return total;
     }
+
     public int getRawDemandFromIndustry(Industry industry) {
-        return getEconSpec().getCalculationScript().getRawUnitsFromDemand(industry.getDemand(commodityID).getQuantity(),null,commodityID,industry);
+        return getEconSpec().getCalculationScript().getRawUnitsFromDemand(industry.getDemand(commodityID).getQuantity(), null, commodityID, industry);
     }
+
     public int getRawSupplyFromIndustry(Industry industry) {
-        if(industry.isDisrupted())return 0;
-        return getEconSpec().getCalculationScript().getRawUnitsFromSupply(industry.getSupply(commodityID).getQuantity(),null,commodityID,industry);
+        if (industry.isDisrupted()) return 0;
+        return getEconSpec().getCalculationScript().getRawUnitsFromSupply(industry.getSupply(commodityID).getQuantity(), null, commodityID, industry);
     }
+
     public LinkedHashMap<String, MutableStat> getDemandUnitsFromIndustries() {
         return demandUnitsFromIndustries;
     }
@@ -104,13 +120,16 @@ public class AoTDSupplyDemandData {
     public int getTotalRawUnitsFromDemand() {
         return demand;
     }
+
     public int getRawNetExport() {
-        return getTotalRawUnitsFromSupply()-getTotalRawUnitsFromDemand();
+        return getTotalRawUnitsFromSupply() - getTotalRawUnitsFromDemand();
     }
-    public int getTotalExportTowardsOtherSources(){
+
+    public int getTotalExportTowardsOtherSources() {
         return additionalExport.getModifiedInt();
     }
-    public int getTotalImportFromOtherSources(){
+
+    public int getTotalImportFromOtherSources() {
         return additionalImport.getModifiedInt();
     }
 
@@ -129,7 +148,8 @@ public class AoTDSupplyDemandData {
     public MutableStatWithTempMods getAdditionalProduction() {
         return additionalProduction;
     }
-    public void advance(float days){
+
+    public void advance(float days) {
         additionalDemand.advance(days);
         additionalImport.advance(days);
         additionalExport.advance(days);
@@ -150,7 +170,7 @@ public class AoTDSupplyDemandData {
         }).toList()) {
 
             if (remainingCargo < 1) break;
-            float raw = getEconSpec().getCalculationScript().getRawUnitsFromDemand(industry.getDemand(commodityId).getQuantity(), market, commodityId,industry);
+            float raw = getEconSpec().getCalculationScript().getRawUnitsFromDemand(industry.getDemand(commodityId).getQuantity(), market, commodityId, industry);
             if (raw > remainingCargo) {
                 float filled = remainingCargo / raw;
                 int rem = Math.round(filled * industry.getDemand(commodityId).getQuantity().getModifiedInt());
