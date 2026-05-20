@@ -72,7 +72,7 @@ public class AoTDToolboxFoodProd extends BaseMarketConditionPlugin {
                 industry.getSupply(Commodities.FOOD).getQuantity().unmodify(prodId);
                 int total = getSupplyFromIndustry(industry,Commodities.FOOD);
                 int newTotal = (int) Math.round(total*Math.pow(2,market.getSize()-1));
-                int toAdd = newTotal-total;
+                int toAdd =Math.max( newTotal-total,0);
                 industry.getSupply(Commodities.FOOD).getQuantity().modifyFlatAlways(prodId, toAdd,"AoTD corrector");
                 industry.getDemand(Commodities.HEAVY_MACHINERY).getQuantity().modifyMultAlways(prodId, Math.round(0.3f*Math.pow(2,market.getSize()-1)),"AoTD corrector");
             }
@@ -82,12 +82,25 @@ public class AoTDToolboxFoodProd extends BaseMarketConditionPlugin {
     public int getSupplyFromIndustry(Industry industry,String comId){
         MutableStat stat = industry.getSupply(comId).getQuantity();
         int total = 0;
+        float currPenalty = 1f;
         for (MutableStat.StatMod object : stat.getFlatMods().values()) {
-            if(object.getValue()>0){
+            if(object.getDesc()==null||!object.getDesc().contains("shortage")){
                 total += (int) object.getValue();
+            } else if (object.getDesc()!=null&&object.getDesc().contains("shortage")&&object.getDesc().contains("Heavy machinery")) {
+                int totalDemanded = industry.getDemand(Commodities.HEAVY_MACHINERY).getQuantity().getModifiedInt();
+                int missed = industry.getMaxDeficit(Commodities.HEAVY_MACHINERY).two;
+                int delivered = Math.max(0,totalDemanded-missed);
+                float ratio = (float) (delivered) /totalDemanded;
+                if(ratio<=currPenalty){
+                    currPenalty = ratio;
+                }
+
             }
         }
-        return total;
+        if(currPenalty<=0.2f){
+            currPenalty = 0.2f;
+        }
+        return Math.round(currPenalty*total);
 
     }
 
