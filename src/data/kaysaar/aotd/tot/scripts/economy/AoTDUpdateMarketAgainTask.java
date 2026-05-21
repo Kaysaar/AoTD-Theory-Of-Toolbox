@@ -1,59 +1,124 @@
 package data.kaysaar.aotd.tot.scripts.economy;
 
+import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.econ.Industry;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.campaign.econ.Economy;
-import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.reach.UpdateMarketsAgainTask;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class AoTDUpdateMarketAgainTask extends UpdateMarketsAgainTask {
-    private List<MarketAPI> markets = null;
-    private int marketIndex = 0;
 
-    public AoTDUpdateMarketAgainTask(Economy var1) {
-        super(var1);
-        this.markets = new ArrayList(var1.getMarkets());
+    private static final String INITIAL_STAGE_DESC = "AoTD economy initial stage";
+    private static final int REDUCTION = 10000;
+
+    private  List<MarketAPI> markets;
+    private final MarketAPI singleMarket;
+
+    private int marketIndex = 0;
+    private boolean done = false;
+
+    public AoTDUpdateMarketAgainTask(Economy economy) {
+        super(economy);
+        this.markets = new ArrayList<>(economy.getMarkets());
+        this.singleMarket = null;
     }
 
+    public AoTDUpdateMarketAgainTask(Economy economy, MarketAPI singleMarket) {
+        super(economy);
+        this.markets = null;
+        this.singleMarket = singleMarket;
+    }
+
+    @Override
     public void doNextBatch() {
-        if (!this.isDone()) {
-            if (this.marketIndex < this.markets.size()) {
-                MarketAPI var1 = (MarketAPI) this.markets.get(this.marketIndex);
-                var1.reapplyConditions();
-                AoTDIndustryData data = AoTDIndustryData.getInstance(var1);
-                data.checkForNewIndustries(var1);
-                for (Industry industry : var1.getIndustries()) {
-                    if (data.isPending(industry.getId())) {
-                        industry.getSupplyBonusFromOther().modifyFlat(AoTDIndustryData.source, -getReduction(), "AoTD economy inital stage");
-                        industry.getDemandReductionFromOther().modifyFlat(AoTDIndustryData.source, getReduction(), "AoTD economy inital stage");
-                        industry.apply();
-                        industry.unapply();
-                    }
-                }
-                for (Industry industry : var1.getIndustries()) {
-                    if (!data.isPending(industry.getId())) {
-                        industry.getSupplyBonusFromOther().unmodifyFlat(AoTDIndustryData.source);
-                        industry.getDemandReductionFromOther().unmodifyFlat(AoTDIndustryData.source);
-                        industry.unapply();
-                        industry.apply();
-                    }
-                }
+        if (isDone()) {
+            return;
+        }
 
-//                AoTDEconomy.pruneCommoditiesThatMightAppear((Market) var1);
-                ++this.marketIndex;
-            }
+        /*
+         * Single-market mode.
+         *
+         * The old version processed the selected market, then continued into the
+         * normal all-market branch because it did not return and never set runOnce.
+         */
+        if (singleMarket != null) {
+            processMarket(singleMarket);
+            done = true;
+            return;
+        } else if (markets==null) {
+            markets = Global.getSector().getEconomy().getMarketsCopy();
+        }
 
+        if (marketIndex >= markets.size()) {
+            done = true;
+            return;
+        }
+
+        processMarket(markets.get(marketIndex));
+        marketIndex++;
+
+        if (marketIndex >= markets.size()) {
+            done = true;
         }
     }
 
-    public static int getReduction() {
-        return 10000;
+    private static void processMarket(MarketAPI market) {
+        market.reapplyConditions();
+
+        AoTDIndustryData data = AoTDIndustryData.getInstance(market);
+        data.checkForNewIndustries(market);
+
+        for (Industry industry : market.getIndustries()) {
+            if (data.isPending(industry.getId())) {
+                applyPendingIndustrySuppression(industry);
+            } else {
+                restoreIndustry(industry);
+            }
+        }
+
+//        AoTDEconomy.pruneCommoditiesThatMightAppear((Market) market);
     }
 
+    private static void applyPendingIndustrySuppression(Industry industry) {
+        industry.getSupplyBonusFromOther().modifyFlat(
+                AoTDIndustryData.source,
+                -getReduction(),
+                INITIAL_STAGE_DESC
+        );
+
+        industry.getDemandReductionFromOther().modifyFlat(
+                AoTDIndustryData.source,
+                getReduction(),
+                INITIAL_STAGE_DESC
+        );
+
+        /*
+         * Keep the original order for pending industries.
+         */
+        industry.apply();
+        industry.unapply();
+    }
+
+    private static void restoreIndustry(Industry industry) {
+        industry.getSupplyBonusFromOther().unmodifyFlat(AoTDIndustryData.source);
+        industry.getDemandReductionFromOther().unmodifyFlat(AoTDIndustryData.source);
+
+        /*
+         * Keep the original order for active industries.
+         */
+        industry.unapply();
+        industry.apply();
+    }
+
+    public static int getReduction() {
+        return REDUCTION;
+    }
+
+    @Override
     public boolean isDone() {
-        return this.marketIndex >= this.markets.size();
+        return done;
     }
 }

@@ -18,26 +18,46 @@ public class AoTDReachEconomy extends ReachEconomy {
     @Override
     public void nextStep(MainWorkTask.EconWorkParams econWorkParams) {
         List<MarketAPI> markets = this.getMarkets();
-        Iterator var3 = (new ArrayList(markets)).iterator();
 
-        while(var3.hasNext()) {
-            MarketAPI var2 = (MarketAPI)var3.next();
-            PersonAPI var4 = var2.getAdmin();
+
+        if(Global.getSector().getCurrentlyOpenMarket()!=null){
+            MarketAPI market = Global.getSector().getCurrentlyOpenMarket();
+            PersonAPI var4 = market.getAdmin();
             var4.getStats().refreshCharacterStatsEffects();
-            var4.getStats().refreshGovernedOutpostEffects(var2);
+            var4.getStats().refreshGovernedOutpostEffects(market);
+
+            MainWorkTask2 var5 = new AoTdMainWorkTask2(markets, this, econWorkParams,market);
+
+            while(!((MultiFrameTask)var5).isDone()) {
+                ((MultiFrameTask)var5).doNextBatch();
+            }
+            AoTDUpdateMarketAgainTask var6 = new AoTDUpdateMarketAgainTask((Economy) Global.getSector().getEconomy(),market);
+
+            while(!((MultiFrameTask)var6).isDone()) {
+                ((MultiFrameTask)var6).doNextBatch();
+            }
+        }
+        else{
+            Iterator var3 = (new ArrayList(markets)).iterator();
+            while(var3.hasNext()) {
+                MarketAPI var2 = (MarketAPI)var3.next();
+                PersonAPI var4 = var2.getAdmin();
+                var4.getStats().refreshCharacterStatsEffects();
+                var4.getStats().refreshGovernedOutpostEffects(var2);
+            }
+            MainWorkTask2 var5 = new AoTdMainWorkTask2(markets, this, econWorkParams);
+
+            while(!((MultiFrameTask)var5).isDone()) {
+                ((MultiFrameTask)var5).doNextBatch();
+            }
+            AoTDUpdateMarketAgainTask var6 = new AoTDUpdateMarketAgainTask((Economy) Global.getSector().getEconomy());
+
+            while(!((MultiFrameTask)var6).isDone()) {
+                ((MultiFrameTask)var6).doNextBatch();
+            }
+
         }
 
-        MainWorkTask2 var5 = new AoTdMainWorkTask2(markets, this, econWorkParams);
-
-        while(!((MultiFrameTask)var5).isDone()) {
-            ((MultiFrameTask)var5).doNextBatch();
-        }
-
-        AoTDUpdateMarketAgainTask var6 = new AoTDUpdateMarketAgainTask((Economy) Global.getSector().getEconomy());
-
-        while(!((MultiFrameTask)var6).isDone()) {
-            ((MultiFrameTask)var6).doNextBatch();
-        }
 
         if (econWorkParams.withImmigration) {
             ImmigrationTask var7 = new ImmigrationTask(markets, this, !econWorkParams.forceNonUIStep);
@@ -50,6 +70,7 @@ public class AoTDReachEconomy extends ReachEconomy {
         while(!((MultiFrameTask)tradeTask).isDone()) {
             ((MultiFrameTask)tradeTask).doNextBatch();
         }
+
         FinishEconomyUpdateTask var8 = new AoTDFinishEconomyUpdateTask((Economy)Global.getSector().getEconomy());
 
         while(!((MultiFrameTask)var8).isDone()) {

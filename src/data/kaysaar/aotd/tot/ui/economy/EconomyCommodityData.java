@@ -71,7 +71,7 @@ public class EconomyCommodityData implements ExtendedUIPanelPlugin {
         return mainPanel;
     }
 
-    public float widthOfSecondSection = 505;
+    public float widthOfSecondSection = 400;
 
 
     @Override
