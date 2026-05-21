@@ -20,7 +20,7 @@ import java.util.List;
 public class AoTDCommodityShortPanelCombined implements ExtendedUIPanelPlugin {
 
     private final CustomPanelAPI mainPanel;
-
+    boolean contractMet = true;
     @Override
     public CustomPanelAPI getMainPanel() {
         return mainPanel;

@@ -4,6 +4,7 @@ import ashlib.data.plugins.ui.models.DropDownButton;
 import ashlib.data.plugins.ui.plugins.UITableImpl;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.FactionAPI;
+import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.util.Misc;
 
 public class AoTDCommodityProductionDropDownButton extends DropDownButton {
@@ -15,6 +16,9 @@ public class AoTDCommodityProductionDropDownButton extends DropDownButton {
         this.factionId = factionId;
         this.commodityId = commodityId;
         this.months = months;
+    }
+    CommoditySpecAPI getSpec(){
+        return Global.getSettings().getCommoditySpec(commodityId);
     }
 
     @Override

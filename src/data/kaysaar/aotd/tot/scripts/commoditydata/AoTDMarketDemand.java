@@ -16,12 +16,11 @@ public class AoTDMarketDemand extends MarketDemand {
         super(market, s);
         this.market = market;
         this.demandClass = s;
-        ReflectionUtilis.setPrivateVariableFromSuperclass("demand", this,new MutableStat(0f));
-
-
+        ReflectionUtilis.setPrivateVariableFromSuperclass("demand", this, new MutableStat(0f));
     }
-    Object readResolve(){
-        ReflectionUtilis.setPrivateVariableFromSuperclass("baseCommodity", this,Global.getSettings().getCommoditySpec(demandClass));
+
+    Object readResolve() {
+        ReflectionUtilis.setPrivateVariableFromSuperclass("baseCommodity", this, Global.getSettings().getCommoditySpec(demandClass));
         return this;
     }
 
@@ -36,34 +35,29 @@ public class AoTDMarketDemand extends MarketDemand {
 
     @Override
     public float getStockpileUtility(boolean includeTradeImpact) {
-        float totalStock = 0f;
-        float totalTrade = 0f;
+        float totalStockpileUtility = 0f;
+        float totalTradeUtility = 0f;
 
         for (CommodityOnMarket com : AoTdMainWorkTask2.getCommoditiesWithSameDemandClass(demandClass, market)) {
-            if(com instanceof AoTDCommodityOnMarket commodity){
-                totalStock += commodity.getStocks();
+            if (com instanceof AoTDCommodityOnMarket commodity) {
+                /*
+                 * AoTD pricing uses custom stocks as the stockpile utility source.
+                 *
+                 * This must match AoTdMainWorkTask2.getAoTDClassStockpileUtility().
+                 */
+                totalStockpileUtility += Math.max(0f, commodity.getStocks());
+            } else {
+                totalStockpileUtility += Math.max(0f, com.getStockpile());
             }
-            else{
-                totalStock += com.getStockpile();
-            }
-
 
             if (includeTradeImpact) {
-                totalTrade +=
-                        com.getTradeMod().getModifiedValue() +
-                                com.getTradeModPlus().getModifiedValue() +
-                                com.getTradeModMinus().getModifiedValue();
+                totalTradeUtility +=
+                        com.getTradeMod().getModifiedValue()
+                                + com.getTradeModPlus().getModifiedValue()
+                                + com.getTradeModMinus().getModifiedValue();
             }
         }
 
-        float demand = getDemand().getModifiedInt();
-        float availableAboveDemand = (totalStock + totalTrade);
-
-        return availableAboveDemand;
+        return Math.max(0f, totalStockpileUtility + totalTradeUtility);
     }
-
-
-
-
-
 }

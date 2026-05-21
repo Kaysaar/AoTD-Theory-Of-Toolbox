@@ -48,10 +48,10 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
     @Override
     public void updateCalc() {
         CommoditySpecAPI spec = getCommoditySpec();
-        getDemandPrice().setBasePrice(spec.getBasePrice() / spec.getUtility());
+        getDemandPrice().setBasePrice(spec.getBasePrice());
         getDemandPrice().setVariability(spec.getPriceVariability());
         getDemandPrice().setDemand(getDemand().getDemandValue());
-        getSupplyPrice().setBasePrice(spec.getBasePrice() / spec.getUtility());
+        getSupplyPrice().setBasePrice(spec.getBasePrice());
         getSupplyPrice().setVariability(spec.getPriceVariability());
         getSupplyPrice().setDemand(getDemand().getDemandValue() + getGreed().getModifiedInt());
     }

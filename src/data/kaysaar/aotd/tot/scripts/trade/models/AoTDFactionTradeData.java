@@ -219,73 +219,101 @@ public class AoTDFactionTradeData {
      * ALSO: if this is player faction, it invalidates and (optionally) precomputes contract predictions,
      * because remainingNet is what contracts draw from.
      */
+    private static final java.util.Comparator<MarketAmount> MARKET_AMOUNT_WEIGHT_DESC =
+            (a, b) -> Float.compare(b.weight, a.weight);
     public void computeInternalTrade() {
+        if (tradeData.isEmpty()) return;
+
+        ArrayList<AoTDMarketData> eligibleMarkets = new ArrayList<>(tradeData.size());
+
+        var economy = Global.getSector().getEconomy();
+
         for (AoTDMarketData md : tradeData.values()) {
             md.resetInternalResults();
+
+            if (md.netProductionValues.isEmpty()) continue;
+
+            MarketAPI market = economy.getMarket(md.marketId);
+            if (market == null) continue;
+            if (!market.hasSpaceport()) continue;
+            if (market.getAccessibilityMod().computeEffective(0f) <= 0f) continue;
+
+            eligibleMarkets.add(md);
+        }
+
+        if (eligibleMarkets.size() <= 1) {
+            refreshContractPredictionsIfPlayerFaction();
+            return;
         }
 
         LinkedHashMap<String, CommodityBucket> buckets = new LinkedHashMap<>();
 
-        for (AoTDMarketData md : tradeData.values()) {
-            for (Map.Entry<String, Integer> e : md.netProductionValues.entrySet()) {
-                String commodityId = e.getKey();
-                int net = e.getValue();
+        for (AoTDMarketData md : eligibleMarkets) {
+            for (Map.Entry<String, Integer> entry : md.netProductionValues.entrySet()) {
+                int net = entry.getValue();
                 if (net == 0) continue;
-                MarketAPI market = Global.getSector().getEconomy().getMarket(md.marketId);
-                if(market==null)continue;
-                if(!market.hasSpaceport()||market.getAccessibilityMod().computeEffective(0f)<=0f)continue;
-                CommodityBucket b = buckets.computeIfAbsent(commodityId, k -> new CommodityBucket());
+
+                CommodityBucket bucket = buckets.computeIfAbsent(entry.getKey(), id -> new CommodityBucket());
+
                 if (net > 0) {
-                    b.exporters.add(new MarketAmount(md, net, md.weight));
-                    b.totalSupply += net;
+                    bucket.exporters.add(new MarketAmount(md, net, md.weight));
+                    bucket.totalSupply += net;
                 } else {
                     int need = -net;
-                    b.importers.add(new MarketAmount(md, need, md.weight));
-                    b.totalNeed += need;
+                    bucket.importers.add(new MarketAmount(md, need, md.weight));
+                    bucket.totalNeed += need;
                 }
             }
         }
 
         for (Map.Entry<String, CommodityBucket> entry : buckets.entrySet()) {
+            CommodityBucket bucket = entry.getValue();
+
+            if (bucket.totalSupply <= 0 || bucket.totalNeed <= 0) continue;
+
+            ArrayList<MarketAmount> exporters = bucket.exporters;
+            ArrayList<MarketAmount> importers = bucket.importers;
+
+            if (exporters.size() > 1) exporters.sort(MARKET_AMOUNT_WEIGHT_DESC);
+            if (importers.size() > 1) importers.sort(MARKET_AMOUNT_WEIGHT_DESC);
+
             String commodityId = entry.getKey();
-            CommodityBucket b = entry.getValue();
 
-            if (b.totalSupply <= 0 || b.totalNeed <= 0) continue;
+            int exporterIndex = 0;
+            int importerIndex = 0;
 
-            b.exporters.sort((a, c) -> Float.compare(c.weight, a.weight));
-            b.importers.sort((a, c) -> Float.compare(c.weight, a.weight));
+            while (exporterIndex < exporters.size() && importerIndex < importers.size()) {
+                MarketAmount exporter = exporters.get(exporterIndex);
+                MarketAmount importer = importers.get(importerIndex);
 
-            int i = 0, j = 0;
-            while (i < b.exporters.size() && j < b.importers.size()) {
-                MarketAmount ex = b.exporters.get(i);
-                MarketAmount im = b.importers.get(j);
+                int moved = Math.min(exporter.amount, importer.amount);
+                if (moved <= 0) {
+                    if (exporter.amount <= 0) exporterIndex++;
+                    if (importer.amount <= 0) importerIndex++;
+                    continue;
+                }
 
-                if (ex.amount <= 0) { i++; continue; }
-                if (im.amount <= 0) { j++; continue; }
+                exporter.m.addInternalSent(commodityId, moved);
+                importer.m.addInternalReceived(commodityId, moved);
 
-                int moved = Math.min(ex.amount, im.amount);
+                exporter.amount -= moved;
+                importer.amount -= moved;
 
-                ex.m.addInternalSent(commodityId, moved);
-                im.m.addInternalReceived(commodityId, moved);
-
-                ex.amount -= moved;
-                im.amount -= moved;
-
-                if (ex.amount == 0) i++;
-                if (im.amount == 0) j++;
+                if (exporter.amount <= 0) exporterIndex++;
+                if (importer.amount <= 0) importerIndex++;
             }
         }
 
-        // ---- Hook: internal trade changes remainingNet, so contract predictions must refresh ----
-        String playerFactionId = Global.getSector().getPlayerFaction().getId();
-        if (playerFactionId != null && playerFactionId.equals(this.faction)) {
-            AoTDTradeContractManager mgr = AoTDTradeContractManager.getInstance();
-            mgr.invalidatePredictions();
-            // Optional: precompute now so UI never recomputes on hover
-            mgr.ensurePredictionsUpToDate();
-        }
+        refreshContractPredictionsIfPlayerFaction();
     }
+    private void refreshContractPredictionsIfPlayerFaction() {
+        String playerFactionId = Global.getSector().getPlayerFaction().getId();
+        if (!faction.equals(playerFactionId)) return;
 
+        AoTDTradeContractManager mgr = AoTDTradeContractManager.getInstance();
+        mgr.invalidatePredictions();
+        mgr.ensurePredictionsUpToDate();
+    }
     public LinkedHashMap<String, AoTDMarketData> getTradeData() {
         return tradeData;
     }

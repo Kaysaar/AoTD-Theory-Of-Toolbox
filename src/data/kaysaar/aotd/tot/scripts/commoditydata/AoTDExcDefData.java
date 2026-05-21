@@ -6,6 +6,7 @@ import com.fs.starfarer.api.combat.MutableStat;
 import com.fs.starfarer.api.combat.MutableStatWithTempMods;
 import com.fs.starfarer.api.impl.campaign.ids.Commodities;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
+import data.kaysaar.aotd.tot.scripts.economy.AoTdMainWorkTask2;
 import data.kaysaar.aotd.tot.scripts.submarket.aotd.AoTDLocalResourcesSubmarketPlugin;
 import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 import data.kaysaar.aotd.tot.strings.AoTDTradeTags;

@@ -80,16 +80,16 @@ public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
                 commsSell.sort(new Comparator<MarketAPI>() {
                     // $FF: renamed from: super (com.fs.starfarer.api.campaign.econ.MarketAPI, com.fs.starfarer.api.campaign.econ.MarketAPI) int
                     public int compare(MarketAPI var1x, MarketAPI var2x) {
-                        float var3x = var1x.getDemandPrice(commodityId, 500, true);
-                        float var4x = var2x.getDemandPrice(commodityId, 500, true);
+                        float var3x = var1x.getDemandPrice(commodityId, getQuantity(), true);
+                        float var4x = var2x.getDemandPrice(commodityId, getQuantity(), true);
                         return (int) Math.signum(var4x - var3x);
                     }
                 });
                 commsBuy.sort(new Comparator<MarketAPI>() {
                     // $FF: renamed from: super (com.fs.starfarer.api.campaign.econ.MarketAPI, com.fs.starfarer.api.campaign.econ.MarketAPI) int
                     public int compare(MarketAPI var1x, MarketAPI var2x) {
-                        float var3x = var1x.getSupplyPrice(commodityId, 500, true);
-                        float var4x = var2x.getSupplyPrice(commodityId, 500, true);
+                        float var3x = var1x.getSupplyPrice(commodityId, getQuantity(), true);
+                        float var4x = var2x.getSupplyPrice(commodityId, getQuantity(), true);
                         return (int) Math.signum(var3x - var4x);
                     }
                 });
@@ -118,7 +118,7 @@ public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
                         AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) bestMarket.getCommodityData(commodityId);
                         int deficit = com.getDeficitQuantity();
                         int demand = com.getSupplyDemandData().getTotalRawUnitsFromDemand();
-                        int price  = (int) bestMarket.getDemandPrice(commodityId,500,true)/500;
+                        int price  = (int) bestMarket.getDemandPrice(commodityId, getQuantity(),true)/ getQuantity();
                         String deficitString = "---";
                         Color deficitStrColor = Misc.getGrayColor();
                         if(deficit>0){
@@ -161,7 +161,7 @@ public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
                         AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) bestMarket.getCommodityData(commodityId);
                         int excess = com.getExcessQuantity();
                         int demand = AoTDOpenMarketPlugin.getStockPileToolbox(com);
-                        int price  = (int) bestMarket.getSupplyPrice(commodityId,500,true)/500;
+                        int price  = (int) bestMarket.getSupplyPrice(commodityId, getQuantity(),true)/ getQuantity();
                         String deficitString = "---";
                         Color deficitStrColor = Misc.getGrayColor();
                         if(excess>0){
@@ -218,6 +218,10 @@ public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
             }
         }
 
+    }
+
+    private static int getQuantity() {
+        return 500;
     }
 
     @Override

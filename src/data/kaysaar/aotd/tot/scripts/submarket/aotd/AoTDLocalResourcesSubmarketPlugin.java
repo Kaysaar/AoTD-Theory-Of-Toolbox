@@ -13,6 +13,7 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
+import data.kaysaar.aotd.tot.scripts.economy.AoTdMainWorkTask2;
 
 import java.util.*;
 
@@ -79,6 +80,7 @@ public class AoTDLocalResourcesSubmarketPlugin extends LocalResourcesSubmarketPl
                 left.removeCommodity(com.getId(), free);
                 cargo.removeCommodity(com.getId(), drawAmount);
                 commodity.getExcDefData().setDeficit((int) -drawAmount,commodity,30,"aotd_shortage_counter_"+Misc.genUID());
+
                 drawAmount -= free;
                 if (market.isPlayerOwned() && drawAmount > 0) {
                     MonthlyReport report = SharedData.getData().getCurrentReport();

@@ -78,6 +78,12 @@ public class AoTDEconomy extends Economy {
     }
 
     @Override
+    public void doubleStep() {
+        super.nextStep();
+    }
+
+
+    @Override
     public void removeMarket(MarketAPI marketAPI) {
         super.removeMarket(marketAPI);
         for (AoTDFactionTradeData value : AoTDTradeManager.getInstance().getAllFactionTradeData().values()) {
@@ -107,7 +113,7 @@ public class AoTDEconomy extends Economy {
     }
     @Override
     public void tripleStep() {
-        super.tripleStep();
+        super.nextStep();
     }
 
     @Override

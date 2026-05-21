@@ -87,6 +87,8 @@ public class AoTDCommodityProductionButton extends CustomButton {
         TooltipMakerAPI tlSupply,tlDemand,tlNet;
         tlSupply = container.createUIElement(AoTDCommodityProductionDataTable.widthMap.get("supply"),container.getPosition().getHeight(),false);
         tlDemand = container.createUIElement(AoTDCommodityProductionDataTable.widthMap.get("demand"),container.getPosition().getHeight(),false);
+        tlNet = container.createUIElement(AoTDCommodityProductionDataTable.widthMap.get("net"),container.getPosition().getHeight(),false);
+
         int supply = AoTDSectorProductionDemandDataUtils.getTotalProductionFromFaction(data.commodityId, data.factionId);
         int demand = AoTDSectorProductionDemandDataUtils.getTotalDemandFromFaction(data.commodityId, data.factionId);
         int net = supply-demand;
@@ -107,8 +109,10 @@ public class AoTDCommodityProductionButton extends CustomButton {
         }
         tlSupply.addPara(Misc.getWithDGS(supply),supplyC,opadText).setAlignment(Alignment.MID);
         tlDemand.addPara(Misc.getWithDGS(demand),demandC,opadText).setAlignment(Alignment.MID);
+        tlNet.addPara(Misc.getWithDGS(net),netC,opadText).setAlignment(Alignment.MID);
         container.addUIElement(tlSupply).inTL(AoTDCommodityProductionDataTable.getStartingX("supply"),0);
         container.addUIElement(tlDemand).inTL(AoTDCommodityProductionDataTable.getStartingX("demand"),0);
+        container.addUIElement(tlNet).inTL(AoTDCommodityProductionDataTable.getStartingX("net"),0);
     }
 
 }

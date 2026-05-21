@@ -86,6 +86,16 @@ public class DetailedTradeContractUI implements ExtendedUIPanelPlugin {
             tl.addSectionHeading("Required monthly resources to fulfill contract", Alignment.MID, 5f);
             AoTDCommodityShortPanelCombined combined = new AoTDCommodityShortPanelCombined(contentPanel.getPosition().getWidth() - 10, 3, contract, false, false);
             tl.addCustom(combined.getMainPanel(), 5f);
+            if(showcaseMode){
+                for (AoTDTradeContract.TradeContractData value : contract.getContractData().values()) {
+                    int def = AoTDSectorProductionDemandDataUtils.getTotalProductionFromFaction(value.getCommodityId(), Factions.PLAYER)-AoTDSectorProductionDemandDataUtils.getTotalDemandFromFactionTillContract(value.getCommodityId(),Factions.PLAYER,contract.getId());
+                    def*=-1;
+                    if(def>0){
+                        tl.addPara("Warning! Our faction does not produce enough resources to fulfill this contract!",Misc.getNegativeHighlightColor(),5f);
+                        break;
+                    }
+                }
+            }
             int am = contract.getPredictedMoneyWorthForMonth();
             Color c = Color.ORANGE;
             if (am < 0) {
