@@ -18,7 +18,7 @@ public class AoTDBaseDemSupCalc implements AoTDDemSupCalc{
         public int getRawUnitsFromSupply(MutableStat supply, MarketAPI market, String commodityID,Industry ind) {
             if(supply.getModifiedInt()<=0)return 0;
             MutableStat statSupply = supply.createCopy();
-
+            if(statSupply.getMult()==0)return 0;
             for (AoTDSupDemListener listener : AoTDCommodityEconSpecManager.getListeners()) {
                 listener.applyEffectsOnMutableStatCopySupply(statSupply,ind,commodityID);
             }
@@ -34,6 +34,7 @@ public class AoTDBaseDemSupCalc implements AoTDDemSupCalc{
                 listener.applyEffectsOnMutableStatCopyDemand(statDem,ind,commodityID);
             }
             int effective = statDem.getModifiedInt();
+            if(statDem.getMult()==0)return 0;
             for (Map.Entry<String, MutableStat.StatMod> entry : statDem.getFlatMods().entrySet()) {
                 if(entry.getValue().getValue()<0){
                     int howMuch = (int) -entry.getValue().getValue();

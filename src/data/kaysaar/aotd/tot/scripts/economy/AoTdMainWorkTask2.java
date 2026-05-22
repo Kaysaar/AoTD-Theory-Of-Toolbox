@@ -40,11 +40,11 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     private List<MarketAPI> aotdMarkets;
     private final MainWorkTask.EconWorkParams aotdParams;
 
-    private final ArrayList<MarketAPI> marketsForCurrentMode = new ArrayList<>();
-    private final ArrayList<String> cachedEconGroups = new ArrayList<>();
+    private ArrayList<MarketAPI> marketsForCurrentMode = new ArrayList<>();
+    private ArrayList<String> cachedEconGroups = new ArrayList<>();
 
 
-    private final Set<String> processedMarketDemandClasses = ConcurrentHashMap.newKeySet();
+    private Set<String> processedMarketDemandClasses = ConcurrentHashMap.newKeySet();
 
     private List<String> aotdCommodities;
     private int aotdIndex = 0;
@@ -61,7 +61,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     private boolean mtWorkersSubmitted = false;
     private boolean mtWorkersFinished = false;
     private boolean mtListenersNotified = false;
-    private final ArrayList<Future<?>> mtFutures = new ArrayList<>();
+    private ArrayList<Future<?>> mtFutures = new ArrayList<>();
 
     private static final String CORE_MOD_ID = "core";
     private static final String AOTD_PRICE_MOD_ID = "aotd_price_state";
@@ -122,8 +122,46 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         this.aotdCommodities.sort(Comparator.naturalOrder());
     }
 
+    /*
+     * Save compatibility:
+     *
+     * Old saves can contain an already-serialized instance of this task.
+     * XStream may restore fields without running constructors or field initializers,
+     * especially for fields added after the save was created.
+     *
+     * Therefore all mutable runtime containers must be non-final and repaired here.
+     * Do not make ArrayList/Set/Future containers final in this task.
+     */
+    private void ensureRuntimeCollections() {
+        if (aotdMarkets == null) {
+            aotdMarkets = Global.getSector().getEconomy().getMarketsCopy();
+        }
+
+        if (marketsForCurrentMode == null) {
+            marketsForCurrentMode = new ArrayList<>();
+        }
+
+        if (cachedEconGroups == null) {
+            cachedEconGroups = new ArrayList<>();
+        }
+
+        if (processedMarketDemandClasses == null) {
+            processedMarketDemandClasses = ConcurrentHashMap.newKeySet();
+        }
+
+        if (mtFutures == null) {
+            mtFutures = new ArrayList<>();
+        }
+
+        if (aotdCommodities == null) {
+            initCommodityList();
+        }
+    }
+
     @Override
     public void doNextBatch() {
+        ensureRuntimeCollections();
+
         if (ENABLE_MULTITHREADED_VERSION) {
             doMultithreadedNextBatch();
             return;
@@ -246,6 +284,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private void startTaskState() {
+        ensureRuntimeCollections();
         initCommodityList();
 
         if (aotdMarkets == null) {
@@ -279,6 +318,8 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private void rebuildCachedEconGroups() {
+        ensureRuntimeCollections();
+
         LinkedHashSet<String> groups = new LinkedHashSet<>();
 
         for (MarketAPI market : marketsForCurrentMode) {
@@ -316,6 +357,8 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private void submitMarketPriceWorkers() {
+        ensureRuntimeCollections();
+
         mtFutures.clear();
 
         if (aotdParams == null || !aotdParams.withStockpileUpdate) {
@@ -378,6 +421,8 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private void updateStockpileAndPriceOnce(Market market, CommoditySpecAPI commoditySpec) {
+        ensureRuntimeCollections();
+
         if (market == null || commoditySpec == null) {
             return;
         }

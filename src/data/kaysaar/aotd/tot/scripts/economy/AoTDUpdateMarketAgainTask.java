@@ -12,7 +12,7 @@ import java.util.List;
 
 public class AoTDUpdateMarketAgainTask extends UpdateMarketsAgainTask {
 
-    private static final String INITIAL_STAGE_DESC = "AoTD economy initial stage";
+    public static final String INITIAL_STAGE_DESC = "AoTD economy initial stage";
     private static final int REDUCTION = 10000;
 
     private  List<MarketAPI> markets;
@@ -83,7 +83,7 @@ public class AoTDUpdateMarketAgainTask extends UpdateMarketsAgainTask {
 //        AoTDEconomy.pruneCommoditiesThatMightAppear((Market) market);
     }
 
-    private static void applyPendingIndustrySuppression(Industry industry) {
+    public static void applyPendingIndustrySuppression(Industry industry) {
         industry.getSupplyBonusFromOther().modifyFlat(
                 AoTDIndustryData.source,
                 -getReduction(),
