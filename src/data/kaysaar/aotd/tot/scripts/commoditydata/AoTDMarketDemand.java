@@ -38,7 +38,7 @@ public class AoTDMarketDemand extends MarketDemand {
         float totalStockpileUtility = 0f;
         float totalTradeUtility = 0f;
 
-        for (CommodityOnMarket com : AoTdMainWorkTask2.getCommoditiesWithSameDemandClass(demandClass, market)) {
+        for (CommodityOnMarket com :market.getCommoditiesWithClass(getDemandClass())) {
             if (com instanceof AoTDCommodityOnMarket commodity) {
                 /*
                  * AoTD pricing uses custom stocks as the stockpile utility source.

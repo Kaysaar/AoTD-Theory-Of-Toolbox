@@ -89,7 +89,7 @@ public class AoTDConstructionSite extends BaseIndustry {
     public HashMap<String, Integer> getMonthlyResNeeded() {
         HashMap<String, Integer> commodities = new HashMap<>();
 
-        int months = Math.max(1, (int) Math.ceil(wonderAPI.getSpec().getBuildTime() / 30f));// prevent division by 0
+        int months = Math.max(1, (int) Math.ceil((wonderAPI.getSpec().getBuildTime()-daysPassedOnConstruction) / 30f));// prevent division by 0
         LinkedHashMap<String, Integer> required = new LinkedHashMap<>();
         for (Map.Entry<String, Integer> entry : wonderAPI.getDemandCostForRestoration().entrySet()) {
             required.put(entry.getKey(), AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(entry.getValue(), true, entry.getKey()));

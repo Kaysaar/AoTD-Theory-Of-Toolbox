@@ -33,10 +33,7 @@ public class AoTDToolboxPopAndInfra extends PopulationAndInfrastructure {
     @Override
     public void doPostSaveRestore() {
         super.doPostSaveRestore();
-        if (Global.LOADING_SAVE) {
-            AoTDEconomy.pruneCommoditiesThatMightAppear((Market) market);
-
-        }
+        AoTDEconomy.pruneCommoditiesThatMightAppear((Market) market);
     }
 
     public Pair<String,Integer> getDeficitAmountPenalty(String commodity) {

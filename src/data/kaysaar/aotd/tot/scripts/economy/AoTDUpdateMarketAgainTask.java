@@ -5,6 +5,7 @@ import com.fs.starfarer.api.campaign.econ.Industry;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.campaign.econ.Economy;
 import com.fs.starfarer.campaign.econ.reach.UpdateMarketsAgainTask;
+import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,7 +68,7 @@ public class AoTDUpdateMarketAgainTask extends UpdateMarketsAgainTask {
 
     private static void processMarket(MarketAPI market) {
         market.reapplyConditions();
-
+        AoTDTradeManager.getInstance().addMarket(market);
         AoTDIndustryData data = AoTDIndustryData.getInstance(market);
         data.checkForNewIndustries(market);
 

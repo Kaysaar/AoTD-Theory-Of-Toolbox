@@ -488,6 +488,9 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
         if (data.smuggling && tier > 4) {
             tier = 4;
         }
+        if(data.cargoDeliver.stream().anyMatch(x->x.getCommodity().getId().equals(Commodities.SHIPS)||x.getCommodity().getId().equals(Commodities.HAND_WEAPONS))){
+            tier = Math.min(data.size*3,8);
+        }
 
 //		data.smuggling = false;
 //		tier = 4;

@@ -6,11 +6,13 @@ import com.fs.starfarer.api.campaign.econ.MarketConditionAPI;
 import com.fs.starfarer.api.impl.campaign.econ.BaseMarketConditionPlugin;
 import com.fs.starfarer.api.impl.campaign.ids.Commodities;
 import com.fs.starfarer.campaign.econ.Market;
+import data.kaysaar.aotd.tot.plugins.AoTDToolboxTheoryPlugin;
 
 import java.util.ArrayList;
 
 import static data.kaysaar.aotd.tot.conditions.AoTDToolboxFoodProd.prodId;
 import static data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy.pruneCommoditiesThatMightAppear;
+import static data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy.runningPrePlayerEconomy;
 
 public class AoTDToolboxFoodProdCanceler extends BaseMarketConditionPlugin {
     //This should cover Unknown skies issues due to food prod being only exp scaling
@@ -31,7 +33,7 @@ public class AoTDToolboxFoodProdCanceler extends BaseMarketConditionPlugin {
             }
         }
 
-        if(Global.LOADING_SAVE){
+        if((Global.LOADING_SAVE&&AoTDToolboxTheoryPlugin.afterSaveState)||runningPrePlayerEconomy){
             pruneCommoditiesThatMightAppear((Market) market);
         }
         for (Industry industry : market.getIndustries()) {

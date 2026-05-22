@@ -14,6 +14,8 @@ import com.fs.starfarer.api.impl.campaign.ids.Industries;
 import com.fs.starfarer.api.impl.campaign.ids.Tags;
 import com.fs.starfarer.api.impl.campaign.intel.bar.events.BarEventManager;
 import com.fs.starfarer.api.impl.campaign.intel.bar.events.DeliveryBarEventCreator;
+import com.fs.starfarer.api.impl.campaign.intel.bar.events.ScientistAICoreBarEventCreator;
+import com.fs.starfarer.api.impl.campaign.intel.bar.events.SpecBarEventCreator;
 import com.fs.starfarer.api.impl.campaign.submarkets.BlackMarketPlugin;
 import com.fs.starfarer.api.impl.campaign.submarkets.LocalResourcesSubmarketPlugin;
 import com.fs.starfarer.api.impl.campaign.submarkets.MilitarySubmarketPlugin;
@@ -41,6 +43,7 @@ import data.kaysaar.aotd.tot.scripts.coreui.IndustryTooltipPlacer;
 import data.kaysaar.aotd.tot.scripts.coreui.listeners.ColonyUIListener;
 import data.kaysaar.aotd.tot.scripts.coreui.listeners.MarketContextListenerInjector;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDIndustryData;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDWorkerManager;
 import data.kaysaar.aotd.tot.scripts.submarket.aotd.AoTDBlackMarketPlugin;
 import data.kaysaar.aotd.tot.scripts.submarket.aotd.AoTDLocalResourcesSubmarketPlugin;
 import data.kaysaar.aotd.tot.scripts.submarket.aotd.AoTDMilitarySubmarketPlugin;
@@ -99,6 +102,8 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
 
 
     }
+    public static boolean isGeneratingSector = false;
+
 
     @Override
     public void onApplicationLoad() throws Exception {
@@ -275,13 +280,26 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         //Kick for economy to start up
 
     }
+    public static boolean afterSaveState = true;
+    @Override
+    public void beforeGameSave() {
+        afterSaveState = false;
+        AoTDWorkerManager.beginSaveAndWait();
+        super.beforeGameSave();
+    }
+
+    @Override
+    public void afterGameSave() {
+        afterSaveState = true;
+        AoTDWorkerManager.endSave();
+    }
+
 
     @Override
     public void onGameLoad(boolean newGame) {
         AoTDCommodityEconSpecManager.loadSpecs();
         Global.getSector().getListenerManager().addListener(new AoTDGrandWonderBtnListener(),true);
         Global.getSector().getListenerManager().addListener(new AoTDGrandWonderDecivListener(),true);
-
         Global.getSector().getListenerManager().addListener(new AoTDCommodityTooltipInjector(), true);
         if(newGame){
             for (MarketAPI marketAPI : Global.getSector().getEconomy().getMarketsCopy()) {
@@ -307,6 +325,12 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
                     bar.getCreators().removeIf(x->x instanceof DeliveryBarEventCreator);
                     bar.addEventCreator(new AoTDDeliveryBarEventCreator());
                 }
+                bar.getCreators().removeIf(x->{
+                    if(x instanceof SpecBarEventCreator creator){
+                        return creator.getSpec().getId().equals("cpm");
+                    }
+                    return false;
+                });
             }
         });
         if(Global.getSettings().isDevMode()){

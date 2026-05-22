@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/models/AoTDFactionTradeData.java
+
 package data.kaysaar.aotd.tot.scripts.trade.models;
 
 import com.fs.starfarer.api.Global;
@@ -6,6 +6,8 @@ import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDWorkerManager;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDSectorProductionDemandDataUtils;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContractManager;
 import data.kaysaar.aotd.tot.scripts.trade.history.FactionCycleProductionData;
@@ -222,18 +224,21 @@ public class AoTDFactionTradeData {
     private static final java.util.Comparator<MarketAmount> MARKET_AMOUNT_WEIGHT_DESC =
             (a, b) -> Float.compare(b.weight, a.weight);
     public void computeInternalTrade() {
+        computeInternalTrade(true);
+    }
+
+    public void computeInternalTrade(boolean refreshContractPredictions) {
         if (tradeData.isEmpty()) return;
 
         ArrayList<AoTDMarketData> eligibleMarkets = new ArrayList<>(tradeData.size());
 
-        var economy = Global.getSector().getEconomy();
 
         for (AoTDMarketData md : tradeData.values()) {
             md.resetInternalResults();
 
             if (md.netProductionValues.isEmpty()) continue;
 
-            MarketAPI market = economy.getMarket(md.marketId);
+            MarketAPI market = AoTDEconomy.getInstance().getMarketThreadSave(md.marketId);
             if (market == null) continue;
             if (!market.hasSpaceport()) continue;
             if (market.getAccessibilityMod().computeEffective(0f) <= 0f) continue;
@@ -242,13 +247,17 @@ public class AoTDFactionTradeData {
         }
 
         if (eligibleMarkets.size() <= 1) {
-            refreshContractPredictionsIfPlayerFaction();
+            if (refreshContractPredictions) {
+                    refreshContractPredictionsIfPlayerFaction();
+                }
+
             return;
         }
 
         LinkedHashMap<String, CommodityBucket> buckets = new LinkedHashMap<>();
 
         for (AoTDMarketData md : eligibleMarkets) {
+            AoTDWorkerManager.checkpoint();
             for (Map.Entry<String, Integer> entry : md.netProductionValues.entrySet()) {
                 int net = entry.getValue();
                 if (net == 0) continue;
@@ -267,6 +276,7 @@ public class AoTDFactionTradeData {
         }
 
         for (Map.Entry<String, CommodityBucket> entry : buckets.entrySet()) {
+            AoTDWorkerManager.checkpoint();
             CommodityBucket bucket = entry.getValue();
 
             if (bucket.totalSupply <= 0 || bucket.totalNeed <= 0) continue;
@@ -304,9 +314,12 @@ public class AoTDFactionTradeData {
             }
         }
 
-        refreshContractPredictionsIfPlayerFaction();
+        if (refreshContractPredictions) {
+            refreshContractPredictionsIfPlayerFaction();
+        }
     }
-    private void refreshContractPredictionsIfPlayerFaction() {
+
+    public void refreshContractPredictionsIfPlayerFaction() {
         String playerFactionId = Global.getSector().getPlayerFaction().getId();
         if (!faction.equals(playerFactionId)) return;
 
