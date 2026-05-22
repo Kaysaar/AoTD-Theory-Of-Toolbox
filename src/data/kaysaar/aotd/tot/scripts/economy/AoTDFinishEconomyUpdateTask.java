@@ -18,7 +18,7 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
 
     private boolean workersSubmitted = false;
     private boolean workersFinished = false;
-    private final ArrayList<Future<?>> internalTradeFutures = new ArrayList<>();
+    private  ArrayList<Future<?>> internalTradeFutures = new ArrayList<>();
 
     public AoTDFinishEconomyUpdateTask(Economy economy) {
         super(economy);
@@ -50,6 +50,7 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
     }
 
     private void doMultithreaded() {
+        if(internalTradeFutures == null)internalTradeFutures = new ArrayList<>();
         if (!workersSubmitted) {
             submitInternalTradeWorkers();
             workersSubmitted = true;

@@ -15,12 +15,15 @@ import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDIndustryData;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDUpdateMarketAgainTask;
 import data.kaysaar.aotd.tot.ui.commoditypanel.AoTDCommodityShortPanel;
 import data.kaysaar.aotd.tot.ui.industry.IndustryOnHoverTooltipV2;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import static data.kaysaar.aotd.tot.scripts.economy.AoTDUpdateMarketAgainTask.INITIAL_STAGE_DESC;
+import static data.kaysaar.aotd.tot.scripts.economy.AoTDUpdateMarketAgainTask.getReduction;
 import static data.kaysaar.aotd.tot.ui.commoditypanel.AoTDCommodityShortPanel.height;
 
 public class AoTDToobloxIndustryListener implements IndustryOptionProvider {
@@ -50,21 +53,16 @@ public class AoTDToobloxIndustryListener implements IndustryOptionProvider {
             for (CommodityOnMarketAPI allCommodity : newM.getAllCommodities()) {
                 allCommodity.getAvailableStat().setBaseValue(20000);
             }
-            Industry newINdustry = newM.instantiateIndustry(ind.getSpec().getId());
-            newINdustry.setSpecialItem(ind.getSpecialItem());
-            newINdustry.setImproved(ind.isImproved());
-            newINdustry.setAICoreId(ind.getAICoreId());
-            newM.getIndustries().add(newINdustry);
-            newINdustry.apply();
-            newM.reapplyConditions();
-
-            newM.getIndustries().remove(newINdustry);
+            Industry newINdustry = newM.getIndustry(ind.getId());
             float y = tooltip.getHeightSoFar();
             float currX = 0;
             float currY = y;
             int maxInRow = 3;
             float effectiveWidth = (width-6)/maxInRow;
-
+            ind.getDemandReductionFromOther().unmodifyFlat(
+                    AoTDIndustryData.source
+            );
+            ind.apply();
             int currInRow = 0;
             ArrayList<CustomPanelAPI>toPlace = new ArrayList<>();
             if(!newINdustry.getAllDemand().isEmpty()){
@@ -121,7 +119,15 @@ public class AoTDToobloxIndustryListener implements IndustryOptionProvider {
             for (CommodityOnMarketAPI allCommodity : newM.getAllCommodities()) {
                 allCommodity.getAvailableStat().setBaseValue(0);
             }
-            newM.reapplyConditions();
+
+        }
+        if(AoTDIndustryData.getInstance(ind.getMarket()).isPending(ind.getId())){
+            ind.unapply();
+            ind.getDemandReductionFromOther().modifyFlat(
+                    AoTDIndustryData.source,
+                    getReduction(),
+                    INITIAL_STAGE_DESC
+            );
         }
 
 
