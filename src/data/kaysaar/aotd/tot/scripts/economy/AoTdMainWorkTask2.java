@@ -43,12 +43,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     private final ArrayList<MarketAPI> marketsForCurrentMode = new ArrayList<>();
     private final ArrayList<String> cachedEconGroups = new ArrayList<>();
 
-    /*
-     * aotdUpdateStockpileAndPrice() updates the whole demand class.
-     *
-     * Without this, the same market+demandClass can be recalculated several times
-     * when multiple commodities share that demand class.
-     */
+
     private final Set<String> processedMarketDemandClasses = ConcurrentHashMap.newKeySet();
 
     private List<String> aotdCommodities;
@@ -60,15 +55,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
     private boolean runOnce = false;
 
-    /*
-     * Multithreaded mode state.
-     *
-     * MT mode only parallelizes stockpile/price recalculation:
-     * each worker owns one market and runs all commodities for that market.
-     *
-     * Market preparation, AoTDCommodityMarketData creation, and listener
-     * notification stay on the main economy thread.
-     */
+
     private boolean mtMarketPrepDone = false;
     private boolean mtDataCreated = false;
     private boolean mtWorkersSubmitted = false;
@@ -352,13 +339,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private void runMarketPriceWorker(Market market) {
-        /*
-         * Worker shape:
-         * market -> all commodities.
-         *
-         * Each worker owns one market. Demand-class dedupe is still global per task,
-         * so repeated commodity demand classes are skipped.
-         */
+
         for (String commodityId : aotdCommodities) {
             AoTDWorkerManager.checkpoint();
 
