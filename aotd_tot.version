@@ -1,12 +1,12 @@
 {
     "masterVersionFile":"https://raw.githubusercontent.com/Kaysaar/AoTD-Theory-Of-Toolbox/refs/heads/master/aotd_tot.version",
     "modName":"Ashes of The Domain - Toolbox Theory",
-    "directDownloadURL":"https://drive.google.com/uc?export=download&id=1XAJ-IpTVZBEk6dtvEsUC6BBSrzFNBPM1",
+    "directDownloadURL":"https://github.com/Kaysaar/AoTD-Theory-Of-Toolbox/releases/latest/download/Ashes.of.The.Domain.-.Theory.of.Toolbox.zip",
     "modThreadId":26307,
     "modVersion":
     {
         "major":1,
         "minor":0,
-        "patch":2
+        "patch":3
      }
 }
