@@ -50,15 +50,6 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
     }
 
     private void doMultithreaded() {
-        /*
-         * Worker mode:
-         *
-         * - Each faction's internal trade is independent, so each faction can be
-         *   solved in a separate worker.
-         * - Contract predictions are NOT rebuilt inside workers.
-         * - After all workers finish, player contract predictions are rebuilt once
-         *   on the main economy thread.
-         */
         if (!workersSubmitted) {
             submitInternalTradeWorkers();
             workersSubmitted = true;
