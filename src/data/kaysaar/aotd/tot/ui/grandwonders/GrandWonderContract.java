@@ -51,7 +51,7 @@ public class GrandWonderContract extends AoTDTradeContract {
 
     @Override
     public boolean isExpired() {
-        return !site.isBuilding();
+        return !site.isBuilding()||!site.getMarket().hasIndustry(site.getId());
     }
     @Override
     public boolean canFreezeContract() {

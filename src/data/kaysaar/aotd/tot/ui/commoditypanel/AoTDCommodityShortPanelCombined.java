@@ -233,6 +233,7 @@ public class AoTDCommodityShortPanelCombined implements ExtendedUIPanelPlugin {
             for (int i = 0; i < itemsThisRow; i++) {
 
                 AoTDTradeContract.TradeContractData data = dataList.get(index);
+                if(Global.getSettings().getCommoditySpec(data.getCommodityId())==null)continue;
                 if(shortMode){
                     CustomPanelAPI commodityPanel = new AoTDCommodityShortPanel(
                             data.getCommodityId(),

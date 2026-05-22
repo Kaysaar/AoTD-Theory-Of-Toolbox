@@ -14,7 +14,7 @@ import java.util.LinkedHashSet;
 
 public class CivilianSupplyProgram extends DirectedTradeInitiativeBaseContract {
 
-    public static float growthPerMetDemandDomesticGoods = 15f;
+    public static float growthPerMetDemandDomesticGoods = 2;
     public static float stabilityPerMetDemandFood = 1f;
 
     @Override
@@ -68,7 +68,7 @@ public class CivilianSupplyProgram extends DirectedTradeInitiativeBaseContract {
                 3f,
                 Color.ORANGE,
                 "Domestic Goods",
-                "+10 growth points"
+                growthPerMetDemandDomesticGoods+"+ growth points"
         );
     }
 

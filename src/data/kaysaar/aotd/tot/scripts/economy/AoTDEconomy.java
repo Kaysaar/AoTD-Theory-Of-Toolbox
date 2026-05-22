@@ -41,6 +41,14 @@ public class AoTDEconomy extends Economy {
         }
 
     }
+    public MarketAPI getMarketThreadSave(String id){
+        for (MarketAPI market : getMarkets()) {
+            if(market.getId().equals(id)){
+                return market;
+            }
+        }
+        return null;
+    }
     public AoTDEconomy(boolean b, Economy currentEconomyToReplace) {
         super(b);
         ArrayList<MarketAPI>current = new ArrayList<>(currentEconomyToReplace.getMarkets());
@@ -99,7 +107,9 @@ public class AoTDEconomy extends Economy {
         initCommodities(market);
         if(!market.hasCondition("aotd_toolbox_food_corrector")){
             market.addCondition("aotd_toolbox_food_corrector");
+            market.getCondition("aotd_toolbox_food_corrector").getPlugin().apply(null);
         }
+
     }
 
     public void runMarketAdjustmentAfterEconomyCreation(){

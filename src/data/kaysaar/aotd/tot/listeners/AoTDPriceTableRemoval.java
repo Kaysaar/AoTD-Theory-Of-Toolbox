@@ -220,7 +220,7 @@ public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
 
     }
 
-    private static int getQuantity() {
+    public static int getQuantity() {
         return 500;
     }
 

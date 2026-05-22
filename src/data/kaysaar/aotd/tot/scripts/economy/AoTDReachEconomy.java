@@ -17,7 +17,7 @@ public class AoTDReachEconomy extends ReachEconomy {
 
     @Override
     public void nextStep(MainWorkTask.EconWorkParams econWorkParams) {
-        List<MarketAPI> markets = this.getMarkets();
+        List<MarketAPI> markets = new ArrayList<>(this.getMarkets());
 
 
         if(Global.getSector().getCurrentlyOpenMarket()!=null){
@@ -65,10 +65,6 @@ public class AoTDReachEconomy extends ReachEconomy {
             while(!((MultiFrameTask)var7).isDone()) {
                 ((MultiFrameTask)var7).doNextBatch();
             }
-        }
-        AoTDFactionInternalTradeTask tradeTask = new AoTDFactionInternalTradeTask((Economy) Global.getSector().getEconomy());
-        while(!((MultiFrameTask)tradeTask).isDone()) {
-            ((MultiFrameTask)tradeTask).doNextBatch();
         }
 
         FinishEconomyUpdateTask var8 = new AoTDFinishEconomyUpdateTask((Economy)Global.getSector().getEconomy());

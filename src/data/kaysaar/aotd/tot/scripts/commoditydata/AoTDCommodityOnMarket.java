@@ -13,6 +13,7 @@ import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.PriceCalculator;
 import com.fs.starfarer.campaign.econ.reach.CommodityMarketData;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
 
 public class AoTDCommodityOnMarket extends CommodityOnMarket {
 
@@ -216,7 +217,7 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
 
     @Override
     public float getUtilityOnMarket() {
-        MarketAPI var3 = Global.getSector().getEconomy().getMarket(this.getCommoditySpec().getOrigin());
+        MarketAPI var3 = AoTDEconomy.getInstance().getMarketThreadSave(this.getCommoditySpec().getOrigin());
         if (this.getCommoditySpec().isExotic() && var3 != null) {
             float var1 = Economy.EXOTIC_UTILITY_MULT;
             float var2 = Economy.RANGE_FOR_MAX_EXOTIC_DEMAND;
