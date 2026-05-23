@@ -376,6 +376,7 @@ public class AoTDTradeContractManager {
         for (AoTDMarketData md : playerTrade.getTradeData().values()) {
             if (md == null) continue;
             MarketAPI market = Global.getSector().getEconomy().getMarket(md.marketId);
+            if(market==null)continue;
             if(!market.hasSpaceport()||market.getAccessibilityMod().computeEffective(0f)<=0f)continue;
             int avail = md.getRemainingNet(commodityId);
             if (avail > 0) exporters.add(md);
