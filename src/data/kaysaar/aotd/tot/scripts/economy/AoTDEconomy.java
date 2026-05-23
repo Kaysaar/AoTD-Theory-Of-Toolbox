@@ -90,10 +90,7 @@ public class AoTDEconomy extends Economy {
             workParams = econWorkParams;
         }
         
-        final long time = System.nanoTime();
         getEconomy().nextStep(workParams);
-        final long diff = (System.nanoTime() - time) / 1_000_000l;
-        Global.getLogger(getClass()).error(diff + " ms");
     }
 
     @Override
