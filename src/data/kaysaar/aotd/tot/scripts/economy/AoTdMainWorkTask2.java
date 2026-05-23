@@ -1,7 +1,6 @@
 package data.kaysaar.aotd.tot.scripts.economy;
 
 import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.campaign.econ.EconomyAPI;
 import com.fs.starfarer.api.campaign.econ.Industry;
@@ -12,9 +11,10 @@ import com.fs.starfarer.campaign.econ.CommodityOnMarket;
 import com.fs.starfarer.campaign.econ.Economy;
 import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.PriceCalculator;
-import com.fs.starfarer.campaign.econ.reach.MainWorkTask;
 import com.fs.starfarer.campaign.econ.reach.MainWorkTask2;
 import com.fs.starfarer.campaign.econ.reach.ReachEconomy;
+import com.fs.starfarer.campaign.econ.reach.MainWorkTask.EconWorkParams;
+
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityMarketData;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
@@ -24,7 +24,6 @@ import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDSupplyDemandData;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.ConcurrentModificationException;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Random;
@@ -33,44 +32,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 
 public class AoTdMainWorkTask2 extends MainWorkTask2 {
-
-    public static boolean ENABLE_MULTITHREADED_VERSION =
-            Global.getSettings().getBoolean("aotd_allow_multithreaded_economy_calculaton");
-
-    private List<MarketAPI> aotdMarkets;
-    private final MainWorkTask.EconWorkParams aotdParams;
-
-    private ArrayList<MarketAPI> marketsForCurrentMode = new ArrayList<>();
-    private ArrayList<String> cachedEconGroups = new ArrayList<>();
-
-
-    private Set<String> processedMarketDemandClasses = ConcurrentHashMap.newKeySet();
-
-    private List<String> aotdCommodities;
-    private int aotdIndex = 0;
-    private boolean aotdStarted = false;
-    private int aotdMarketIndex = 0;
-
-    public MarketAPI singleMarketToUpdate;
-
-    private boolean runOnce = false;
-
-
-    private boolean mtMarketPrepDone = false;
-    private boolean mtDataCreated = false;
-    private boolean mtWorkersSubmitted = false;
-    private boolean mtWorkersFinished = false;
-    private boolean mtListenersNotified = false;
-    private ArrayList<Future<?>> mtFutures = new ArrayList<>();
-
     private static final String CORE_MOD_ID = "core";
     private static final String AOTD_PRICE_MOD_ID = "aotd_price_state";
-
-    private static final float AOTD_REFERENCE_TRADE_QUANTITY = 500f;
-
-    private static final float[] AOTD_SPREAD_CHECK_QUANTITIES = new float[] {
-            500f
-    };
 
     private static final float AOTD_NORMAL_CENTER_MIN = 0.90f;
     private static final float AOTD_NORMAL_CENTER_MAX = 1.12f;
@@ -89,37 +52,60 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     private static final float AOTD_MIN_CORRECTION_MULT = 0.05f;
     private static final float AOTD_MAX_CORRECTION_MULT = 20f;
 
-    public AoTdMainWorkTask2(List<MarketAPI> markets, ReachEconomy reachEconomy, MainWorkTask.EconWorkParams econWorkParams) {
+    private static final float AOTD_REFERENCE_TRADE_QUANTITY = 500f;
+    private static final float[] AOTD_SPREAD_CHECK_QUANTITIES = new float[] { 500f };
+
+    public static final boolean ENABLE_MULTITHREADED_VERSION = Global.getSettings().getBoolean("aotd_allow_multithreaded_economy_calculaton");
+
+    private final EconWorkParams aotdParams;
+    
+    private List<MarketAPI> aotdMarkets;
+    private List<String> aotdCommodities;
+    private ArrayList<MarketAPI> marketsForCurrentMode = new ArrayList<>();
+    private ArrayList<String> cachedEconGroups = new ArrayList<>();
+    private ArrayList<Future<?>> mtFutures = new ArrayList<>();
+
+    private Set<String> processedMarketDemandClasses = ConcurrentHashMap.newKeySet();
+
+    private int aotdIndex = 0;
+    private int aotdMarketIndex = 0;
+    
+    private boolean aotdStarted = false;
+    private boolean runOnce = false;
+    private boolean mtMarketPrepDone = false;
+    private boolean mtDataCreated = false;
+    private boolean mtWorkersSubmitted = false;
+    private boolean mtWorkersFinished = false;
+    private boolean mtListenersNotified = false;
+    
+    public MarketAPI singleMarketToUpdate;
+
+    public AoTdMainWorkTask2(List<MarketAPI> markets, ReachEconomy reachEconomy, EconWorkParams econWorkParams) {
         super(markets, reachEconomy, econWorkParams);
 
-        this.aotdMarkets = new ArrayList<>(markets);
-        this.aotdParams = econWorkParams;
+        aotdMarkets = new ArrayList<>(markets);
+        aotdParams = econWorkParams;
     }
 
-    public AoTdMainWorkTask2(
-            List<MarketAPI> markets,
-            ReachEconomy reachEconomy,
-            MainWorkTask.EconWorkParams econWorkParams,
-            MarketAPI singleMarket
-    ) {
+    public AoTdMainWorkTask2(List<MarketAPI> markets, ReachEconomy reachEconomy, EconWorkParams econWorkParams, MarketAPI singleMarket) {
         super(markets, reachEconomy, econWorkParams);
 
-        this.singleMarketToUpdate = singleMarket;
-        this.aotdMarkets = new ArrayList<>(markets);
-        this.aotdParams = econWorkParams;
+        singleMarketToUpdate = singleMarket;
+        aotdMarkets = new ArrayList<>(markets);
+        aotdParams = econWorkParams;
     }
 
     @Override
     public void initCommodityList() {
-        this.aotdCommodities = new ArrayList<>();
+        aotdCommodities = new ArrayList<>();
 
         for (CommoditySpecAPI spec : Global.getSettings().getAllCommoditySpecs()) {
-            if (spec != null && !spec.hasTag("nonecon")) {
-                this.aotdCommodities.add(spec.getId());
+            if (spec != null && !spec.isNonEcon()) {
+                aotdCommodities.add(spec.getId());
             }
         }
 
-        this.aotdCommodities.sort(Comparator.naturalOrder());
+        aotdCommodities.sort(Comparator.naturalOrder());
     }
 
     /*
@@ -182,9 +168,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             return;
         }
 
-        if (isDone()) {
-            return;
-        }
+        if (isDone()) return;
 
         if (aotdMarketIndex < marketsForCurrentMode.size()) {
             processMarketReapplyStage(marketsForCurrentMode.get(aotdMarketIndex));
@@ -192,25 +176,25 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             return;
         }
 
-        String commodityId = aotdCommodities.get(aotdIndex);
-        CommoditySpecAPI commoditySpec = Global.getSettings().getCommoditySpec(commodityId);
-        aotdIndex++;
+        final String comId = aotdCommodities.get(aotdIndex);
+        final CommoditySpecAPI spec = Global.getSettings().getCommoditySpec(comId);
+        ++aotdIndex;
 
-        createCommodityMarketData(commodityId);
+        createCommodityMarketData(comId);
 
-        if (aotdParams != null && aotdParams.withStockpileUpdate && commoditySpec != null) {
-            for (MarketAPI market : marketsForCurrentMode) {
-                if (market instanceof Market) {
-                    updateStockpileAndPriceOnce((Market) market, commoditySpec);
+        if (aotdParams != null && aotdParams.withStockpileUpdate && spec != null) {
+            for (MarketAPI marketAPI : marketsForCurrentMode) {
+                if (marketAPI instanceof Market market) {
+                    updateStockpileAndPriceOnce(market, spec);
                 }
             }
         }
 
-        notifyCommodityUpdated(commodityId);
+        notifyCommodityUpdated(comId);
     }
 
     private void runSequentialSingleMarketNow() {
-        MarketAPI market = singleMarketToUpdate;
+        final MarketAPI market = singleMarketToUpdate;
 
         processMarketReapplyStage(market);
 
@@ -235,9 +219,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             return;
         }
 
-        if (isDone()) {
-            return;
-        }
+        if (isDone()) return;
 
         /*
          * 1) Main-thread market preparation.
@@ -370,11 +352,11 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
                 continue;
             }
 
-            Market vanillaMarket = (Market) market;
+            final Market vanillaMarket = (Market) market;
 
-            Future<?> future = AoTDWorkerManager.submit(
-                    "AoTD price recalculation: " + market.getId(),
-                    () -> runMarketPriceWorker(vanillaMarket)
+            final Future<?> future = AoTDWorkerManager.submit(
+                "AoTD price recalculation: " + market.getId(),
+                () -> runMarketPriceWorker(vanillaMarket)
             );
 
             mtFutures.add(future);
@@ -383,21 +365,21 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
     private void runMarketPriceWorker(Market market) {
 
-        for (String commodityId : aotdCommodities) {
+        for (String comId : aotdCommodities) {
             AoTDWorkerManager.checkpoint();
 
-            CommoditySpecAPI commoditySpec = Global.getSettings().getCommoditySpec(commodityId);
-            if (commoditySpec == null || commoditySpec.hasTag("nonecon")) {
+            final CommoditySpecAPI spec = Global.getSettings().getCommoditySpec(comId);
+            if (spec == null || spec.hasTag("nonecon")) {
                 continue;
             }
 
             try {
-                updateStockpileAndPriceOnce(market, commoditySpec);
+                updateStockpileAndPriceOnce(market, spec);
             } catch (Throwable ex) {
                 Global.getLogger(AoTdMainWorkTask2.class).warn(
-                        "AoTD price worker failed for commodity " + commodityId +
-                                " on market " + market.getId() + ". Skipping.",
-                        ex
+                    "AoTD price worker failed for commodity " + comId +
+                            " on market " + market.getId() + ". Skipping.",
+                    ex
                 );
             }
         }
@@ -420,56 +402,42 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         }
     }
 
-    private void updateStockpileAndPriceOnce(Market market, CommoditySpecAPI commoditySpec) {
+    private void updateStockpileAndPriceOnce(Market market, CommoditySpecAPI comSpec) {
         ensureRuntimeCollections();
 
-        if (market == null || commoditySpec == null) {
+        if (market == null || comSpec == null) {
             return;
         }
 
-        String demandClass = commoditySpec.getDemandClass();
-        if (demandClass == null) {
-            return;
-        }
+        final String demandClass = comSpec.getDemandClass();
+        if (demandClass == null) return;
 
         String key = market.getId() + '\u0000' + demandClass;
         if (!processedMarketDemandClasses.add(key)) {
             return;
         }
 
-        aotdUpdateStockpileAndPrice(market, commoditySpec);
+        aotdUpdateStockpileAndPrice(market, comSpec);
     }
 
-    private static void notifyCommodityUpdated(String commodityId) {
-        List<EconomyAPI.EconomyUpdateListener> listeners =
-                new ArrayList<>(Global.getSector().getEconomy().getUpdateListeners());
+    private static void notifyCommodityUpdated(final String comId) {
+        final List<EconomyAPI.EconomyUpdateListener> listeners = Global.getSector().getEconomy().getUpdateListeners();
 
-        for (EconomyAPI.EconomyUpdateListener listener : listeners) {
-            if (listener == null) continue;
-
-            if (listener.isEconomyListenerExpired()) {
-                Global.getSector().getEconomy().removeUpdateListener(listener);
-            } else {
-                listener.commodityUpdated(commodityId);
-            }
-        }
+        listeners.removeIf(l -> l == null || l.isEconomyListenerExpired());
+        listeners.forEach(l -> l.commodityUpdated(comId));
     }
 
-    private static void notifyCommoditiesUpdated(Collection<String> commodityIds) {
-        List<EconomyAPI.EconomyUpdateListener> listeners =
-                new ArrayList<>(Global.getSector().getEconomy().getUpdateListeners());
+    private static void notifyCommoditiesUpdated(final Collection<String> comIds) {
+        final List<EconomyAPI.EconomyUpdateListener> listeners = Global.getSector().getEconomy().getUpdateListeners();
 
-        for (String commodityId : commodityIds) {
-            for (EconomyAPI.EconomyUpdateListener listener : listeners) {
-                if (listener == null) continue;
-
-                if (listener.isEconomyListenerExpired()) {
-                    Global.getSector().getEconomy().removeUpdateListener(listener);
-                } else {
-                    listener.commodityUpdated(commodityId);
+        for (String comId : comIds) {
+            listeners.forEach(l -> {
+                if (l != null && !l.isEconomyListenerExpired()) {
+                    l.commodityUpdated(comId);
                 }
-            }
+            });
         }
+        listeners.removeIf(l -> l == null || l.isEconomyListenerExpired());
     }
 
     @Override
@@ -480,11 +448,11 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             }
 
             return aotdCommodities != null
-                    && mtMarketPrepDone
-                    && mtDataCreated
-                    && mtWorkersSubmitted
-                    && mtWorkersFinished
-                    && mtListenersNotified;
+                && mtMarketPrepDone
+                && mtDataCreated
+                && mtWorkersSubmitted
+                && mtWorkersFinished
+                && mtListenersNotified;
         }
 
         if (singleMarketToUpdate != null) {
@@ -518,12 +486,8 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             ReflectionUtilis.setPrivateVariableFromSuperclass("demandData", market, new AoTDMarketDemandData(market));
         }
 
-        List<CommodityOnMarket> sameClassCommodities =
-                getCommoditiesWithSameDemandClass(commoditySpec.getDemandClass(), market);
-
-        if (sameClassCommodities.isEmpty()) {
-            return;
-        }
+        final List<CommodityOnMarket> sameClassCommodities = getCommoditiesWithSameDemandClass(commoditySpec.getDemandClass(), market);
+        if (sameClassCommodities.isEmpty()) return;
 
         boolean hasAoTDCommodity = false;
         for (CommodityOnMarket commodity : sameClassCommodities) {
@@ -542,16 +506,13 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         /*
          * Vanilla fallback for non-AoTD commodities/classes.
          */
-        Random random = new Random(
-                (long) market.getId().hashCode()
-                        + commoditySpec.getId().hashCode()
-                        + Global.getSector().getClock().getMonth() * 170000L
+        final Random random = new Random(
+            market.getId().hashCode()
+                + commoditySpec.getId().hashCode()
+                + Global.getSector().getClock().getMonth() * 170000l
         );
 
-        float stockpileBonus = 0.0f;
-        float stockpileMult = 1.0f;
-        float demandForDemandClass = 0.0f;
-        float greedFraction = Economy.ECONOMY_GREED_FRACTION;
+        float demandForDemandClass = 0f;
         boolean noDemandOrSupply = false;
 
         for (CommodityOnMarket commodity : sameClassCommodities) {
@@ -559,39 +520,34 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
                 continue;
             }
 
-            CommodityIconCounts counts = new CommodityIconCounts(commodity);
-            float usableProduction = counts.production - counts.inFactionOnlyExport - counts.canNotExport;
-            float targetDemand = Math.max(usableProduction, commodity.getMaxDemand()) + stockpileBonus;
-
-            if (targetDemand < 1.0f) {
-                targetDemand = 1.0f;
-            }
+            final CommodityIconCounts counts = new CommodityIconCounts(commodity);
+            final float usableProduction = counts.production - counts.inFactionOnlyExport - counts.canNotExport;
+            final float targetDemand = Math.max(1f, Math.max(usableProduction, commodity.getMaxDemand()));
 
             noDemandOrSupply = commodity.getMaxDemand() <= 0 && commodity.getMaxSupply() <= 0;
 
-            demandForDemandClass =
-                    MainWorkTask2.getStockpileQuantity(commodity, targetDemand) * stockpileMult
-                            + Economy.MIN_STOCKPILE_FOR_PRICING * 2.0f;
+            demandForDemandClass = MainWorkTask2.getStockpileQuantity(commodity, targetDemand)
+                + Economy.MIN_STOCKPILE_FOR_PRICING * 2f;
 
             demandForDemandClass *= 0.95f + 0.1f * random.nextFloat();
 
             if (noDemandOrSupply) {
                 commodity.getPlayerDemandPriceMod().modifyMult(
-                        CORE_MOD_ID,
-                        Economy.ECONOMY_NO_DEMAND_PRICE_MULT
+                    CORE_MOD_ID,
+                    Economy.ECONOMY_NO_DEMAND_PRICE_MULT
                 );
             } else {
                 commodity.getPlayerDemandPriceMod().unmodifyMult(CORE_MOD_ID);
             }
 
             commodity.getDemand().getDemand().modifyFlat(
-                    CORE_MOD_ID,
-                    demandForDemandClass * (1.0f - greedFraction)
+                CORE_MOD_ID,
+                demandForDemandClass * (1f - Economy.ECONOMY_GREED_FRACTION)
             );
 
             commodity.getGreed().modifyFlat(
-                    CORE_MOD_ID,
-                    demandForDemandClass * greedFraction
+                CORE_MOD_ID,
+                demandForDemandClass * Economy.ECONOMY_GREED_FRACTION
             );
 
             break;
@@ -604,14 +560,14 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
             if (noDemandOrSupply) {
                 commodity.getPlayerDemandPriceMod().modifyMult(
-                        CORE_MOD_ID,
-                        Economy.ECONOMY_NO_DEMAND_PRICE_MULT
+                    CORE_MOD_ID,
+                    Economy.ECONOMY_NO_DEMAND_PRICE_MULT
                 );
             } else {
                 commodity.getPlayerDemandPriceMod().unmodifyMult(CORE_MOD_ID);
             }
 
-            commodity.getGreed().modifyFlat(CORE_MOD_ID, demandForDemandClass * greedFraction);
+            commodity.getGreed().modifyFlat(CORE_MOD_ID, demandForDemandClass * Economy.ECONOMY_GREED_FRACTION);
         }
 
         for (CommodityOnMarket commodity : sameClassCommodities) {
@@ -625,47 +581,41 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
                 continue;
             }
 
-            AoTDSupplyDemandData data = aotdCommodity.getSupplyDemandData();
+            final AoTDSupplyDemandData data = aotdCommodity.getSupplyDemandData();
             data.updateSupplyDemandData(market);
 
-            float rawDemand = Math.max(0f, data.getTotalRawUnitsFromDemand());
-            float rawSupply = Math.max(0f, data.getTotalRawUnitsFromSupply());
+            final float rawDemand = Math.max(0f, data.getTotalRawUnitsFromDemand());
+            final float rawSupply = Math.max(0f, data.getTotalRawUnitsFromSupply());
 
             aotdCommodity.getExcDefData().applyDeficitDueToSuddenChangeOfDemand(aotdCommodity);
 
-            float floor = Math.max(1f, PriceCalculator.MIN_STOCKPILE_FOR_PRICING * 2f);
+            final float floor = Math.max(1f, PriceCalculator.MIN_STOCKPILE_FOR_PRICING * 2f);
 
-            float rawStocks = Math.max(floor, Math.max(rawDemand, rawSupply));
+            final float rawStocks = Math.max(floor, Math.max(rawDemand, rawSupply));
 
             aotdCommodity.setStocks(Math.round(rawStocks));
             aotdCommodity.setStockpile(rawStocks);
         }
     }
 
-    private static void applyAoTDNeutralCurveAndCalibratedPriceMods(
-            MarketAPI market,
-            List<CommodityOnMarket> sameClassCommodities
-    ) {
-        float classStockpileUtility = getAoTDClassStockpileUtility(sameClassCommodities);
-
-        float neutralDemandCurve =
-                classStockpileUtility
-                        + PriceCalculator.MIN_STOCKPILE_FOR_PRICING
-                        - PriceCalculator.MIN_DEMAND_FOR_PRICING;
-
-        neutralDemandCurve = Math.max(1f, neutralDemandCurve);
+    private static void applyAoTDNeutralCurveAndCalibratedPriceMods(MarketAPI market, List<CommodityOnMarket> sameClassCommodities) {
+        final float neutralDemandCurve = Math.max(1f,
+            getAoTDClassStockpileUtility(sameClassCommodities)
+            + PriceCalculator.MIN_STOCKPILE_FOR_PRICING
+            - PriceCalculator.MIN_DEMAND_FOR_PRICING
+        );
 
         for (CommodityOnMarket commodity : sameClassCommodities) {
             if (!(commodity instanceof AoTDCommodityOnMarket aotdCommodity)) {
                 continue;
             }
 
-            boolean noDemandOrSupply = commodity.getMaxDemand() <= 0 && commodity.getMaxSupply() <= 0;
+            final boolean noDemandOrSupply = commodity.getMaxDemand() <= 0 && commodity.getMaxSupply() <= 0;
 
             if (noDemandOrSupply) {
                 commodity.getPlayerDemandPriceMod().modifyMult(
-                        CORE_MOD_ID,
-                        Economy.ECONOMY_NO_DEMAND_PRICE_MULT
+                    CORE_MOD_ID,
+                    Economy.ECONOMY_NO_DEMAND_PRICE_MULT
                 );
             } else {
                 commodity.getPlayerDemandPriceMod().unmodifyMult(CORE_MOD_ID);
@@ -684,43 +634,38 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private static void applyCalibratedAoTDPlayerPriceMods(MarketAPI market, AoTDCommodityOnMarket commodity) {
-        AoTDPriceTargets targets = getAoTDPriceTargets(market, commodity);
+        final AoTDPriceTargets targets = getAoTDPriceTargets(market, commodity);
 
         commodity.getPlayerDemandPriceMod().unmodifyMult(AOTD_PRICE_MOD_ID);
         commodity.getPlayerSupplyPriceMod().unmodifyMult(AOTD_PRICE_MOD_ID);
 
-        float quantity = AOTD_REFERENCE_TRADE_QUANTITY;
-        float basePrice = commodity.getCommoditySpec().getBasePrice();
+        final float basePrice = commodity.getCommoditySpec().getBasePrice();
 
-        float currentSellTotal = market.getDemandPrice(commodity.getId(), quantity, true);
-        float currentBuyTotal = market.getSupplyPrice(commodity.getId(), quantity, true);
+        final float currentSellTotal = market.getDemandPrice(commodity.getId(), AOTD_REFERENCE_TRADE_QUANTITY, true);
+        final float currentBuyTotal = market.getSupplyPrice(commodity.getId(), AOTD_REFERENCE_TRADE_QUANTITY, true);
 
-        float targetSellTotal = basePrice * targets.sellMult * quantity;
-        float targetBuyTotal = basePrice * targets.buyMult * quantity;
+        final float targetSellTotal = basePrice * targets.sellMult * AOTD_REFERENCE_TRADE_QUANTITY;
+        final float targetBuyTotal = basePrice * targets.buyMult * AOTD_REFERENCE_TRADE_QUANTITY;
+        final float minSpreadPerUnit = basePrice * AOTD_MIN_LOCAL_SPREAD;
 
         float sellCorrection = getCorrectionMult(currentSellTotal, targetSellTotal);
         float buyCorrection = getCorrectionMult(currentBuyTotal, targetBuyTotal);
 
-        float minSpreadPerUnit = basePrice * AOTD_MIN_LOCAL_SPREAD;
-
         for (float checkQuantity : AOTD_SPREAD_CHECK_QUANTITIES) {
 
-            float sellWithoutAoTD;
-            float buyWithoutAoTD;
-
-            sellWithoutAoTD = currentSellTotal;
-            buyWithoutAoTD = currentBuyTotal;
+            final float sellWithoutAoTD = currentSellTotal;
+            final float buyWithoutAoTD = currentBuyTotal;
 
             if (sellWithoutAoTD <= 0f || buyWithoutAoTD <= 0f) continue;
 
-            float predictedSell = sellWithoutAoTD * sellCorrection;
+            final float predictedSell = sellWithoutAoTD * sellCorrection;
             float predictedBuy = buyWithoutAoTD * buyCorrection;
 
-            float requiredBuy = predictedSell + minSpreadPerUnit * checkQuantity;
+            final float requiredBuy = predictedSell + minSpreadPerUnit * checkQuantity;
 
             if (predictedBuy < requiredBuy) {
                 buyCorrection = requiredBuy / buyWithoutAoTD;
-                buyCorrection = aotdClamp(buyCorrection, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
+                buyCorrection = clamp(buyCorrection, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
 
                 predictedBuy = buyWithoutAoTD * buyCorrection;
 
@@ -728,7 +673,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
                     float allowedSell = predictedBuy - minSpreadPerUnit * checkQuantity;
                     if (allowedSell > 0f) {
                         sellCorrection = allowedSell / sellWithoutAoTD;
-                        sellCorrection = aotdClamp(sellCorrection, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
+                        sellCorrection = clamp(sellCorrection, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
                     }
                 }
             }
@@ -739,52 +684,46 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private static float getCorrectionMult(float currentTotal, float targetTotal) {
-        if (currentTotal <= 0f || targetTotal <= 0f) {
-            return 1f;
-        }
+        if (currentTotal <= 0f || targetTotal <= 0f) return 1f;
 
-        return aotdClamp(targetTotal / currentTotal, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
+        return clamp(targetTotal / currentTotal, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
     }
 
     private static AoTDPriceTargets getAoTDPriceTargets(MarketAPI market, AoTDCommodityOnMarket commodity) {
-        AoTDSupplyDemandData data = commodity.getSupplyDemandData();
+        final AoTDSupplyDemandData data = commodity.getSupplyDemandData();
 
-        float rawDemand = Math.max(0f, data.getTotalRawUnitsFromDemand());
-        float rawSupply = Math.max(0f, data.getTotalRawUnitsFromSupply());
+        final float rawDemand = Math.max(0f, data.getTotalRawUnitsFromDemand());
+        final float rawSupply = Math.max(0f, data.getTotalRawUnitsFromSupply());
+        final float excess = Math.max(0f, Math.max(commodity.getExc(), commodity.getExcessQuantity()));
+        final float deficit = Math.max(0f, Math.max(commodity.getDef(), commodity.getDeficitQuantity()));
 
-        float excess = Math.max(commodity.getExc(), commodity.getExcessQuantity());
-        float deficit = Math.max(commodity.getDef(), commodity.getDeficitQuantity());
-
-        excess = Math.max(0f, excess);
-        deficit = Math.max(0f, deficit);
-
-        boolean hasExcess = excess >= AOTD_MIN_STATE_AMOUNT && excess >= deficit;
-        boolean hasDeficit = deficit >= AOTD_MIN_STATE_AMOUNT && deficit > excess;
+        final boolean hasExcess = excess >= AOTD_MIN_STATE_AMOUNT && excess >= deficit;
+        final boolean hasDeficit = deficit >= AOTD_MIN_STATE_AMOUNT && deficit > excess;
 
         if (hasDeficit) {
-            float basis = Math.max(1f, rawDemand);
-            float pressure = aotdClamp(deficit / basis, 0f, 1f);
+            final float basis = Math.max(1f, rawDemand);
+            final float pressure = clamp(deficit / basis, 0f, 1f);
 
-            float center = aotdLerp(AOTD_DEFICIT_CENTER_MIN, AOTD_DEFICIT_CENTER_MAX, pressure);
+            final float center = lerp(AOTD_DEFICIT_CENTER_MIN, AOTD_DEFICIT_CENTER_MAX, pressure);
             return targetsFromCenter(center);
         }
 
         if (hasExcess) {
-            float basis = Math.max(1f, Math.max(rawSupply, rawDemand));
-            float pressure = aotdClamp(excess / basis, 0f, 1f);
+            final float basis = Math.max(1f, Math.max(rawSupply, rawDemand));
+            final float pressure = clamp(excess / basis, 0f, 1f);
 
-            float center = aotdLerp(AOTD_EXCESS_CENTER_MAX, AOTD_EXCESS_CENTER_MIN, pressure);
+            final float center = lerp(AOTD_EXCESS_CENTER_MAX, AOTD_EXCESS_CENTER_MIN, pressure);
             return targetsFromCenter(center);
         }
 
-        float roll = aotdStablePriceRoll(market, commodity.getId());
+        final float roll = aotdStablePriceRoll(market, commodity.getId());
 
-        float center = aotdLerp(AOTD_NORMAL_CENTER_MIN, AOTD_NORMAL_CENTER_MAX, roll);
+        final float center = lerp(AOTD_NORMAL_CENTER_MIN, AOTD_NORMAL_CENTER_MAX, roll);
         return targetsFromCenter(center);
     }
 
     private static AoTDPriceTargets targetsFromCenter(float center) {
-        float halfSpread = AOTD_MIN_LOCAL_SPREAD * 0.5f;
+        final float halfSpread = AOTD_MIN_LOCAL_SPREAD * 0.5f;
         return new AoTDPriceTargets(center - halfSpread, center + halfSpread);
     }
 
@@ -804,91 +743,55 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
     private static void setModifiedValueWithFlatMod(MutableStat stat, String id, float targetValue) {
         stat.unmodifyFlat(id);
-        float existingWithoutThisMod = stat.getModifiedValue();
-        stat.modifyFlat(id, targetValue - existingWithoutThisMod);
+        stat.modifyFlat(id, targetValue - stat.getModifiedValue());
     }
 
     private static void applyVanillaPriceBands(CommodityOnMarket commodity, CommoditySpecAPI commoditySpec) {
         commodity.updateCalc();
 
-        CommodityIconCounts counts = new CommodityIconCounts(commodity);
-        PriceCalculator demandPrice = commodity.getDemandPrice();
-        PriceCalculator supplyPrice = commodity.getSupplyPrice();
+        final CommodityIconCounts counts = new CommodityIconCounts(commodity);
+        final PriceCalculator demandPrice = commodity.getDemandPrice();
+        final PriceCalculator supplyPrice = commodity.getSupplyPrice();
 
-        float deficit = counts.deficit;
-        float excess = counts.extra;
-        float stockpile = commodity.getStockpile();
-        float econUnit = commoditySpec.getEconUnit();
+        final float deficit = counts.deficit;
+        final float excess = counts.extra;
+        final float stockpile = commodity.getStockpile();
+        final float econUnit = commoditySpec.getEconUnit();
 
-        float deficitPriceIncrementPerUnit = Economy.DEFICIT_PRICE_INCR_PER_UNIT;
-        float excessPriceDecrementPerUnit = Economy.EXCESS_PRICE_DECR_PER_UNIT;
-        float deficitPriceMax = Economy.DEFICIT_PRICE_MULT_MAX;
-        float excessPriceMin = Economy.EXCESS_PRICE_MULT_MIN;
+        final float deficitPriceIncrementPerUnit = Economy.DEFICIT_PRICE_INCR_PER_UNIT;
+        final float excessPriceDecrementPerUnit = Economy.EXCESS_PRICE_DECR_PER_UNIT;
+        final float deficitPriceMax = Economy.DEFICIT_PRICE_MULT_MAX;
+        final float excessPriceMin = Economy.EXCESS_PRICE_MULT_MIN;
 
-        if (deficit > 0.0f) {
-            float threshold = stockpile + deficit * econUnit;
-            float mult = 1.0f + Math.max(1.0f, deficit) * deficitPriceIncrementPerUnit;
+        final float deficitThreshold = deficit > 0f ? stockpile + deficit * econUnit : -1f;
+        final float deficitMult = deficit > 0f ? Math.min(deficitPriceMax, 1f + Math.max(1f, deficit) * deficitPriceIncrementPerUnit) : 1f;
+        final float excessThreshold = excess > 0f ? Math.max(0f, stockpile - excess * econUnit) : -1f;
+        final float excessMult = excess > 0f ? Math.max(excessPriceMin, 1f - Math.max(1f, excess) * excessPriceDecrementPerUnit) : 1f;
 
-            if (mult > deficitPriceMax) {
-                mult = deficitPriceMax;
-            }
+        demandPrice.setHighPriceThreshold(deficitThreshold);
+        supplyPrice.setHighPriceThreshold(deficitThreshold);
+        demandPrice.setHighPriceMult(deficitMult);
+        supplyPrice.setHighPriceMult(deficitMult);
 
-            demandPrice.setHighPriceThreshold(threshold);
-            demandPrice.setHighPriceMult(mult);
+        demandPrice.setLowPriceThreshold(excessThreshold);
+        supplyPrice.setLowPriceThreshold(excessThreshold);
+        demandPrice.setLowPriceMult(excessMult);
+        supplyPrice.setLowPriceMult(excessMult);
 
-            supplyPrice.setHighPriceThreshold(threshold);
-            supplyPrice.setHighPriceMult(mult);
-        } else {
-            demandPrice.setHighPriceThreshold(-1.0f);
-            demandPrice.setHighPriceMult(1.0f);
+        final float combinedTradeQuantity = commodity.getCombinedTradeModQuantity();
+        final float tradeValue = commodity.getModValueForQuantity(combinedTradeQuantity);
 
-            supplyPrice.setHighPriceThreshold(-1.0f);
-            supplyPrice.setHighPriceMult(1.0f);
-        }
+        if (deficit <= 0f && tradeValue > 0f) {
+            final float incomingTrade = commodity.getTradeMod().getModifiedValue()
+                + commodity.getTradeModPlus().getModifiedValue();
 
-        float combinedTradeQuantity = commodity.getCombinedTradeModQuantity();
-        float tradeValue = commodity.getModValueForQuantity(combinedTradeQuantity);
-
-        if (deficit <= 0.0f && tradeValue > 0.0f) {
-            float incomingTrade =
-                    commodity.getTradeMod().getModifiedValue()
-                            + commodity.getTradeModPlus().getModifiedValue();
-
-            if (incomingTrade > 0.0f) {
-                float threshold = Math.max(0.0f, stockpile - excess * econUnit);
-                float mult = 1.0f + Math.max(1.0f, 1.0f) * deficitPriceIncrementPerUnit;
-
-                if (mult > deficitPriceMax) {
-                    mult = deficitPriceMax;
-                }
+            if (incomingTrade > 0f) {
+                final float threshold = Math.max(0f, stockpile - excess * econUnit);
+                final float mult = Math.min(deficitPriceMax, 1f + Math.max(1f, 1f) * deficitPriceIncrementPerUnit);
 
                 supplyPrice.setHighPriceThreshold(threshold);
                 supplyPrice.setHighPriceMult(mult);
             }
-        }
-
-        if (excess > 0.0f) {
-            float threshold = stockpile - excess * econUnit;
-            if (threshold < 0.0f) {
-                threshold = 0.0f;
-            }
-
-            float mult = 1.0f - Math.max(1.0f, excess) * excessPriceDecrementPerUnit;
-            if (mult < excessPriceMin) {
-                mult = excessPriceMin;
-            }
-
-            demandPrice.setLowPriceThreshold(threshold);
-            demandPrice.setLowPriceMult(mult);
-
-            supplyPrice.setLowPriceThreshold(threshold);
-            supplyPrice.setLowPriceMult(mult);
-        } else {
-            demandPrice.setLowPriceThreshold(-1.0f);
-            demandPrice.setLowPriceMult(1.0f);
-
-            supplyPrice.setLowPriceThreshold(-1.0f);
-            supplyPrice.setLowPriceMult(1.0f);
         }
     }
 
@@ -901,15 +804,15 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private static float aotdStablePriceRoll(MarketAPI market, String commodityId) {
-        int seed = 31 * market.getId().hashCode() + commodityId.hashCode();
+        final int seed = 31 * market.getId().hashCode() + commodityId.hashCode();
         return new Random(seed).nextFloat();
     }
 
-    private static float aotdLerp(float from, float to, float t) {
-        return from + (to - from) * aotdClamp(t, 0f, 1f);
+    private static float lerp(float from, float to, float t) {
+        return from + (to - from) * clamp(t, 0f, 1f);
     }
 
-    private static float aotdClamp(float value, float min, float max) {
+    private static float clamp(float value, float min, float max) {
         return Math.max(min, Math.min(max, value));
     }
 

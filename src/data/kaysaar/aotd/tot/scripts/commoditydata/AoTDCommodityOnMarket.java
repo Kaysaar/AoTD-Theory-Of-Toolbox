@@ -23,7 +23,7 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
         super(market, commodityId);
         ReflectionUtilis.setPrivateVariableFromSuperclass("available", this, new AoTDAvailableStat(0f));
 
-
+        getSupplyDemandData();
     }
 
     public int stocks;
@@ -103,7 +103,6 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
 
 
     public AoTDSupplyDemandData getSupplyDemandData() {
-
         return getAoTDAvailableStat().getSupplyDemandData(this);
     }
 
