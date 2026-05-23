@@ -129,7 +129,8 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
      * XStream may restore fields without running constructors or field initializers,
      * especially for fields added after the save was created.
      *
-     * Therefore mutable runtime containers are repaired here.
+     * Therefore all mutable runtime containers must be non-final and repaired here.
+     * Do not make ArrayList/Set/Future containers final in this task.
      */
     private void ensureRuntimeCollections() {
         if (aotdMarkets == null) {
@@ -685,9 +686,6 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     private static void applyCalibratedAoTDPlayerPriceMods(MarketAPI market, AoTDCommodityOnMarket commodity) {
         AoTDPriceTargets targets = getAoTDPriceTargets(market, commodity);
 
-        /*
-         * Remove our previous state first so current price measurement is not polluted.
-         */
         commodity.getPlayerDemandPriceMod().unmodifyMult(AOTD_PRICE_MOD_ID);
         commodity.getPlayerSupplyPriceMod().unmodifyMult(AOTD_PRICE_MOD_ID);
 
@@ -705,75 +703,35 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
         float minSpreadPerUnit = basePrice * AOTD_MIN_LOCAL_SPREAD;
 
-        /*
-         * Same-moment guard:
-         * buying now from this market must be more expensive than selling now to
-         * this same market.
-         */
         for (float checkQuantity : AOTD_SPREAD_CHECK_QUANTITIES) {
-            if (checkQuantity <= 0f) continue;
 
             float sellWithoutAoTD;
             float buyWithoutAoTD;
 
-            if (checkQuantity == quantity) {
-                sellWithoutAoTD = currentSellTotal;
-                buyWithoutAoTD = currentBuyTotal;
-            } else {
-                sellWithoutAoTD = market.getDemandPrice(commodity.getId(), checkQuantity, true);
-                buyWithoutAoTD = market.getSupplyPrice(commodity.getId(), checkQuantity, true);
+            sellWithoutAoTD = currentSellTotal;
+            buyWithoutAoTD = currentBuyTotal;
+
+            if (sellWithoutAoTD <= 0f || buyWithoutAoTD <= 0f) continue;
+
+            float predictedSell = sellWithoutAoTD * sellCorrection;
+            float predictedBuy = buyWithoutAoTD * buyCorrection;
+
+            float requiredBuy = predictedSell + minSpreadPerUnit * checkQuantity;
+
+            if (predictedBuy < requiredBuy) {
+                buyCorrection = requiredBuy / buyWithoutAoTD;
+                buyCorrection = aotdClamp(buyCorrection, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
+
+                predictedBuy = buyWithoutAoTD * buyCorrection;
+
+                if (predictedBuy < requiredBuy) {
+                    float allowedSell = predictedBuy - minSpreadPerUnit * checkQuantity;
+                    if (allowedSell > 0f) {
+                        sellCorrection = allowedSell / sellWithoutAoTD;
+                        sellCorrection = aotdClamp(sellCorrection, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
+                    }
+                }
             }
-
-            PriceCorrection correction = enforceBuyAboveSell(
-                    sellWithoutAoTD,
-                    buyWithoutAoTD,
-                    sellCorrection,
-                    buyCorrection,
-                    minSpreadPerUnit * checkQuantity
-            );
-
-            sellCorrection = correction.sellCorrection;
-            buyCorrection = correction.buyCorrection;
-        }
-
-        /*
-         * Post-transaction anti-resell guard:
-         *
-         * This handles the edge case where the first transaction removes the market
-         * state that made the price special:
-         * - player buys the whole surplus, so there is no surplus anymore
-         * - player sells enough to fill the whole deficit, so there is no deficit anymore
-         *
-         * In both cases, buying and then selling back, or selling and then buying
-         * back, must still lose money on the same market.
-         */
-        for (float checkQuantity : AOTD_SPREAD_CHECK_QUANTITIES) {
-            PriceCorrection correction = enforceRoundTripNoProfit(
-                    market,
-                    commodity,
-                    checkQuantity,
-                    basePrice,
-                    sellCorrection,
-                    buyCorrection
-            );
-
-            sellCorrection = correction.sellCorrection;
-            buyCorrection = correction.buyCorrection;
-        }
-
-        float stateQuantity = getRelevantStateQuantity(commodity);
-        if (stateQuantity > 0f) {
-            PriceCorrection correction = enforceRoundTripNoProfit(
-                    market,
-                    commodity,
-                    stateQuantity,
-                    basePrice,
-                    sellCorrection,
-                    buyCorrection
-            );
-
-            sellCorrection = correction.sellCorrection;
-            buyCorrection = correction.buyCorrection;
         }
 
         commodity.getPlayerDemandPriceMod().modifyMult(AOTD_PRICE_MOD_ID, sellCorrection);
@@ -786,116 +744,6 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         }
 
         return aotdClamp(targetTotal / currentTotal, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
-    }
-
-    private static PriceCorrection enforceRoundTripNoProfit(
-            MarketAPI market,
-            AoTDCommodityOnMarket commodity,
-            float quantity,
-            float basePrice,
-            float sellCorrection,
-            float buyCorrection
-    ) {
-        if (quantity <= 0f || basePrice <= 0f) {
-            return new PriceCorrection(sellCorrection, buyCorrection);
-        }
-
-        float utility = Math.max(0.0001f, commodity.getUtilityOnMarket());
-        float transactionUtility = quantity * utility;
-        float requiredSpread = basePrice * AOTD_MIN_LOCAL_SPREAD * quantity;
-
-        /*
-         * Case 1:
-         * Player buys from market first, reducing stockpile.
-         * Then player tries to sell the same goods back after surplus was consumed.
-         */
-        float buyNow = market.getSupplyPrice(commodity.getId(), quantity, true);
-        float sellAfterBuy = market.getDemandPriceAssumingExistingTransaction(
-                commodity.getId(),
-                quantity,
-                -transactionUtility,
-                true
-        );
-
-        PriceCorrection correction = enforceBuyAboveSell(
-                sellAfterBuy,
-                buyNow,
-                sellCorrection,
-                buyCorrection,
-                requiredSpread
-        );
-
-        sellCorrection = correction.sellCorrection;
-        buyCorrection = correction.buyCorrection;
-
-        /*
-         * Case 2:
-         * Player sells to market first, increasing stockpile.
-         * Then player tries to buy the same goods back after deficit was filled.
-         */
-        float sellNow = market.getDemandPrice(commodity.getId(), quantity, true);
-        float buyAfterSell = market.getSupplyPriceAssumingExistingTransaction(
-                commodity.getId(),
-                quantity,
-                transactionUtility,
-                true
-        );
-
-        correction = enforceBuyAboveSell(
-                sellNow,
-                buyAfterSell,
-                sellCorrection,
-                buyCorrection,
-                requiredSpread
-        );
-
-        return correction;
-    }
-
-    private static PriceCorrection enforceBuyAboveSell(
-            float sellWithoutAoTD,
-            float buyWithoutAoTD,
-            float sellCorrection,
-            float buyCorrection,
-            float requiredSpread
-    ) {
-        if (sellWithoutAoTD <= 0f || buyWithoutAoTD <= 0f) {
-            return new PriceCorrection(sellCorrection, buyCorrection);
-        }
-
-        float predictedSell = sellWithoutAoTD * sellCorrection;
-        float predictedBuy = buyWithoutAoTD * buyCorrection;
-        float requiredBuy = predictedSell + requiredSpread;
-
-        if (predictedBuy >= requiredBuy) {
-            return new PriceCorrection(sellCorrection, buyCorrection);
-        }
-
-        buyCorrection = requiredBuy / buyWithoutAoTD;
-        buyCorrection = aotdClamp(buyCorrection, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
-
-        predictedBuy = buyWithoutAoTD * buyCorrection;
-
-        /*
-         * If buy correction hit the safety clamp and still cannot create a spread,
-         * lower sell correction. Same-market exploit prevention wins over price target.
-         */
-        if (predictedBuy < requiredBuy) {
-            float allowedSell = predictedBuy - requiredSpread;
-            if (allowedSell > 0f) {
-                sellCorrection = allowedSell / sellWithoutAoTD;
-                sellCorrection = aotdClamp(sellCorrection, AOTD_MIN_CORRECTION_MULT, AOTD_MAX_CORRECTION_MULT);
-            }
-        }
-
-        return new PriceCorrection(sellCorrection, buyCorrection);
-    }
-
-    private static float getRelevantStateQuantity(AoTDCommodityOnMarket commodity) {
-        float excess = Math.max(commodity.getExc(), commodity.getExcessQuantity());
-        float deficit = Math.max(commodity.getDef(), commodity.getDeficitQuantity());
-
-        return Math.max(0f, Math.max(excess, deficit));
     }
 
     private static AoTDPriceTargets getAoTDPriceTargets(MarketAPI market, AoTDCommodityOnMarket commodity) {
@@ -1063,16 +911,6 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
     private static float aotdClamp(float value, float min, float max) {
         return Math.max(min, Math.min(max, value));
-    }
-
-    private static final class PriceCorrection {
-        final float sellCorrection;
-        final float buyCorrection;
-
-        PriceCorrection(float sellCorrection, float buyCorrection) {
-            this.sellCorrection = sellCorrection;
-            this.buyCorrection = buyCorrection;
-        }
     }
 
     private static final class AoTDPriceTargets {
