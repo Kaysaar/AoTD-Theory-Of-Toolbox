@@ -7,7 +7,6 @@ import com.fs.starfarer.api.impl.campaign.econ.impl.PopulationAndInfrastructure;
 import com.fs.starfarer.api.impl.campaign.econ.impl.Spaceport;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
 import data.kaysaar.aotd.tot.strings.AoTDIndTags;
-import data.kaysaar.aotd.tot.strings.AoTDTradeTags;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;

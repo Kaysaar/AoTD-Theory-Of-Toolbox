@@ -1,0 +1,31 @@
+{
+	"id":"aotd_theory_of_toolbox",
+	"name": "zz AoTD - Theory of Toolbox",
+	"author":"Kaysaar",
+	"utility":"false",
+	"version":"1.0.4",
+	"description":"Ashes of The Domain - Theory of Toolbox: Its economy overhaul module, that is used by other AoTD modules.",
+    "gameVersion": "0.98",
+	"jars":["jars/AoTDToolboxTheory.jar"],
+	"dependencies": [  
+	{
+        "id": "lw_lazylib",
+       "name": "LazyLib",
+        "version": "3.0"
+    } ,
+	{
+        "id": "ashlib",
+       "name": "Ashlib",
+        "version": "2.2.0"
+    },
+    
+	{
+        "id": "bmo",
+       "name": "Building Menu Overhaul",
+        "version": "2.1.0"
+    }
+],
+	
+	"modPlugin":"data.kaysaar.aotd.tot.plugins.AoTDToolboxTheoryPlugin"
+
+}

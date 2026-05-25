@@ -35,9 +35,7 @@ public class AoTDUpdateMarketAgainTask extends UpdateMarketsAgainTask {
 
     @Override
     public void doNextBatch() {
-        if (isDone()) {
-            return;
-        }
+        if (isDone()) return;
 
         /*
          * Single-market mode.
@@ -49,6 +47,7 @@ public class AoTDUpdateMarketAgainTask extends UpdateMarketsAgainTask {
             processMarket(singleMarket);
             done = true;
             return;
+
         } else if (markets==null) {
             markets = Global.getSector().getEconomy().getMarketsCopy();
         }
@@ -69,7 +68,7 @@ public class AoTDUpdateMarketAgainTask extends UpdateMarketsAgainTask {
     private static void processMarket(MarketAPI market) {
         market.reapplyConditions();
         AoTDTradeManager.getInstance().addMarket(market);
-        AoTDIndustryData data = AoTDIndustryData.getInstance(market);
+        final AoTDIndustryData data = AoTDIndustryData.getInstance(market);
         data.checkForNewIndustries(market);
 
         for (Industry industry : market.getIndustries()) {
@@ -79,21 +78,19 @@ public class AoTDUpdateMarketAgainTask extends UpdateMarketsAgainTask {
                 restoreIndustry(industry);
             }
         }
-
-//        AoTDEconomy.pruneCommoditiesThatMightAppear((Market) market);
     }
 
     public static void applyPendingIndustrySuppression(Industry industry) {
         industry.getSupplyBonusFromOther().modifyFlat(
-                AoTDIndustryData.source,
-                -getReduction(),
-                INITIAL_STAGE_DESC
+            AoTDIndustryData.source,
+            -getReduction(),
+            INITIAL_STAGE_DESC
         );
 
         industry.getDemandReductionFromOther().modifyFlat(
-                AoTDIndustryData.source,
-                getReduction(),
-                INITIAL_STAGE_DESC
+            AoTDIndustryData.source,
+            getReduction(),
+            INITIAL_STAGE_DESC
         );
 
         /*

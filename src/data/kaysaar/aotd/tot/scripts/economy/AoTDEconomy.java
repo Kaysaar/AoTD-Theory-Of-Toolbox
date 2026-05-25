@@ -17,31 +17,37 @@ import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 
 public class AoTDEconomy extends Economy {
+    private static final String AOTD_FOOD_CORRECTOR_COND_ID = "aotd_toolbox_food_corrector";
+
     public static boolean runningPrePlayerEconomy = false;
     public static boolean mustPruneCommodities = true;
+
     public static AoTDEconomy getInstance(){
-        if(Global.getSector().getEconomy() instanceof AoTDEconomy){
-            return (AoTDEconomy)Global.getSector().getEconomy();
+        if(Global.getSector().getEconomy() instanceof AoTDEconomy econ){
+            return econ;
         }
         return null;
     }
+
     public void doEconomyStepOnNewGameLoad(){
-        AoTDEconomyReachStepper stepper = (AoTDEconomyReachStepper) getStepper();
-        stepper.doEconomyTick();
+        ((AoTDEconomyReachStepper) getStepper()).doEconomyTick();
+
         for (MarketAPI market : getMarkets()) {
-            AoTDIndustryData data = AoTDIndustryData.getInstance(market);
-            data.applyEndOfMonthChange(market);
+            AoTDIndustryData.getInstance(market).applyEndOfMonthChange(market);
+
             for (CommodityOnMarketAPI allCommodity : market.getAllCommodities()) {
                 if(allCommodity instanceof AoTDCommodityOnMarket commodity){
                     commodity.getExcDefData().applyDeficitDueToSuddenChangeOfDemand(commodity);
                 }
             }
         }
-
     }
-    public MarketAPI getMarketThreadSave(String id){
+
+    /** TODO I made this actually thread safe by setting it as synchronized, but was this intended? */
+    public synchronized MarketAPI getMarketThreadSave(String id){
         for (MarketAPI market : getMarkets()) {
             if(market.getId().equals(id)){
                 return market;
@@ -49,17 +55,19 @@ public class AoTDEconomy extends Economy {
         }
         return null;
     }
-    public AoTDEconomy(boolean b, Economy currentEconomyToReplace) {
-        super(b);
-        ArrayList<MarketAPI>current = new ArrayList<>(currentEconomyToReplace.getMarkets());
-        this.setEcon(new AoTDReachEconomy());
-        ReflectionUtilis.setPrivateVariableFromSuperclass("stepper",this,new AoTDEconomyReachStepper(this.getEconomy()));
-        this.getMarkets().addAll(current);
-        current.clear();
 
+    public AoTDEconomy(boolean isSimMode, Economy econToReplace) {
+        super(isSimMode);
 
-        this.getUpdateListeners().addAll(currentEconomyToReplace.getUpdateListeners());
-        currentEconomyToReplace.getUpdateListeners().clear();
+        final AoTDReachEconomy reach = new AoTDReachEconomy();
+        setEcon(reach);
+        ReflectionUtilis.setPrivateVariableFromSuperclass("stepper", this, new AoTDEconomyReachStepper(reach));
+
+        getMarkets().addAll(econToReplace.getMarkets());
+        getUpdateListeners().addAll(econToReplace.getUpdateListeners());
+        econToReplace.getMarkets().clear();
+        econToReplace.getUpdateListeners().clear();
+
         for (MarketAPI market : getMarkets()) {
             market.clearCommodities();
             initCommodities((Market) market);
@@ -68,28 +76,27 @@ public class AoTDEconomy extends Economy {
 
     @Override
     public void nextStep(MainWorkTask.EconWorkParams econWorkParams) {
-        Iterator var3 = this.getMarkets().iterator();
-
-        while(var3.hasNext()) {
-            MarketAPI var2 = (MarketAPI)var3.next();
-            ((Market)var2).updatePrevStability();
+        for (MarketAPI market : getMarkets()) {
+            ((Market) market).updatePrevStability();
         }
 
-        MainWorkTask.EconWorkParams var4 = new MainWorkTask.EconWorkParams();
-        var4.withIncomeAndUpkeep = false;
-        var4.withStockpileUpdate = true;
-        var4.withImmigration = true;
-        if (econWorkParams != null) {
-            var4 = econWorkParams;
+        final MainWorkTask.EconWorkParams workParams;
+        if (econWorkParams == null) {
+            workParams = new MainWorkTask.EconWorkParams();
+            workParams.withIncomeAndUpkeep = false;
+            workParams.withStockpileUpdate = true;
+            workParams.withImmigration = true;
+        } else {
+            workParams = econWorkParams;
         }
-        this.getEconomy().nextStep(var4);
+        
+        getEconomy().nextStep(workParams);
     }
 
     @Override
     public void doubleStep() {
         super.nextStep();
     }
-
 
     @Override
     public void removeMarket(MarketAPI marketAPI) {
@@ -102,25 +109,27 @@ public class AoTDEconomy extends Economy {
     @Override
     public void addMarket(MarketAPI marketAPI, boolean addJunk) {
         super.addMarket(marketAPI, addJunk);
-        Market market = (Market) marketAPI;
+        final Market market = (Market) marketAPI;
+
         market.clearCommodities();
         initCommodities(market);
-        if(!market.hasCondition("aotd_toolbox_food_corrector")){
-            market.addCondition("aotd_toolbox_food_corrector");
-            market.getCondition("aotd_toolbox_food_corrector").getPlugin().apply(null);
-        }
 
+        if(!market.hasCondition(AOTD_FOOD_CORRECTOR_COND_ID)){
+            market.addCondition(AOTD_FOOD_CORRECTOR_COND_ID); // TODO applied automatically when added
+        }
     }
 
     public void runMarketAdjustmentAfterEconomyCreation(){
         for (MarketAPI market : getMarkets()) {
             market.clearCommodities();
             initCommodities((Market) market);
-            if(!market.hasCondition("aotd_toolbox_food_corrector")){
-                market.addCondition("aotd_toolbox_food_corrector");
+
+            if(!market.hasCondition(AOTD_FOOD_CORRECTOR_COND_ID)){
+                market.addCondition(AOTD_FOOD_CORRECTOR_COND_ID);
             }
         }
     }
+
     @Override
     public void tripleStep() {
         super.nextStep();
@@ -130,62 +139,67 @@ public class AoTDEconomy extends Economy {
     public void updatePriceMult(MarketAPI marketAPI) {
         super.updatePriceMult(marketAPI);
     }
-    public static void pruneCommodities(){
-        for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
-            pruneCommoditiesThatMightAppear((Market) market);
-        }
-    }
+
+    // FIXME this is unused
+    // private static void pruneCommodities() {
+    //     for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
+    //         pruneCommoditiesThatMightAppear((Market) market);
+    //     }
+    // }
+
+    @SuppressWarnings("unchecked")
     public static void pruneCommoditiesThatMightAppear(Market market){
-        ArrayList<String>newCommoditiesToAdd = new ArrayList<>();
-        ArrayList<CommodityOnMarket>list = (ArrayList<CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodities",market);
+        final ArrayList<String> newCommoditiesToAdd = new ArrayList<>();
+        final List<CommodityOnMarket> commodities = market.getCommodities();
+        final var commodityMap = (HashMap<String, CommodityOnMarket>) ReflectionUtilis
+            .getPrivateVariableFromSuperClass("commodityMap", market);
+
         for (CommoditySpecAPI allCommoditySpec : Global.getSettings().getAllCommoditySpecs()) {
-            if(list.stream().noneMatch(x->x.getId().equals(allCommoditySpec.getId()))) {
+            if(commodities.stream().noneMatch(x->x.getId().equals(allCommoditySpec.getId()))) {
                 newCommoditiesToAdd.add(allCommoditySpec.getId());
             }
         }
-        HashMap<String,CommodityOnMarket>commodityMap = (HashMap<String, CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodityMap",market);
 
-        Iterator iterator = list.iterator();
-        while (iterator.hasNext()) {
-            CommodityOnMarket data = (CommodityOnMarket) iterator.next();
+        final Iterator<CommodityOnMarket> comIter = commodities.iterator();
+        while (comIter.hasNext()) {
+            final CommodityOnMarket data = comIter.next();
             if(!(data instanceof AoTDCommodityOnMarket)){
                 newCommoditiesToAdd.add(data.getId());
-                iterator.remove();
+                comIter.remove();
             }
         }
-        for (String s : newCommoditiesToAdd) {
-            AoTDCommodityOnMarket data = new AoTDCommodityOnMarket(market,s);
-            commodityMap.put(s,data);
-            list.add(data);
-        }
 
+        for (String s : newCommoditiesToAdd) {
+            final AoTDCommodityOnMarket data = new AoTDCommodityOnMarket(market,s);
+            commodityMap.put(s,data);
+            commodities.add(data);
+        }
     }
 
+    @SuppressWarnings("unchecked")
     public void initCommodities(Market market) {
-        ArrayList<CommodityOnMarket>list = (ArrayList<CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodities",market);
-        HashMap<String,CommodityOnMarket>commodityMap = (HashMap<String, CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodityMap",market);
-        ReflectionUtilis.setPrivateVariableFromSuperclass("demandData",market,new AoTDMarketDemandData(market));
-        for (CommoditySpecAPI commoditySpecAPI : Global.getSettings().getAllCommoditySpecs()) {
-            market.getDemandData().getDemand(commoditySpecAPI.getDemandClass());
-            AoTDCommodityOnMarket data = new AoTDCommodityOnMarket(market,commoditySpecAPI.getId());
-            data.getSupplyDemandData();
-            commodityMap.put(commoditySpecAPI.getId(),data);
-            list.add(data);
-            ReflectionUtilis.invokeMethodWithAutoProjection("addToDemandClassList",market,(CommodityOnMarket)data);
-        }
-        Iterator iterator = list.iterator();
-        while (iterator.hasNext()) {
-            CommodityOnMarket data = (CommodityOnMarket) iterator.next();
-            if(!(data instanceof AoTDCommodityOnMarket)){
-                iterator.remove();
-            }
-        }
-        for (CommodityOnMarket commodityOnMarket : list) {
-            commodityMap.put(commodityOnMarket.getId(),commodityOnMarket);
+        final List<CommodityOnMarket> commodities = market.getCommodities();
+        final var commodityMap = (HashMap<String, CommodityOnMarket>) ReflectionUtilis
+            .getPrivateVariableFromSuperClass("commodityMap", market);
+
+        final AoTDMarketDemandData demandData = new AoTDMarketDemandData(market);
+        ReflectionUtilis.setPrivateVariableFromSuperclass("demandData", market, demandData);
+
+        demandData.replaceWithAoTDMarketDemand(Global.getSettings().getAllCommoditySpecs());
+
+        for (CommoditySpecAPI comSpec : Global.getSettings().getAllCommoditySpecs()) {
+            final AoTDCommodityOnMarket data = new AoTDCommodityOnMarket(market,comSpec.getId());
+
+            commodityMap.put(comSpec.getId(),data);
+            commodities.add(data);
+            ReflectionUtilis.invokeMethodWithAutoProjection("addToDemandClassList", market, (CommodityOnMarket)data);
         }
 
+        commodities.removeIf(c -> !(c instanceof AoTDCommodityOnMarket));
+        for (CommodityOnMarket com : commodities) {
+            commodityMap.put(com.getId(), com);
+        }
 
-        market.getAllCommodities();
-
+        market.getAllCommodities(); // FIXME is this needed?
     }
 }
