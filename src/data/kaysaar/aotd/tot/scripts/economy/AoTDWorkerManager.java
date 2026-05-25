@@ -20,11 +20,11 @@ import java.util.concurrent.Future;
  * afterGameSave() should call endSave().
  */
 public final class AoTDWorkerManager {
+    private AoTDWorkerManager() {}
 
     private static final Logger log = Global.getLogger(AoTDWorkerManager.class);
 
-    private static final int THREAD_COUNT =
-            Math.max(1, Math.min(2, Runtime.getRuntime().availableProcessors() - 1));
+    private static final int THREAD_COUNT = Math.max(1, Math.min(2, Runtime.getRuntime().availableProcessors() - 1));
 
     private static final Object LOCK = new Object();
 
@@ -39,7 +39,7 @@ public final class AoTDWorkerManager {
     private static final Object ECONOMY_ACCESS_LOCK = new Object();
 
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(THREAD_COUNT, runnable -> {
-        Thread thread = new Thread(runnable, "AoTD Worker");
+        final Thread thread = new Thread(runnable, "AoTD Worker");
         thread.setDaemon(true);
         return thread;
     });
@@ -49,11 +49,8 @@ public final class AoTDWorkerManager {
     private static boolean saveBarrierActive = false;
     private static int runningWorkers = 0;
 
-    private AoTDWorkerManager() {
-    }
-
     public static Future<?> submit(String name, Runnable task) {
-        Future<?> future = EXECUTOR.submit(() -> {
+        final Future<?> future = EXECUTOR.submit(() -> {
             enterWorker();
 
             try {
@@ -75,7 +72,6 @@ public final class AoTDWorkerManager {
             while (saveBarrierActive) {
                 waitQuietly();
             }
-
             runningWorkers++;
         }
     }
