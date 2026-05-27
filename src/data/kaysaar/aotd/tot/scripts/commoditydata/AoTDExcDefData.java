@@ -5,6 +5,8 @@ import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.combat.MutableStat;
 import com.fs.starfarer.api.combat.MutableStatWithTempMods;
 import com.fs.starfarer.api.impl.campaign.ids.Commodities;
+import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
+import com.fs.starfarer.api.impl.campaign.submarkets.LocalResourcesSubmarketPlugin;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
 import data.kaysaar.aotd.tot.scripts.economy.AoTdMainWorkTask2;
 import data.kaysaar.aotd.tot.scripts.submarket.aotd.AoTDLocalResourcesSubmarketPlugin;
@@ -36,7 +38,17 @@ public class AoTDExcDefData {
     }
     public static final String EXT_TRADE_ID = "aotd_ext_trade";
     public static final String DEF_FROM_NEW_IND = "aotd_new_ind_demand";
-    public void clearExternalTrade() {
+    public void clearExternalTrade(AoTDCommodityOnMarket commodity) {
+        if(commodity.getExcessQuantityFromTrade()>0){
+            if(commodity.getMarket().hasSubmarket(Submarkets.LOCAL_RESOURCES)){
+                if(commodity.getMarket().getSubmarket(Submarkets.LOCAL_RESOURCES).getCargo()!=null){
+                    commodity.getMarket().getSubmarket(Submarkets.LOCAL_RESOURCES).getCargo().addCommodity(commodity.getId(),commodity.getExcessQuantity());
+                    commodity.getTradeMod().unmodify();
+                    commodity.getTradeModPlus().unmodify();
+                    commodity.getTradeModMinus().unmodify();
+                }
+            }
+        }
         if(deficit.getModifiedValue()>0){
             deficitConsequtiveMonths++;
         }

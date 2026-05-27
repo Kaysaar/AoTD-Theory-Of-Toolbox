@@ -26,6 +26,7 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
 
     }
 
+
     public int stocks;
 
     public void setStocks(int stocks) {
@@ -160,8 +161,8 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
         if (this.getPlayerSupplyPriceMod() == null) {
             ReflectionUtilis.invokeMethodWithAutoProjection("playerSupplyMod", this, new StatBonus());
         }
-        ReflectionUtilis.setPrivateVariableFromSuperclass("supplyPrice", this, new PriceCalculator());
-        ReflectionUtilis.setPrivateVariableFromSuperclass("demandPrice", this, new PriceCalculator());
+        ReflectionUtilis.setPrivateVariableFromSuperclass("supplyPrice", this, new AoTDPriceCalculator(this));
+        ReflectionUtilis.setPrivateVariableFromSuperclass("demandPrice", this, new AoTDPriceCalculator(this));
         PriceCalculator supply = (PriceCalculator) this.getSupplyPrice();
         PriceCalculator demand = (PriceCalculator) this.getDemandPrice();
 
@@ -250,7 +251,13 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
         }
         return Math.max(0, deficit);
     }
+    public int getExcessQuantityFromTrade() {
+        float trade = getTradeMod().getModifiedValue()
+                + getTradeModPlus().getModifiedValue()
+                + getTradeModMinus().getModifiedValue();
 
+        return Math.max(0, Math.round( trade));
+    }
     @Override
     public int getExcessQuantity() {
         float excess = getExc();

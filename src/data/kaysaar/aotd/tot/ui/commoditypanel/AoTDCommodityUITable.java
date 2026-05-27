@@ -32,8 +32,8 @@ public class AoTDCommodityUITable extends UITableImpl {
     public static LinkedHashMap<String, Integer> widthMap = new LinkedHashMap<>();
     static {
         widthMap.put("commodity", 90);
-        widthMap.put("production", 73);
-        widthMap.put("demand", 73);
+        widthMap.put("production", 83);
+        widthMap.put("demand", 83);
         widthMap.put("import", 73);
         widthMap.put("deficit", 73);
     }

@@ -124,7 +124,7 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
                 AoTDIndustryData.getInstance(market).applyEndOfMonthChange(market);
                 for (CommodityOnMarketAPI c : market.getAllCommodities()) {
                     if (!(c instanceof AoTDCommodityOnMarket com)) continue;
-                    com.getExcDefData().clearExternalTrade();
+                    com.getExcDefData().clearExternalTrade(com);
                     String commodityId = com.getId();
                     int r = md.getRemainingNet(commodityId);
 
