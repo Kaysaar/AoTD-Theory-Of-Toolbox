@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class SectorSurplusConsumptionStats {
-    public static String memKey = "$aotd_sector_surplus_consumption_solver";
+    private static final String memKey = "$aotd_sector_surplus_consumption_solver";
 
     public static SectorSurplusConsumptionStats getInstance() {
         if (!Global.getSector().getPersistentData().containsKey(memKey)) {

@@ -1,5 +1,6 @@
 package data.kaysaar.aotd.tot.scripts.commoditydata;
 
+import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.campaign.econ.MarketDemandAPI;
 import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.MarketDemand;
@@ -11,8 +12,9 @@ import java.util.List;
 import java.util.Map;
 
 public class AoTDMarketDemandData extends MarketDemandData {
-    private Market market;
-    private Map<String, MarketDemand> dem = new HashMap();
+    private final Map<String, MarketDemand> dem = new HashMap<>();
+    private final Market market;
+
     public AoTDMarketDemandData(Market market) {
         super(market);
         this.market = market;
@@ -28,15 +30,24 @@ public class AoTDMarketDemandData extends MarketDemandData {
         return dem;
     }
 
-    public MarketDemand getDemand(String var1) {
-        MarketDemand var2 = (MarketDemand)this.dem.get(var1);
-        if ((var2 instanceof AoTDMarketDemand)) {
-            return var2;
+    @Override
+    public MarketDemand getDemand(final String comId) {
+        if (dem.get(comId) instanceof AoTDMarketDemand aotdDemand) {
+            return aotdDemand;
         } else {
-            var2 = new AoTDMarketDemand(this.market, var1);
-            this.dem.put(var1, var2);
-            return var2;
+            final MarketDemand demand = new AoTDMarketDemand(market, comId);
+            dem.put(comId, demand);
+            return demand;
         }
     }
 
+    public final void replaceWithAoTDMarketDemand(final List<CommoditySpecAPI> specs) {
+        for (CommoditySpecAPI spec : specs) {
+            final String comId = spec.getId();
+
+            if (!(dem.get(comId) instanceof AoTDMarketDemand)) {
+                dem.put(comId, new AoTDMarketDemand(market, comId));
+            }
+        }
+    }
 }

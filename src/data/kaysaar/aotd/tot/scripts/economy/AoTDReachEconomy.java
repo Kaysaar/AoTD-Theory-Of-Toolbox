@@ -4,73 +4,64 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.characters.PersonAPI;
 import com.fs.starfarer.campaign.econ.Economy;
-import com.fs.starfarer.campaign.econ.contract.iter.MultiFrameTask;
 import com.fs.starfarer.campaign.econ.reach.*;
-import data.kaysaar.aotd.tot.scripts.trade.tasks.AoTDFactionInternalTradeTask;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 public class AoTDReachEconomy extends ReachEconomy {
 
-
     @Override
     public void nextStep(MainWorkTask.EconWorkParams econWorkParams) {
-        List<MarketAPI> markets = new ArrayList<>(this.getMarkets());
+        final List<MarketAPI> markets = new ArrayList<>(this.getMarkets());
 
+        final MarketAPI openMarket = Global.getSector().getCurrentlyOpenMarket();
+        if(openMarket != null){
+            final PersonAPI admin = openMarket.getAdmin();
+            admin.getStats().refreshCharacterStatsEffects();
+            admin.getStats().refreshGovernedOutpostEffects(openMarket);
 
-        if(Global.getSector().getCurrentlyOpenMarket()!=null){
-            MarketAPI market = Global.getSector().getCurrentlyOpenMarket();
-            PersonAPI var4 = market.getAdmin();
-            var4.getStats().refreshCharacterStatsEffects();
-            var4.getStats().refreshGovernedOutpostEffects(market);
+            final MainWorkTask2 workTask = new AoTdMainWorkTask2(markets, this, econWorkParams,openMarket);
 
-            MainWorkTask2 var5 = new AoTdMainWorkTask2(markets, this, econWorkParams,market);
-
-            while(!((MultiFrameTask)var5).isDone()) {
-                ((MultiFrameTask)var5).doNextBatch();
+            while(!workTask.isDone()) {
+                workTask.doNextBatch();
             }
-            AoTDUpdateMarketAgainTask var6 = new AoTDUpdateMarketAgainTask((Economy) Global.getSector().getEconomy(),market);
 
-            while(!((MultiFrameTask)var6).isDone()) {
-                ((MultiFrameTask)var6).doNextBatch();
+            final AoTDUpdateMarketAgainTask marketUpdateTask = new AoTDUpdateMarketAgainTask((Economy) Global.getSector().getEconomy(), openMarket);
+            while(!marketUpdateTask.isDone()) {
+                marketUpdateTask.doNextBatch();
+            }
+
+        } else {
+            for (MarketAPI market : markets) {
+                final PersonAPI admin = market.getAdmin();
+                admin.getStats().refreshCharacterStatsEffects();
+                admin.getStats().refreshGovernedOutpostEffects(market);
+            }
+
+            final MainWorkTask2 workTask = new AoTdMainWorkTask2(markets, this, econWorkParams);
+
+            while(!workTask.isDone()) {
+                workTask.doNextBatch();
+            }
+
+            final AoTDUpdateMarketAgainTask marketUpdateTask = new AoTDUpdateMarketAgainTask((Economy) Global.getSector().getEconomy());
+            while(!marketUpdateTask.isDone()) {
+                marketUpdateTask.doNextBatch();
             }
         }
-        else{
-            Iterator var3 = (new ArrayList(markets)).iterator();
-            while(var3.hasNext()) {
-                MarketAPI var2 = (MarketAPI)var3.next();
-                PersonAPI var4 = var2.getAdmin();
-                var4.getStats().refreshCharacterStatsEffects();
-                var4.getStats().refreshGovernedOutpostEffects(var2);
-            }
-            MainWorkTask2 var5 = new AoTdMainWorkTask2(markets, this, econWorkParams);
-
-            while(!((MultiFrameTask)var5).isDone()) {
-                ((MultiFrameTask)var5).doNextBatch();
-            }
-            AoTDUpdateMarketAgainTask var6 = new AoTDUpdateMarketAgainTask((Economy) Global.getSector().getEconomy());
-
-            while(!((MultiFrameTask)var6).isDone()) {
-                ((MultiFrameTask)var6).doNextBatch();
-            }
-
-        }
-
 
         if (econWorkParams.withImmigration) {
-            ImmigrationTask var7 = new ImmigrationTask(markets, this, !econWorkParams.forceNonUIStep);
+            final ImmigrationTask immigrationTask = new ImmigrationTask(markets, this, !econWorkParams.forceNonUIStep);
 
-            while(!((MultiFrameTask)var7).isDone()) {
-                ((MultiFrameTask)var7).doNextBatch();
+            while(!immigrationTask.isDone()) {
+                immigrationTask.doNextBatch();
             }
         }
 
-        FinishEconomyUpdateTask var8 = new AoTDFinishEconomyUpdateTask((Economy)Global.getSector().getEconomy());
-
-        while(!((MultiFrameTask)var8).isDone()) {
-            ((MultiFrameTask)var8).doNextBatch();
+        final FinishEconomyUpdateTask finishUpdateTask = new AoTDFinishEconomyUpdateTask((Economy)Global.getSector().getEconomy());
+        while(!finishUpdateTask.isDone()) {
+            finishUpdateTask.doNextBatch();
         }
     }
 

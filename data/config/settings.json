@@ -1,0 +1,16 @@
+{
+	
+	"graphics":{
+		"ui":{
+			"marketArrow":"graphics/ui/aotd_arrow.png",
+		
+		},
+		
+	
+
+
+	},
+	"aotd_allow_multithreaded_economy_calculaton":true,
+	"decivMinStreak":9
+}
+
