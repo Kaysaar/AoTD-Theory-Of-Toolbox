@@ -14,9 +14,7 @@ import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDMarketDemandData;
 import data.kaysaar.aotd.tot.scripts.trade.models.AoTDFactionTradeData;
 import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
+import java.util.*;
 
 public class AoTDEconomy extends Economy {
     public static boolean runningPrePlayerEconomy = false;
@@ -135,57 +133,123 @@ public class AoTDEconomy extends Economy {
             pruneCommoditiesThatMightAppear((Market) market);
         }
     }
-    public static void pruneCommoditiesThatMightAppear(Market market){
-        ArrayList<String>newCommoditiesToAdd = new ArrayList<>();
-        ArrayList<CommodityOnMarket>list = (ArrayList<CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodities",market);
-        for (CommoditySpecAPI allCommoditySpec : Global.getSettings().getAllCommoditySpecs()) {
-            if(list.stream().noneMatch(x->x.getId().equals(allCommoditySpec.getId()))) {
-                newCommoditiesToAdd.add(allCommoditySpec.getId());
-            }
-        }
-        HashMap<String,CommodityOnMarket>commodityMap = (HashMap<String, CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodityMap",market);
+    public static void pruneCommoditiesThatMightAppear(Market market) {
+        List<CommodityOnMarket> commodities =
+                (List<CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodities", market);
 
-        Iterator iterator = list.iterator();
-        while (iterator.hasNext()) {
-            CommodityOnMarket data = (CommodityOnMarket) iterator.next();
-            if(!(data instanceof AoTDCommodityOnMarket)){
-                newCommoditiesToAdd.add(data.getId());
-                iterator.remove();
-            }
-        }
-        for (String s : newCommoditiesToAdd) {
-            AoTDCommodityOnMarket data = new AoTDCommodityOnMarket(market,s);
-            commodityMap.put(s,data);
-            list.add(data);
+        if (commodities == null) {
+            commodities = new ArrayList<>();
+            ReflectionUtilis.setPrivateVariableFromSuperclass("commodities", market, commodities);
         }
 
+        ensureAoTDDemandData(market);
+
+        /*
+         * Preserve already-converted AoTD commodities where possible.
+         * Replace vanilla CommodityOnMarket entries and add any missing commodity specs.
+         */
+        Map<String, AoTDCommodityOnMarket> byId = new HashMap<>();
+
+        for (CommodityOnMarket commodity : new ArrayList<>(commodities)) {
+            if (commodity instanceof AoTDCommodityOnMarket aotdCommodity) {
+                byId.put(aotdCommodity.getId(), aotdCommodity);
+            }
+        }
+
+        for (CommoditySpecAPI spec : Global.getSettings().getAllCommoditySpecs()) {
+            AoTDCommodityOnMarket commodity = byId.get(spec.getId());
+
+            if (commodity == null) {
+                commodity = new AoTDCommodityOnMarket(market, spec.getId());
+                commodity.getSupplyDemandData();
+                byId.put(spec.getId(), commodity);
+            }
+        }
+
+        commodities.clear();
+
+        for (CommoditySpecAPI spec : Global.getSettings().getAllCommoditySpecs()) {
+            commodities.add(byId.get(spec.getId()));
+        }
+
+        rebuildCommodityLookupMaps(market, commodities);
+        market.getAllCommodities();
     }
 
     public void initCommodities(Market market) {
-        ArrayList<CommodityOnMarket>list = (ArrayList<CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodities",market);
-        HashMap<String,CommodityOnMarket>commodityMap = (HashMap<String, CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodityMap",market);
-        ReflectionUtilis.setPrivateVariableFromSuperclass("demandData",market,new AoTDMarketDemandData(market));
-        for (CommoditySpecAPI commoditySpecAPI : Global.getSettings().getAllCommoditySpecs()) {
-            market.getDemandData().getDemand(commoditySpecAPI.getDemandClass());
-            AoTDCommodityOnMarket data = new AoTDCommodityOnMarket(market,commoditySpecAPI.getId());
-            data.getSupplyDemandData();
-            commodityMap.put(commoditySpecAPI.getId(),data);
-            list.add(data);
-            ReflectionUtilis.invokeMethodWithAutoProjection("addToDemandClassList",market,(CommodityOnMarket)data);
-        }
-        Iterator iterator = list.iterator();
-        while (iterator.hasNext()) {
-            CommodityOnMarket data = (CommodityOnMarket) iterator.next();
-            if(!(data instanceof AoTDCommodityOnMarket)){
-                iterator.remove();
-            }
-        }
-        for (CommodityOnMarket commodityOnMarket : list) {
-            commodityMap.put(commodityOnMarket.getId(),commodityOnMarket);
+        List<CommodityOnMarket> commodities =
+                (List<CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodities", market);
+
+        if (commodities == null) {
+            commodities = new ArrayList<>();
+            ReflectionUtilis.setPrivateVariableFromSuperclass("commodities", market, commodities);
         }
 
+        commodities.clear();
 
+        ReflectionUtilis.setPrivateVariableFromSuperclass("demandData", market, new AoTDMarketDemandData(market));
+
+        for (CommoditySpecAPI spec : Global.getSettings().getAllCommoditySpecs()) {
+            market.getDemandData().getDemand(spec.getDemandClass());
+
+            AoTDCommodityOnMarket commodity = new AoTDCommodityOnMarket(market, spec.getId());
+            commodity.getSupplyDemandData();
+
+            commodities.add(commodity);
+        }
+
+        rebuildCommodityLookupMaps(market, commodities);
         market.getAllCommodities();
+    }
 
+    private static void ensureAoTDDemandData(Market market) {
+        Object demandData = ReflectionUtilis.getPrivateVariableFromSuperClass("demandData", market);
+
+        if (!(demandData instanceof AoTDMarketDemandData)) {
+            ReflectionUtilis.setPrivateVariableFromSuperclass("demandData", market, new AoTDMarketDemandData(market));
+        }
+    }
+
+    private static void rebuildCommodityLookupMaps(Market market, List<CommodityOnMarket> commodities) {
+        Map<String, CommodityOnMarket> commodityMap =
+                (Map<String, CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodityMap", market);
+
+        if (commodityMap == null) {
+            commodityMap = new HashMap<>();
+            ReflectionUtilis.setPrivateVariableFromSuperclass("commodityMap", market, commodityMap);
+        }
+
+        Map<String, List<CommodityOnMarket>> commoditiesByDemandClass =
+                (Map<String, List<CommodityOnMarket>>) ReflectionUtilis.getPrivateVariableFromSuperClass("commoditiesByDemandClass", market);
+
+        if (commoditiesByDemandClass == null) {
+            commoditiesByDemandClass = new HashMap<>();
+            ReflectionUtilis.setPrivateVariableFromSuperclass("commoditiesByDemandClass", market, commoditiesByDemandClass);
+        }
+
+        commodityMap.clear();
+        commoditiesByDemandClass.clear();
+
+        for (CommodityOnMarket commodity : commodities) {
+            if (!(commodity instanceof AoTDCommodityOnMarket)) {
+                /*
+                 * This should never happen after prune/init, but keep this guard so
+                 * getCommoditiesWithClass() cannot return vanilla CommodityOnMarket.
+                 */
+                continue;
+            }
+
+            commodityMap.put(commodity.getId(), commodity);
+
+            String demandClass = ((AoTDCommodityOnMarket) commodity).getCommoditySpec().getDemandClass();
+            List<CommodityOnMarket> demandClassCommodities = commoditiesByDemandClass.get(demandClass);
+
+            if (demandClassCommodities == null) {
+                demandClassCommodities = new ArrayList<>();
+                commoditiesByDemandClass.put(demandClass, demandClassCommodities);
+            }
+
+            demandClassCommodities.add(commodity);
+        }
     }
 }

@@ -1,5 +1,6 @@
 package data.kaysaar.aotd.tot.ui.grandwonders;
 
+import com.fs.starfarer.api.campaign.econ.Industry;
 import com.fs.starfarer.api.characters.PersonAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
@@ -51,7 +52,15 @@ public class GrandWonderContract extends AoTDTradeContract {
 
     @Override
     public boolean isExpired() {
-        return !site.isBuilding()||!site.getMarket().hasIndustry(site.getId());
+        boolean isThisSitePresent = false;
+        for (Industry industry : site.getMarket().getIndustries()) {
+            if(industry instanceof AoTDConstructionSite site){
+                if(site.equals(this.site)){
+                    isThisSitePresent = true;
+                }
+            }
+        }
+        return !site.isUpgrading()||!isThisSitePresent||!site.getMarket().getFaction().isPlayerFaction();
     }
     @Override
     public boolean canFreezeContract() {

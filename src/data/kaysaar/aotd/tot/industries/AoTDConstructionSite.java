@@ -111,6 +111,7 @@ public class AoTDConstructionSite extends BaseIndustry {
         return commodities;
     }
 
+
     public String getUniqueIdForContract() {
         if (uniqueIdForContract == null) uniqueIdForContract = Misc.genUID();
         return "grand_wonder_construction_" + uniqueIdForContract;
@@ -126,6 +127,7 @@ public class AoTDConstructionSite extends BaseIndustry {
         spec = getSpec();
         return resolved;
     }
+
 
     public void setAssignedWonder(String assignedWonder) {
 
@@ -217,7 +219,7 @@ public class AoTDConstructionSite extends BaseIndustry {
 
     @Override
     public String getId() {
-
+        this.id = getSpec().getId();
         return super.getId();
     }
 

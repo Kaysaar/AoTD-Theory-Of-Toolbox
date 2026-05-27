@@ -6,11 +6,12 @@ import com.fs.starfarer.campaign.econ.CommodityOnMarket;
 import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.MarketDemand;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
-import data.kaysaar.aotd.tot.scripts.economy.AoTdMainWorkTask2;
 
 public class AoTDMarketDemand extends MarketDemand {
     Market market;
     String demandClass;
+
+    private static final float AOTD_MIN_TRADE_IMPACT = 0.01f;
 
     public AoTDMarketDemand(Market market, String s) {
         super(market, s);
@@ -21,6 +22,11 @@ public class AoTDMarketDemand extends MarketDemand {
 
     Object readResolve() {
         ReflectionUtilis.setPrivateVariableFromSuperclass("baseCommodity", this, Global.getSettings().getCommoditySpec(demandClass));
+
+        if (market != null && demandClass != null) {
+            ReflectionUtilis.setPrivateVariableFromSuperclass("demand", this, new MutableStat(0f));
+        }
+
         return this;
     }
 
@@ -34,30 +40,54 @@ public class AoTDMarketDemand extends MarketDemand {
     }
 
     @Override
-    public float getStockpileUtility(boolean includeTradeImpact) {
-        float totalStockpileUtility = 0f;
-        float totalTradeUtility = 0f;
+    public float getStockpileUtility() {
+        return getStockpileUtility(true);
+    }
 
-        for (CommodityOnMarket com :market.getCommoditiesWithClass(getDemandClass())) {
-            if (com instanceof AoTDCommodityOnMarket commodity) {
-                /*
-                 * AoTD pricing uses custom stocks as the stockpile utility source.
-                 *
-                 * This must match AoTdMainWorkTask2.getAoTDClassStockpileUtility().
-                 */
-                totalStockpileUtility += Math.max(0f, commodity.getStocks());
-            } else {
-                totalStockpileUtility += Math.max(0f, com.getStockpile());
-            }
+    @Override
+    public float getStockpileUtility(boolean includeTradeImpact) {
+        float totalUtility = 0f;
+
+        for (CommodityOnMarket commodity : market.getCommoditiesWithClass(demandClass)) {
+            if (commodity == null) continue;
+
+            float utility = Math.max(0.0001f, commodity.getUtilityOnMarket());
+            float stockpile = Math.max(0f, commodity.getStockpile());
 
             if (includeTradeImpact) {
-                totalTradeUtility +=
-                        com.getTradeMod().getModifiedValue()
-                                + com.getTradeModPlus().getModifiedValue()
-                                + com.getTradeModMinus().getModifiedValue();
+                stockpile += getEffectiveRawTradeImpact(commodity);
             }
+
+            if (stockpile < 0f) {
+                stockpile = 0f;
+            }
+
+            totalUtility += stockpile * utility;
         }
 
-        return Math.max(0f, totalStockpileUtility + totalTradeUtility);
+        return Math.max(0f, totalUtility);
+    }
+
+    private static float getEffectiveRawTradeImpact(CommodityOnMarket commodity) {
+        float combined = commodity.getCombinedTradeModQuantity();
+
+        float rawSum =
+                commodity.getTradeMod().getModifiedValue()
+                        + commodity.getTradeModPlus().getModifiedValue()
+                        + commodity.getTradeModMinus().getModifiedValue();
+
+        if (Math.abs(rawSum) <= AOTD_MIN_TRADE_IMPACT) {
+            return combined;
+        }
+
+        if (Math.abs(combined) <= AOTD_MIN_TRADE_IMPACT) {
+            return rawSum;
+        }
+
+        if (Math.signum(rawSum) == Math.signum(combined)) {
+            return Math.abs(rawSum) >= Math.abs(combined) ? rawSum : combined;
+        }
+
+        return combined;
     }
 }

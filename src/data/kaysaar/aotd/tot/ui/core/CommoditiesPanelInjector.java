@@ -107,7 +107,7 @@ public class CommoditiesPanelInjector implements MarketUIListener {
 
         float xAxis = 70;
         float additionalHeight  =30;
-        float extraWidth =54;
+        float extraWidth =74;
         if(toRemove != null){
             if(!ctx.grandColoniesLayout){
                 if(widgets!=null){

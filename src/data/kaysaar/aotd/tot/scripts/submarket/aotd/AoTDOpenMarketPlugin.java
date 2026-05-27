@@ -42,7 +42,7 @@ public class AoTDOpenMarketPlugin extends OpenMarketPlugin {
             limit+=imports*ECON_UNIT_MULT_IMPORTS;
         }
         limit+=supply*ECON_UNIT_MULT_PRODUCTION;
-        limit-= commodity.getDef();
+        limit-= commodity.getDeficitQuantity();
         limit+= commodity.getExcessQuantity();
         if(limit<=0)limit=0;
         return limit;

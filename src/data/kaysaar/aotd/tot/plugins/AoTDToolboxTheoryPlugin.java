@@ -206,18 +206,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
 
     }
 
-    @Override
-    public void onNewGameAfterProcGen() {
-        Economy econ = (Economy) Global.getSector().getEconomy();
-        ReflectionUtilis.setPrivateVariableFromSuperclass("economy", Global.getSector(), new AoTDEconomy(econ.isSimMode(), econ));
-        AoTDEconomy econ2 = (AoTDEconomy) Global.getSector().getEconomy();
-        econ2.runMarketAdjustmentAfterEconomyCreation();
-        AoTDEconomy.runningPrePlayerEconomy = true;
-        Global.getSector().removeScriptsOfClass(EconomyFleetRouteManager.class);
-        Global.getSector().addScript(new AoTDEconomyRouteManager());
 
-
-    }
 
     @Override
     public void onCodexDataGenerated() {
@@ -277,7 +266,13 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
     }
     @Override
     public void onNewGameAfterEconomyLoad() {
-        //Kick for economy to start up
+        Economy econ = (Economy) Global.getSector().getEconomy();
+        ReflectionUtilis.setPrivateVariableFromSuperclass("economy", Global.getSector(), new AoTDEconomy(econ.isSimMode(), econ));
+        AoTDEconomy econ2 = (AoTDEconomy) Global.getSector().getEconomy();
+        econ2.runMarketAdjustmentAfterEconomyCreation();
+        AoTDEconomy.runningPrePlayerEconomy = true;
+        Global.getSector().removeScriptsOfClass(EconomyFleetRouteManager.class);
+        Global.getSector().addScript(new AoTDEconomyRouteManager());
 
     }
     public static boolean afterSaveState = true;
