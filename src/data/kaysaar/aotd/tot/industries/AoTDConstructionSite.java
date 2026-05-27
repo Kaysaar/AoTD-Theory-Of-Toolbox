@@ -60,7 +60,7 @@ public class AoTDConstructionSite extends BaseIndustry {
     public float getAllowedProgressOnRestoration() {
         LinkedHashMap<String, Integer> required = new LinkedHashMap<>();
         for (Map.Entry<String, Integer> entry : wonderAPI.getDemandCostForRestoration().entrySet()) {
-            required.put(entry.getKey(), AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(entry.getValue(), true, entry.getKey()));
+            required.put(entry.getKey(), (int) (AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(entry.getValue(), true, entry.getKey())*Math.ceil(wonderAPI.getSpec().getBuildTime()/30f)));
         }
 
         if (required == null || required.isEmpty()) {
@@ -92,7 +92,7 @@ public class AoTDConstructionSite extends BaseIndustry {
         int months = Math.max(1, (int) Math.ceil((wonderAPI.getSpec().getBuildTime()-daysPassedOnConstruction) / 30f));// prevent division by 0
         LinkedHashMap<String, Integer> required = new LinkedHashMap<>();
         for (Map.Entry<String, Integer> entry : wonderAPI.getDemandCostForRestoration().entrySet()) {
-            required.put(entry.getKey(), AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(entry.getValue(), true, entry.getKey()));
+            required.put(entry.getKey(), (int) (AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(entry.getValue(), true, entry.getKey())*Math.ceil(wonderAPI.getSpec().getBuildTime()/30f)));
         }
 
         required.forEach((key, totalRequired) -> {
@@ -161,10 +161,7 @@ public class AoTDConstructionSite extends BaseIndustry {
             tooltip.addSectionHeading("Current Wonder In Construction", Alignment.MID, 5f);
             tooltip.addPara("Currently constructed wonder : %s", 5f, Color.ORANGE, wonderAPI.getCurrentName());
             tooltip.addPara("This wonder to progress requires monthly flow of resources, which are provided via Trade Contract", 3f);
-            LinkedHashMap<String, Integer> am = new LinkedHashMap<>();
-            for (Map.Entry<String, Integer> entry : wonderAPI.getDemandCostForRestoration().entrySet()) {
-                am.put(entry.getKey(), AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(entry.getValue(), true, entry.getKey()));
-            }
+            LinkedHashMap<String, Integer> am = new LinkedHashMap<>(getMonthlyResNeeded());
             float progress = Math.round(getAllowedProgressOnRestoration() * 100);
             AoTDCommodityShortPanelCombined combined = new AoTDCommodityShortPanelCombined(tooltip.getWidthSoFar(), 3, am);
             ProgressBarComponentV2 bar = new ProgressBarComponentV2(tooltip.getWidthSoFar(), 15, null, null, market.getFaction().getBaseUIColor(), market.getFaction().getDarkUIColor(), progress / 100);
