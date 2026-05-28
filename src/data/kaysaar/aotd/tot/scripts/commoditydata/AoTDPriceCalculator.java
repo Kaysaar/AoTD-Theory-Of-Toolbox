@@ -1,7 +1,6 @@
 package data.kaysaar.aotd.tot.scripts.commoditydata;
 
 import com.fs.starfarer.campaign.econ.CommodityOnMarket;
-import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.PriceCalculator;
 
 public class AoTDPriceCalculator extends PriceCalculator {
