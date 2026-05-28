@@ -452,18 +452,18 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
             for (EconomyFleetAssignmentAI.CargoQuantityData cargoQuantityData : data.cargoReturn) {
                 AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) from.getCommodityData(cargoQuantityData.getCommodity().getId());
                 com.getExcDefData().deficit.addTemporaryModFlat(60,fleet.getId()+"_aotd_lost_trade","Recent Shipment Lost",cargoQuantityData.units);
-                AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getCommoditySpec());
+                AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getSpec());
             }
             if(!returning){
                 for (EconomyFleetAssignmentAI.CargoQuantityData cargoQuantityData : data.cargoDeliver) {
                     AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) to.getCommodityData(cargoQuantityData.getCommodity().getId());
                     com.getExcDefData().deficit.addTemporaryModFlat(60,fleet.getId()+"_aotd_lost_trade","Recent Shipment Lost",cargoQuantityData.units);
-                    AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getCommoditySpec());
+                    AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getSpec());
                 }
                 for (EconomyFleetAssignmentAI.CargoQuantityData cargoQuantityData : data.cargoReturn) {
                     AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) to.getCommodityData(cargoQuantityData.getCommodity().getId());
                     com.getExcDefData().excess.addTemporaryModFlat(60,fleet.getId()+"_aotd_lost_trade","Recent Shipment Lost",cargoQuantityData.units);
-                    AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getCommoditySpec());
+                    AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getSpec());
                 }
             }
 

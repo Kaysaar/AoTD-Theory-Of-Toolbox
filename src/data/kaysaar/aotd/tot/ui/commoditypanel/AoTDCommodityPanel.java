@@ -77,14 +77,14 @@ public class AoTDCommodityPanel implements ExtendedUIPanelPlugin {
                    return 1;
                }
                else {
-                   return (int)Math.signum(o1.getCommoditySpec().getEconomyTier() - o2.getCommoditySpec().getEconomyTier());
+                   return (int)Math.signum(o1.getSpec().getEconomyTier() - o2.getSpec().getEconomyTier());
                }
             }
         });
         Iterator<AoTDCommodityOnMarket>commoditiesIterator = commodities.iterator();
         while(commoditiesIterator.hasNext()){
             AoTDCommodityOnMarket com = commoditiesIterator.next();
-            if (!com.getCommoditySpec().isNonEcon() && com.getCommoditySpec().isPrimary()) {
+            if (!com.getSpec().isNonEcon() && com.getSpec().isPrimary()) {
                 if (!(com.getSupplyDemandData().doesHaveSupplyOrDemand())) {
                     commoditiesIterator.remove();
                 }

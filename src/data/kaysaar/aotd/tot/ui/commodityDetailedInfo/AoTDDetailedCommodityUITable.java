@@ -200,7 +200,7 @@ public class AoTDDetailedCommodityUITable extends UITableImpl {
         }));
             handleSortButton(share,Comparator.comparing(x->{
                 float prod = x.commodity.getSupplyDemandData().getTotalRawUnitsFromSupply();
-                float total = AoTDSectorProductionDemandDataUtils.getTotalProductionFromSector(x.commodity.getCommoditySpec().getId());
+                float total = AoTDSectorProductionDemandDataUtils.getTotalProductionFromSector(x.commodity.getSpec().getId());
                 return prod/total;
             }));
 

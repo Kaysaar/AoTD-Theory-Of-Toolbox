@@ -16,9 +16,8 @@ import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityMarketData;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDMarketDemandData;
-import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDPriceCalculator;
+import data.kaysaar.aotd.tot.scripts.commoditydata.EffectivePriceCalculator;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDSupplyDemandData;
-import data.kaysaar.aotd.tot.scripts.submarket.aotd.AoTDOpenMarketPlugin;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -775,26 +774,26 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         commodity.getPlayerDemandPriceMod().unmodifyMult(AOTD_PRICE_MOD_ID);
         commodity.getPlayerSupplyPriceMod().unmodifyMult(AOTD_PRICE_MOD_ID);
 
-        if (commodity.getCommoditySpec().getPriceVariability().v <= 0.0001f) {
+        if (commodity.getSpec().getPriceVariability().v <= 0.0001f) {
             commodity.getPlayerDemandPriceMod().modifyMult(AOTD_PRICE_MOD_ID, targets.sellMult);
             commodity.getPlayerSupplyPriceMod().modifyMult(AOTD_PRICE_MOD_ID, targets.buyMult);
         }
     }
 
     private static void ensureAoTDPriceCalculators(AoTDCommodityOnMarket commodity) {
-        if (!(commodity.getDemandPrice() instanceof AoTDPriceCalculator)) {
+        if (!(commodity.getDemandPrice() instanceof EffectivePriceCalculator)) {
             ReflectionUtilis.setPrivateVariableFromSuperclass(
                     "demandPrice",
                     commodity,
-                    new AoTDPriceCalculator(commodity)
+                    new EffectivePriceCalculator(commodity)
             );
         }
 
-        if (!(commodity.getSupplyPrice() instanceof AoTDPriceCalculator)) {
+        if (!(commodity.getSupplyPrice() instanceof EffectivePriceCalculator)) {
             ReflectionUtilis.setPrivateVariableFromSuperclass(
                     "supplyPrice",
                     commodity,
-                    new AoTDPriceCalculator(commodity)
+                    new EffectivePriceCalculator(commodity)
             );
         }
     }
@@ -807,21 +806,22 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             float minBuy,
             float maxBuy
     ) {
-        if (calculator instanceof AoTDPriceCalculator aotdCalculator) {
-            aotdCalculator.setAoTDPriceModel(
-                    targets.sellMult,
-                    targets.buyMult,
-                    minSell,
-                    maxSell,
-                    minBuy,
-                    maxBuy,
-                    AOTD_REFERENCE_TRADE_QUANTITY,
-                    AOTD_CUSTOM_PRICE_RESPONSE,
-                    AOTD_CUSTOM_PRICE_STOCKPILE_DENOM_MULT,
-                    AOTD_CUSTOM_PRICE_DENOM_MAX_REFERENCE_MULT,
-                    AOTD_MAX_RESELL_RETURN_MULT
-            );
-        }
+        // FIXME this is not needed I think.
+        // if (calculator instanceof EffectivePriceCalculator aotdCalculator) {
+        //     aotdCalculator.setAoTDPriceModel(
+        //             targets.sellMult,
+        //             targets.buyMult,
+        //             minSell,
+        //             maxSell,
+        //             minBuy,
+        //             maxBuy,
+        //             AOTD_REFERENCE_TRADE_QUANTITY,
+        //             AOTD_CUSTOM_PRICE_RESPONSE,
+        //             AOTD_CUSTOM_PRICE_STOCKPILE_DENOM_MULT,
+        //             AOTD_CUSTOM_PRICE_DENOM_MAX_REFERENCE_MULT,
+        //             AOTD_MAX_RESELL_RETURN_MULT
+        //     );
+        // }
     }
 
     private static AoTDClassPriceState buildAoTDClassPriceState(List<CommodityOnMarket> sameClassCommodities) {
@@ -922,9 +922,6 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private static float getDeficitCenterMax(AoTDCommodityOnMarket commodity) {
-        CommoditySpecAPI spec = commodity.getCommoditySpec();
-
-
         if (commodity.isIllegal()) {
             return AOTD_ILLEGAL_DEFICIT_CENTER_MAX;
         }

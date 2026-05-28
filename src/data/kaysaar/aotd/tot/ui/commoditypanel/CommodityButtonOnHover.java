@@ -182,7 +182,7 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
             if (independentImports < 0) independentImports = 0;
 
             if (importsFromFaction > 0) {
-                float saved = importsFromFaction * spec.getBasePrice() * AoTDCommodityEconSpecManager.getCutForCommodity(com.getCommoditySpec().getId(),false);
+                float saved = importsFromFaction * spec.getBasePrice() * AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(),false);
                 tooltip.addPara("%s supplied internally from faction-trades",
                         3f, Color.ORANGE,
                         Misc.getWithDGS(importsFromFaction),
@@ -285,7 +285,7 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
 
                 // LOCAL USE
                 if (localized > 0) {
-                    float income = localized * spec.getBasePrice() * AoTDCommodityEconSpecManager.getCutForCommodity(com.getCommoditySpec().getId(),true);
+                    float income = localized * spec.getBasePrice() * AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(),true);
                     tooltip.addPara(
                             "%s sold locally, generating roughly %s in internal trade.",
                             3f, Color.ORANGE,
@@ -296,7 +296,7 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
 
                 // FACTION EXPORT (internal)
                 if (exportsToFaction > 0) {
-                    float income = exportsToFaction * spec.getBasePrice() * AoTDCommodityEconSpecManager.getCutForCommodity(com.getCommoditySpec().getId(),true);
+                    float income = exportsToFaction * spec.getBasePrice() * AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(),true);
                     tooltip.addPara(
                             "%s shipped to faction markets, generating roughly %s.",
                             3f, Color.ORANGE,

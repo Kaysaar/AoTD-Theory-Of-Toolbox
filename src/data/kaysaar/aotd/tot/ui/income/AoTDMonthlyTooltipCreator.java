@@ -36,7 +36,7 @@ public class AoTDMonthlyTooltipCreator implements TooltipMakerAPI.TooltipCreator
             tooltip.addCustom(tl.getMainPanel(),0f);
         }
         if(node.custom instanceof AoTDCommodityOnMarket commodity){
-            CommodityButtonOnHover hover = new CommodityButtonOnHover(commodity.getCommoditySpec(),commodity.getMarket(),true,true);
+            CommodityButtonOnHover hover = new CommodityButtonOnHover(commodity.getSpec(),commodity.getMarket(),true,true);
             hover.createTooltip(tooltip,expanded,tooltipParam);
         }
 
