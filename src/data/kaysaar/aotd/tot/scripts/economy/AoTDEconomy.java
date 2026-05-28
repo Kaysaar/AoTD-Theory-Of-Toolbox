@@ -241,7 +241,7 @@ public class AoTDEconomy extends Economy {
 
             commodityMap.put(commodity.getId(), commodity);
 
-            String demandClass = ((AoTDCommodityOnMarket) commodity).getCommoditySpec().getDemandClass();
+            String demandClass = ((AoTDCommodityOnMarket) commodity).getSpec().getDemandClass();
             List<CommodityOnMarket> demandClassCommodities = commoditiesByDemandClass.get(demandClass);
 
             if (demandClassCommodities == null) {

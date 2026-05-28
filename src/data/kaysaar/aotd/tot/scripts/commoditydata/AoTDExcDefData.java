@@ -70,16 +70,16 @@ public class AoTDExcDefData {
         else deficit.removeTemporaryMod(EXT_TRADE_ID);
 
         if (excessAmt > 0) {
-            if(com.getCommoditySpec().hasTag(AoTDTradeTags.AOTD_DOES_NOT_HAVE_EXCESS)){
+            if(com.getSpec().hasTag(AoTDTradeTags.AOTD_DOES_NOT_HAVE_EXCESS)){
                 return;
             }
             else{
-                if(com.getCommoditySpec().hasTag(AoTDTradeTags.AOTD_NO_ONE_BUYS_OUTSIDE)){
+                if(com.getSpec().hasTag(AoTDTradeTags.AOTD_NO_ONE_BUYS_OUTSIDE)){
                     excess.addTemporaryModFlat(days, EXT_TRADE_ID,"Unable to export due to Global Excess.", excessAmt);
                 }
                 else{
                     int soldMax = excessAmt/2;
-                    AoTDTradeManager.getInstance().getMarketData(com.getMarket()).addExtraSold(com.getCommoditySpec().getId(),soldMax);
+                    AoTDTradeManager.getInstance().getMarketData(com.getMarket()).addExtraSold(com.getSpec().getId(),soldMax);
                     excess.addTemporaryModFlat(days, EXT_TRADE_ID,"Unable to export due to Global Excess.", soldMax);
 
                 }
@@ -107,7 +107,7 @@ public class AoTDExcDefData {
             return;
         }
         int diff =currDemand - recoreded;
-        if(commodity.getCommoditySpec().getId().equals(Commodities.SUPPLIES)){
+        if(commodity.getSpec().getId().equals(Commodities.SUPPLIES)){
             String hehe = "ege";
         }
         if(diff>0){

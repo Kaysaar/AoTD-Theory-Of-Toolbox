@@ -5,11 +5,11 @@ import java.util.Collections;
 
 /**
  * Price calculator for trade with tunable parameters. The price function is piecewise‑defined,
- * continuous, monotonic decreasing, symmetric and positive for all real s.
+ * continuous, monotonic, decreasing, symmetric and positive for all real s.
  * <p>
  */
-public class PriceCalculator {
-    private PriceCalculator() {}
+public class BasePriceCalculator {
+    private BasePriceCalculator() {}
 
     // ------------------------ TUNABLE START ------------------------
 
@@ -37,6 +37,9 @@ public class PriceCalculator {
     static final double LAMBDA_FACTOR;
     static final double EXP_EXCESS;
     static final double SHIFT_FRACTION;
+
+    // TODO Not used, but you can use it if you want
+    // static final int INHERENT_DEMAND = com.fs.starfarer.campaign.econ.Economy.MIN_DEMAND_FOR_PRICING;
 
     static final float INHERENT_DEMAND = 4f;
     static final float PRICE_MULT_FLOOR = 0.01f;
