@@ -144,7 +144,7 @@ public class PriceCalculatorTest {
 
     @Test
     public void tradeAcrossZoneBoundaries_StillAdditive() {
-        // Stock near deficit boundary: DEMAND=100, DEFICIT_RATIO=0.5 -> boundary at 50
+        // Stock near deficit boundary: DEMAND=100, DEFICIT_NORMAL_BOUND=0.5 -> boundary at 50
         final double stored = 55.0;
         final long buyAmount = 20;  // will cross from normal to deficit (stored goes 55 -> 35)
         final float avgFull = PriceCalculator.getUnitPrice(TransactionDirection.ENTITY_SELLING, buyAmount, stored, BASE_PRICE, DEMAND);
@@ -200,8 +200,8 @@ public class PriceCalculatorTest {
 
     @Test
     public void instantaneousMultiplierAtZoneBoundaries() {
-        final double atDeficit = DEFICIT_RATIO * DEMAND;
-        final double atExcess  = EXCESS_RATIO * DEMAND;
+        final double atDeficit = DEFICIT_NORMAL_BOUND * DEMAND;
+        final double atExcess  = EXCESS_NORMAL_BOUND * DEMAND;
         final float pDef = PriceCalculator.getUnitPrice(TransactionDirection.NEUTRAL, 0, atDeficit, BASE_PRICE, DEMAND);
         final float pExc = PriceCalculator.getUnitPrice(TransactionDirection.NEUTRAL, 0, atExcess,  BASE_PRICE, DEMAND);
         // These are just sanity checks; no assertion on magnitude, but they must be finite.
@@ -210,19 +210,17 @@ public class PriceCalculatorTest {
 
     @Test
     public void tradeStartingExactlyAtDeficitBoundary() {
-        final double stored = DEFICIT_RATIO * DEMAND;
+        final double stored = DEFICIT_NORMAL_BOUND * DEMAND;
         final float avg = PriceCalculator.getUnitPrice(TransactionDirection.ENTITY_SELLING, 5, stored, BASE_PRICE, DEMAND);
         assertTrue(avg > 0);
     }
 
     @Test
     public void tradeEndingExactlyAtExcessBoundary() {
-        final double start = EXCESS_RATIO * DEMAND - 2;
+        final double start = EXCESS_NORMAL_BOUND * DEMAND - 2;
         final float avg = PriceCalculator.getUnitPrice(TransactionDirection.ENTITY_SELLING, 2, start, BASE_PRICE, DEMAND);
         assertTrue(avg > 0);
     }
-
-    // ---- price monotonicity ----------------------------------------------------
 
     @Test
     public void instantaneousPriceDecreasesWithStock() {
@@ -233,8 +231,6 @@ public class PriceCalculatorTest {
             assertTrue(p1 > p2, "Price should decrease as stock increases: " + stocks[i] + " -> " + stocks[i+1]);
         }
     }
-
-    // ---- small / large amounts -------------------------------------------------
 
     @Test
     public void tinyBuyInExcessGivesLowPrice() {
@@ -396,5 +392,29 @@ public class PriceCalculatorTest {
         final float avg = PriceCalculator.getUnitPrice(TransactionDirection.ENTITY_SELLING, 1, stored, BASE_PRICE, DEMAND);
         // Must be significantly elevated, but below ceiling if not saturated.
         assertTrue(avg > BASE_PRICE * 2 && avg <= BASE_PRICE * PriceCalculator.PRICE_MULT_CEILING);
+    }
+
+    @Test
+    public void priceFunctionIsContinuousAtZoneBoundaries() {
+        final double deficitB = DEFICIT_NORMAL_BOUND * DEMAND;
+        final double excessB  = EXCESS_NORMAL_BOUND * DEMAND;
+
+        // Get instantaneous prices right at the boundaries (using NEUTRAL with zero amount)
+        final float atDeficit = PriceCalculator.getUnitPrice(TransactionDirection.NEUTRAL, 0, deficitB, BASE_PRICE, DEMAND);
+        final float atExcess  = PriceCalculator.getUnitPrice(TransactionDirection.NEUTRAL, 0, excessB,  BASE_PRICE, DEMAND);
+
+        // Compute prices just barely inside each adjacent zone (offset by a tiny epsilon)
+        final double eps = 1e-6;
+        final float justBelowDeficit = PriceCalculator.getUnitPrice(TransactionDirection.NEUTRAL, 0, deficitB - eps, BASE_PRICE, DEMAND);
+        final float justAboveDeficit = PriceCalculator.getUnitPrice(TransactionDirection.NEUTRAL, 0, deficitB + eps, BASE_PRICE, DEMAND);
+
+        final float justBelowExcess = PriceCalculator.getUnitPrice(TransactionDirection.NEUTRAL, 0, excessB - eps, BASE_PRICE, DEMAND);
+        final float justAboveExcess = PriceCalculator.getUnitPrice(TransactionDirection.NEUTRAL, 0, excessB + eps, BASE_PRICE, DEMAND);
+
+        // The limit from both sides should equal the value at the boundary.
+        assertEquals(atDeficit, justBelowDeficit, 1e-4, "Deficit boundary left limit");
+        assertEquals(atDeficit, justAboveDeficit, 1e-4, "Deficit boundary right limit");
+        assertEquals(atExcess, justBelowExcess, 1e-4, "Excess boundary left limit");
+        assertEquals(atExcess, justAboveExcess, 1e-4, "Excess boundary right limit");
     }
 }

@@ -4,54 +4,79 @@ import java.util.ArrayList;
 import java.util.Collections;
 
 /**
- * Price calculator for trade with tunable parameters. The instantaneous price p(s)
- * depends only on the current stockpile s and the demand d.
- * <p>
- * The price function is piecewise‑defined, continuous, strictly decreasing,
- * symmetric and positive for all real s. Three zones are used:
- * <ul>
- *   <li><b>Deficit zone</b> (s ≤ deficitRatio · d) : exponential growth
- *   as stock becomes more negative.</li>
- *   <li><b>Normal zone</b> (deficitRatio·d < s < excessRatio·d) : power law
- *   that passes through equilibrium p(d)=basePrice.</li>
- *   <li><b>Excess zone</b> (s ≥ excessRatio·d) : power law with a smaller
- *   exponent, making the price fall slowly towards zero.</li>
- * </ul>
- * Buying an amount increases the stockpile, selling decreases it.
- * The average unit price for a transaction is the integral of p(s) over the
- * stock change divided by the absolute amount.  Because p(s) is decreasing,
- * buying always yields an average price below the starting price (and below
- * base if starting below demand), selling yields an average above.
+ * Price calculator for trade with tunable parameters. The price function is piecewise‑defined,
+ * continuous, monotonic decreasing, symmetric and positive for all real s.
  * <p>
  */
 public class PriceCalculator {
     private PriceCalculator() {}
 
-    static final float INHERENT_DEMAND = 4f;
-
-    /** Shift added to stock and demand to avoid poles (fraction of demand). */
-    static final double SHIFT_FRACTION = 0.002;
+    // ------------------------ TUNABLE START ------------------------
 
     /** Stock/demand ratio below which the deficit zone starts. */
-    static final double DEFICIT_RATIO = 0.5;
-
+    static final double DEFICIT_NORMAL_BOUND = 0.6;
     /** Stock/demand ratio above which the excess zone starts. */
-    static final double EXCESS_RATIO = 1.5;
+    static final double EXCESS_NORMAL_BOUND  = 1.4;
+    /** Stock/demand ratio where the deficit zone ends. */
+    static final double ABSOLUTE_DEFICIT_BOUND = 0.0;
+    /** Stock/demand ratio where the excess zone ends. */
+    static final double ABSOLUTE_EXCESS_BOUND = 5.0;
 
-    /** Exponent for the power law in the normal zone. */
-    static final double EXP_NORMAL = 1.0;
+    /** Multiplier when stock is at {@link #DEFICIT_NORMAL_BOUND}. */
+    static final double DEFICIT_NORMAL_MULT = 1.2;
+    /** Multiplier when stock is at {@link #EXCESS_NORMAL_BOUND}. */
+    static final double EXCESS_NORMAL_MULT = 0.8;
+    /** Multiplier when stock is at {@link #ABSOLUTE_DEFICIT_BOUND}. */
+    static final double ABSOLUTE_DEFICIT_MULT = 1.8;
+    /** Multiplier when stock is at {@link #ABSOLUTE_EXCESS_BOUND}. */
+    static final double ABSOLUTE_EXCESS_MULT = 0.4;
 
-    /** Exponent for the power law in the excess zone (must be < EXP_NORMAL
-     *  to keep price decreasing). */
-    static final double EXP_EXCESS = 0.5;
+    // ------------------------ TUNABLE END ------------------------
 
-    /** Steepness of the exponential price increase in the deficit zone. */
-    static final double LAMBDA = 0.01;
+    static final double EXP_NORMAL;
+    static final double LAMBDA_FACTOR;
+    static final double EXP_EXCESS;
+    static final double SHIFT_FRACTION;
 
-    static final float PRICE_MULT_FLOOR = 0.1f;
-    static final float PRICE_MULT_CEILING = 10.0f;
-    static final double MAX_MULT = 1000.0;
+    static final float INHERENT_DEMAND = 4f;
+    static final float PRICE_MULT_FLOOR = 0.01f;
+    static final float PRICE_MULT_CEILING = 100.0f;
+    static final double MAX_MULT = Double.MAX_VALUE;
     static final double MAX_EXP_ARG = 6.0;
+
+    static {
+        final double r1 = DEFICIT_NORMAL_BOUND;
+        final double r2 = EXCESS_NORMAL_BOUND;
+        final double m1 = DEFICIT_NORMAL_MULT;
+        final double m2 = EXCESS_NORMAL_MULT;
+
+        // solve: ln(m1)/ln((1+f)/(r1+f)) == ln(m2)/ln((1+f)/(r2+f))
+        // bisection on f ∈ [0.0001, 10.0]
+        double lo = 0.0001, hi = 10.0;
+        for (int i = 0; i < 60; i++) {
+            double mid = (lo + hi) * 0.5;
+            double L1 = Math.log((1 + mid) / (r1 + mid));
+            double L2 = Math.log((1 + mid) / (r2 + mid));
+            double left  = Math.log(m1) / L1;
+            double right = Math.log(m2) / L2;
+            if (left < right) {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        SHIFT_FRACTION = (lo + hi) * 0.5;
+
+        final double L1 = Math.log((1 + SHIFT_FRACTION) / (r1 + SHIFT_FRACTION));
+        EXP_NORMAL = Math.log(m1) / L1;
+
+        final double rDefAbs = ABSOLUTE_DEFICIT_BOUND;
+        LAMBDA_FACTOR = -Math.log(ABSOLUTE_DEFICIT_MULT / m1) / (rDefAbs - r1);
+
+        final double rExcAbs = ABSOLUTE_EXCESS_BOUND;
+        final double ratioExc = (r2 + SHIFT_FRACTION) / (rExcAbs + SHIFT_FRACTION);
+        EXP_EXCESS = Math.log(ABSOLUTE_EXCESS_MULT / m2) / Math.log(ratioExc);
+    }
 
     /**
      * Computes the per‑unit price for a transaction of {@code amount} units. This function is symmetric and directionless.
@@ -69,7 +94,7 @@ public class PriceCalculator {
         final float d = Math.max(preferred, INHERENT_DEMAND);
 
         if (amount == 0l || type == TransactionDirection.NEUTRAL) {
-            return (float) Math.max(1.0, basePrice * clampMult(p(stored, d)));
+            return (float) Math.max(1.0, basePrice * p(stored, d));
         }
 
         final double deltaStock = (type == TransactionDirection.ENTITY_BUYING) ? amount : -amount;
@@ -82,9 +107,9 @@ public class PriceCalculator {
         final double integralMult = integrate(lower, upper, d);
 
         final double avgMult = integralMult / Math.abs(deltaStock);
-        final double clampedMult = clampMult(avgMult);
+        final float clampedMult = (float) clampMult(avgMult);
 
-        return (float) Math.max(1f, basePrice * clampedMult);
+        return Math.max(1f, basePrice * clampedMult);
     }
 
     private static final double clampMult(double mult) {
@@ -93,15 +118,16 @@ public class PriceCalculator {
 
     /** Piecewise multiplier function m(s). */
     private static final double p(double stock, float demand) {
-        final double deficitBound = DEFICIT_RATIO * demand;
-        final double excessBound = EXCESS_RATIO * demand;
+        final double deficitBound = DEFICIT_NORMAL_BOUND * demand;
+        final double excessBound = EXCESS_NORMAL_BOUND * demand;
 
         final double raw;
         if (stock <= deficitBound) {
             final double mAtBoundary = normalMultiplier(deficitBound, demand);
-            final double arg = -LAMBDA * (stock - deficitBound);
+            final double arg = -LAMBDA_FACTOR * (stock - deficitBound);
 
-            raw = mAtBoundary * Math.exp(arg > MAX_EXP_ARG ? MAX_EXP_ARG : arg);
+            raw = mAtBoundary * Math.exp(arg);
+            // raw = mAtBoundary * Math.exp(arg > MAX_EXP_ARG ? MAX_EXP_ARG : arg);
         } else if (stock >= excessBound) {
             raw = excessMultiplier(stock, demand);
         } else {
@@ -120,7 +146,7 @@ public class PriceCalculator {
 
     /** Excess zone multiplier, continuous with normal at excessBound. */
     private static final double excessMultiplier(double s, float demand) {
-        final double excessBound = EXCESS_RATIO * demand;
+        final double excessBound = EXCESS_NORMAL_BOUND * demand;
         final double shift = SHIFT_FRACTION * demand;
 
         final double ratio = (excessBound + shift) / (s + shift);
@@ -131,8 +157,8 @@ public class PriceCalculator {
     private static final double integrate(double a, double b, float demand) {
         if (a == b) return 0.0;
 
-        final double deficitBound = DEFICIT_RATIO * demand;
-        final double excessBound = EXCESS_RATIO * demand;
+        final double deficitBound = DEFICIT_NORMAL_BOUND * demand;
+        final double excessBound = EXCESS_NORMAL_BOUND * demand;
 
         final ArrayList<Double> points = new ArrayList<>(4);
         points.add(a);
@@ -166,30 +192,34 @@ public class PriceCalculator {
                 return powerIntegral(a, b, shift, EXP_NORMAL, K);
             }
             case EXCESS: {
-                final double excessBound = EXCESS_RATIO * demand;
+                final double excessBound = EXCESS_NORMAL_BOUND * demand;
                 final double mAtBoundary = normalMultiplier(excessBound, demand);
                 final double K = mAtBoundary * Math.pow(excessBound + shift, EXP_EXCESS);
                 return powerIntegral(a, b, shift, EXP_EXCESS, K);
             }
             case DEFICIT: {
-                final double deficitBound = DEFICIT_RATIO * demand;
+                final double deficitBound = DEFICIT_NORMAL_BOUND * demand;
                 final double mDef = normalMultiplier(deficitBound, demand);
-                final double satStock = deficitBound - Math.log(MAX_MULT / mDef) / LAMBDA;
+                final double lambdaOverD = LAMBDA_FACTOR / demand;
+
+                // stock where raw exponential reaches MAX_MULT
+                final double satStock = deficitBound - Math.log(MAX_MULT / mDef) / lambdaOverD;
 
                 double total = 0.0;
+                double lower = a, upper = b;
 
-                // Capped region
-                if (a < satStock) {
-                    double end = Math.min(b, satStock);
-                    total += MAX_MULT * (end - a);
+                // capped region
+                if (lower < satStock) {
+                    final double end = Math.min(upper, satStock);
+                    total += MAX_MULT * (end - lower);
+                    lower = end;
                 }
 
-                // Exponential region (safe arguments)
-                double expStart = Math.max(a, satStock);
-                if (expStart < b) {
-                    double argStart = -LAMBDA * (expStart - deficitBound);
-                    double argEnd = -LAMBDA * (b - deficitBound);
-                    total += (mDef / LAMBDA) * (Math.exp(argStart) - Math.exp(argEnd));
+                // exponential region
+                if (lower < upper) {
+                    final double argLower = -lambdaOverD * (lower - deficitBound);
+                    final double argUpper = -lambdaOverD * (upper - deficitBound);
+                    total += (mDef / lambdaOverD) * (Math.exp(argLower) - Math.exp(argUpper));
                 }
 
                 return total;
