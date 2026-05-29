@@ -22,6 +22,9 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
         super(market, commodityId);
         ReflectionUtilis.setPrivateVariableFromSuperclass("available", this, new AoTDAvailableStat(0f));
 
+        ReflectionUtilis.setPrivateVariableFromSuperclass("supplyPrice", this, new EffectivePriceCalculator(this));
+        ReflectionUtilis.setPrivateVariableFromSuperclass("demandPrice", this, new EffectivePriceCalculator(this));
+
         getSupplyDemandData();
     }
 

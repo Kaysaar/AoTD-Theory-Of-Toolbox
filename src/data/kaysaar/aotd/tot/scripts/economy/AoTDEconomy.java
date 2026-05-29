@@ -66,12 +66,7 @@ public class AoTDEconomy extends Economy {
 
     @Override
     public void nextStep(MainWorkTask.EconWorkParams econWorkParams) {
-        Iterator var3 = this.getMarkets().iterator();
-
-        while(var3.hasNext()) {
-            MarketAPI var2 = (MarketAPI)var3.next();
-            ((Market)var2).updatePrevStability();
-        }
+        for (MarketAPI market : getMarkets()) ((Market)market).updatePrevStability();
 
         MainWorkTask.EconWorkParams var4 = new MainWorkTask.EconWorkParams();
         var4.withIncomeAndUpkeep = false;
@@ -124,23 +119,14 @@ public class AoTDEconomy extends Economy {
         super.nextStep();
     }
 
-    @Override
-    public void updatePriceMult(MarketAPI marketAPI) {
-        super.updatePriceMult(marketAPI);
-    }
     public static void pruneCommodities(){
         for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
             pruneCommoditiesThatMightAppear((Market) market);
         }
     }
-    public static void pruneCommoditiesThatMightAppear(Market market) {
-        List<CommodityOnMarket> commodities =
-                (List<CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodities", market);
 
-        if (commodities == null) {
-            commodities = new ArrayList<>();
-            ReflectionUtilis.setPrivateVariableFromSuperclass("commodities", market, commodities);
-        }
+    public static void pruneCommoditiesThatMightAppear(Market market) {
+        List<CommodityOnMarket> commodities = getCommodities(market);
 
         ensureAoTDDemandData(market);
 
@@ -176,14 +162,8 @@ public class AoTDEconomy extends Economy {
         market.getAllCommodities();
     }
 
-    public void initCommodities(Market market) {
-        List<CommodityOnMarket> commodities =
-                (List<CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodities", market);
-
-        if (commodities == null) {
-            commodities = new ArrayList<>();
-            ReflectionUtilis.setPrivateVariableFromSuperclass("commodities", market, commodities);
-        }
+    public static void initCommodities(Market market) {
+        List<CommodityOnMarket> commodities = getCommodities(market);
 
         commodities.clear();
 
@@ -210,17 +190,18 @@ public class AoTDEconomy extends Economy {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static void rebuildCommodityLookupMaps(Market market, List<CommodityOnMarket> commodities) {
-        Map<String, CommodityOnMarket> commodityMap =
-                (Map<String, CommodityOnMarket>) ReflectionUtilis.getPrivateVariableFromSuperClass("commodityMap", market);
+        Map<String, CommodityOnMarket> commodityMap = (Map<String, CommodityOnMarket>) ReflectionUtilis
+            .getPrivateVariableFromSuperClass("commodityMap", market);
 
         if (commodityMap == null) {
             commodityMap = new HashMap<>();
             ReflectionUtilis.setPrivateVariableFromSuperclass("commodityMap", market, commodityMap);
         }
 
-        Map<String, List<CommodityOnMarket>> commoditiesByDemandClass =
-                (Map<String, List<CommodityOnMarket>>) ReflectionUtilis.getPrivateVariableFromSuperClass("commoditiesByDemandClass", market);
+        var commoditiesByDemandClass = (Map<String, List<CommodityOnMarket>>) ReflectionUtilis.
+            getPrivateVariableFromSuperClass("commoditiesByDemandClass", market);
 
         if (commoditiesByDemandClass == null) {
             commoditiesByDemandClass = new HashMap<>();
@@ -251,5 +232,18 @@ public class AoTDEconomy extends Economy {
 
             demandClassCommodities.add(commodity);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<CommodityOnMarket> getCommodities(final MarketAPI market) {
+        List<CommodityOnMarket> commodities = (List<CommodityOnMarket>) ReflectionUtilis
+            .getPrivateVariableFromSuperClass("commodities", market);
+
+        if (commodities == null) {
+            commodities = new ArrayList<>();
+            ReflectionUtilis.setPrivateVariableFromSuperclass("commodities", market, commodities);
+        }
+
+        return commodities;
     }
 }
