@@ -692,7 +692,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
             aotdCommodity.updateCalc();
 
-            applyAoTDVanillaPriceBands(aotdCommodity, state);
+            // applyAoTDVanillaPriceBands(aotdCommodity, state);
             applyCalibratedAoTDPlayerPriceMods(market, aotdCommodity, state);
         }
     }
@@ -748,23 +748,23 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             maxBuy = 2.50f;
         }
 
-        configureAoTDCalculator(
-                commodity.getDemandPrice(),
-                targets,
-                minSell,
-                maxSell,
-                minBuy,
-                maxBuy
-        );
+        // configureAoTDCalculator(
+        //         commodity.getDemandPrice(),
+        //         targets,
+        //         minSell,
+        //         maxSell,
+        //         minBuy,
+        //         maxBuy
+        // );
 
-        configureAoTDCalculator(
-                commodity.getSupplyPrice(),
-                targets,
-                minSell,
-                maxSell,
-                minBuy,
-                maxBuy
-        );
+        // configureAoTDCalculator(
+        //         commodity.getSupplyPrice(),
+        //         targets,
+        //         minSell,
+        //         maxSell,
+        //         minBuy,
+        //         maxBuy
+        // );
 
         /*
          * Non-V0 commodities use AoTDPriceCalculator final prices.

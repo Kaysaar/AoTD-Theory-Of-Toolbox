@@ -43,8 +43,8 @@ public class EffectivePriceCalculator extends PriceCalculator {
     }
 
     @Override
-    public float getPrice(double amount) {
-        return getRemovePrice(amount, 1d);
+    public float getPrice(double stock) {
+        return getRemovePrice(stock, 1d);
     }
 
     /**
@@ -54,8 +54,6 @@ public class EffectivePriceCalculator extends PriceCalculator {
      *      <li>{@link Market#getDemandPriceAssumingExistingTransaction}</li>
      *      <li>{@link Market#getDemandPriceAssumingStockpileUtility}</li>
      * </ul>
-     * 
-     * // TODO ideally the above Market class methods are overridden to just call {@link #computeVanillaPrice}
      */
     @Override
     public float getAddPrice(double stock, double amount) {
@@ -70,13 +68,11 @@ public class EffectivePriceCalculator extends PriceCalculator {
      *      <li>{@link Market#getSupplyPriceAssumingExistingTransaction}</li>
      *      <li>{@link Market#getSupplyPriceAssumingStockpileUtility}</li>
      * </ul>
-     * 
-     * // TODO ideally the above Market class methods are overridden to just call {@link #computeVanillaPrice}
      */
     @Override
     public float getRemovePrice(double stock, double amount) { 
         return BasePriceCalculator.getUnitPrice(TransactionDirection.ENTITY_SELLING, (long) amount, stock, basePrice, demand)
-             * (float) amount * MARKET_SELLING_MULT;
+            * (float) amount * MARKET_SELLING_MULT;
     }
 
     /**
@@ -96,7 +92,10 @@ public class EffectivePriceCalculator extends PriceCalculator {
     public static final float computeVanillaPrice(double amount, boolean isSellingToMarket, boolean isPlayer,
         AoTDCommodityOnMarket com
     ) {
-        return computeVanillaPrice(amount, isSellingToMarket, isPlayer, com, com.getSupplyDemandData().demand, com.stocks);
+        final AoTDSupplyDemandData data = com.getSupplyDemandData();
+        final float stock = Math.max(0f, data.available - data.demand); 
+
+        return computeVanillaPrice(amount, isSellingToMarket, isPlayer, com, data.demand, stock);
     }
 
     /**
@@ -133,7 +132,7 @@ public class EffectivePriceCalculator extends PriceCalculator {
             return isPlayer ? priceMod.computeEffective(value) : value;
         }
 
-        final double stored = stock + com.getTradeModPlus().getModifiedInt();
+        final double stored = stock + com.getCombinedTradeModQuantity();
 
         final TransactionDirection type = isSellingToMarket ? TransactionDirection.ENTITY_BUYING : TransactionDirection.ENTITY_SELLING;
         final float unitPrice = BasePriceCalculator.getUnitPrice(

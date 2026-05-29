@@ -14,22 +14,22 @@ public class BasePriceCalculator {
     // ------------------------ TUNABLE START ------------------------
 
     /** Stock/demand ratio below which the deficit zone starts. */
-    static final double DEFICIT_NORMAL_BOUND = 0.6;
+    static final double DEFICIT_NORMAL_BOUND = 0.7;
     /** Stock/demand ratio above which the excess zone starts. */
-    static final double EXCESS_NORMAL_BOUND  = 1.4;
+    static final double EXCESS_NORMAL_BOUND  = 1.3;
     /** Stock/demand ratio where the deficit zone ends. */
     static final double ABSOLUTE_DEFICIT_BOUND = 0.0;
     /** Stock/demand ratio where the excess zone ends. */
-    static final double ABSOLUTE_EXCESS_BOUND = 5.0;
+    static final double ABSOLUTE_EXCESS_BOUND = 4.0;
 
     /** Multiplier when stock is at {@link #DEFICIT_NORMAL_BOUND}. */
     static final double DEFICIT_NORMAL_MULT = 1.2;
     /** Multiplier when stock is at {@link #EXCESS_NORMAL_BOUND}. */
     static final double EXCESS_NORMAL_MULT = 0.8;
     /** Multiplier when stock is at {@link #ABSOLUTE_DEFICIT_BOUND}. */
-    static final double ABSOLUTE_DEFICIT_MULT = 1.8;
+    static final double ABSOLUTE_DEFICIT_MULT = 2.2;
     /** Multiplier when stock is at {@link #ABSOLUTE_EXCESS_BOUND}. */
-    static final double ABSOLUTE_EXCESS_MULT = 0.4;
+    static final double ABSOLUTE_EXCESS_MULT = 0.3;
 
     // ------------------------ TUNABLE END ------------------------
 
@@ -38,10 +38,7 @@ public class BasePriceCalculator {
     static final double EXP_EXCESS;
     static final double SHIFT_FRACTION;
 
-    // TODO Not used, but you can use it if you want
-    // static final int INHERENT_DEMAND = com.fs.starfarer.campaign.econ.Economy.MIN_DEMAND_FOR_PRICING;
-
-    static final float INHERENT_DEMAND = 4f;
+    static final float INHERENT_DEMAND = 100f;
     static final float PRICE_MULT_FLOOR = 0.01f;
     static final float PRICE_MULT_CEILING = 100.0f;
     static final double MAX_MULT = Double.MAX_VALUE;
