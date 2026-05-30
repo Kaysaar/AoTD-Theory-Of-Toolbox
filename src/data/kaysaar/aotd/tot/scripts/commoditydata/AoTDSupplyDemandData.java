@@ -157,9 +157,6 @@ public class AoTDSupplyDemandData {
     }
 
     public int getAvailableOnThisMarket(float cargo, MarketAPI market, String commodityId) {
-        if (market.getId().equals("jangala")) {
-            String heeh = "hehge";
-        }
         int available = 0;
         float remainingCargo = cargo;
         for (Industry industry : market.getIndustries().stream().filter(x -> !AoTDIndustryData.getInstance(x.getMarket()).isPending(x.getId())).sorted(new Comparator<Industry>() {

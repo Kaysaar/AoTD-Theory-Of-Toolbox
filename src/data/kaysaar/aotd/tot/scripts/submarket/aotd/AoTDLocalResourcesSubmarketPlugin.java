@@ -51,7 +51,7 @@ public class AoTDLocalResourcesSubmarketPlugin extends LocalResourcesSubmarketPl
             if (commodity instanceof AoTDCommodityOnMarket com) {
                 float units = getDeficitCountered(com);
                 if (units > 0) {
-                    float per = LocalResourcesSubmarketPlugin.getStockpilingUnitPrice(com.getCommoditySpec(), true);
+                    float per = LocalResourcesSubmarketPlugin.getStockpilingUnitPrice(com.getSpec(), true);
                     totalCost += units * per;
                 }
             }
@@ -94,7 +94,7 @@ public class AoTDLocalResourcesSubmarketPlugin extends LocalResourcesSubmarketPl
                     }
                     tooltipCargo.addCommodity(com.getId(), addToTooltipCargo);
 
-                    float unitPrice = (int) getStockpilingUnitPrice(commodity.getCommoditySpec(), true);
+                    float unitPrice = (int) getStockpilingUnitPrice(commodity.getSpec(), true);
                     //node.upkeep += unitPrice * addAmount;
 
                     MonthlyReport.FDNode comNode = report.getNode(node, com.getId());

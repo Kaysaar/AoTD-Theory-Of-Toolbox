@@ -42,7 +42,7 @@ public class AoTDCommodityGroundRaidObjectivePluginImpl extends CommodityGroundR
 
             }
             else{
-                iconGroup.addIconGroup(id, IconRenderMode.NORMAL, AoTDCommodityEconSpecManager.getEconSpec(com.getId()).getCalculationScript().convertRawUnitsToDemand(commodityOnMarket.getSupplyDemandData().getTotalRawUnitsFromDemand(),market,commodityOnMarket.getCommoditySpec().getId()), null);
+                iconGroup.addIconGroup(id, IconRenderMode.NORMAL, AoTDCommodityEconSpecManager.getEconSpec(com.getId()).getCalculationScript().convertRawUnitsToDemand(commodityOnMarket.getSupplyDemandData().getTotalRawUnitsFromDemand(),market,commodityOnMarket.getSpec().getId()), null);
 
             }
         }
@@ -59,8 +59,8 @@ public class AoTDCommodityGroundRaidObjectivePluginImpl extends CommodityGroundR
             MarketCMD.RaidDangerLevel base = com.getCommodity().getBaseDanger();
             for (Industry ind : market.getIndustries()) {
                 int supply = commodityOnMarket.getSupplyDemandData().getRawSupplyFromIndustry(ind);
-                int deficit = ind.getMaxDeficit(commodityOnMarket.getCommoditySpec().getId()).two;
-                int units = AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(deficit, true, commodityOnMarket.getCommoditySpec().getId());
+                int deficit = ind.getMaxDeficit(commodityOnMarket.getSpec().getId()).two;
+                int units = AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(deficit, true, commodityOnMarket.getSpec().getId());
                 int demandMet = commodityOnMarket.getSupplyDemandData().getRawDemandFromIndustry(ind) - units;
                 int currScore = Math.max(supply, demandMet) * 1000;
                 MarketCMD.RaidDangerLevel danger = ind.adjustCommodityDangerLevel(com.getId(), base);

@@ -133,7 +133,7 @@ public class AoTDToolboxMisc {
             if (commodity instanceof AoTDCommodityOnMarket com) {
                 float units = getDeficitCountered(com);
                 if (units > 0) {
-                    float per = LocalResourcesSubmarketPlugin.getStockpilingUnitPrice(com.getCommoditySpec(), true);
+                    float per = LocalResourcesSubmarketPlugin.getStockpilingUnitPrice(com.getSpec(), true);
                     totalCost += units * per;
                 }
             }
@@ -182,7 +182,7 @@ public class AoTDToolboxMisc {
         AoTDMarketData md = AoTDTradeManager.getInstance().getMarketData(com.getMarket());
         if (md == null) return 0;
 
-        float basePrice = com.getCommoditySpec().getBasePrice();
+        float basePrice = com.getSpec().getBasePrice();
 
 
         // only internal shipments (guaranteed by your internal solver)
@@ -192,9 +192,9 @@ public class AoTDToolboxMisc {
         int suppliedLocally = Math.min(supply, demand);
         double localIncome = 0.0;
         if (suppliedLocally > 0) {
-            localIncome = suppliedLocally * basePrice * AoTDCommodityEconSpecManager.getCutForCommodity(com.getCommoditySpec().getId(), true);
+            localIncome = suppliedLocally * basePrice * AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(), true);
         }
-        double income = internalUnits * basePrice * AoTDCommodityEconSpecManager.getCutForCommodity(com.getCommoditySpec().getId(), true);
+        double income = internalUnits * basePrice * AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(), true);
         return (int) Math.floor(income + localIncome);
     }
 
@@ -202,13 +202,13 @@ public class AoTDToolboxMisc {
         int guaranteed = getGuaranteedExportIncome(com);
         AoTDMarketData md = AoTDTradeManager.getInstance().getMarketData(com.getMarket());
         if (md == null) return guaranteed;
-        int exported = md.getSoldOutside(com.getCommoditySpec().getId());
-        int extraExported = md.getExtraSoldOutside(com.getCommoditySpec().getId());
-        float cut = AoTDCommodityEconSpecManager.getCutForCommodity(com.getCommoditySpec().getId(), false);
+        int exported = md.getSoldOutside(com.getSpec().getId());
+        int extraExported = md.getExtraSoldOutside(com.getSpec().getId());
+        float cut = AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(), false);
 
         int extraIncome = Math.round(getPriceForAmount(com.getId(), extraExported) * AoTDTradeManager.multFromSellingExcess);
 
-        int income = Math.round((exported * cut * com.getCommoditySpec().getBasePrice()));
+        int income = Math.round((exported * cut * com.getSpec().getBasePrice()));
         return income + guaranteed+extraIncome;
 
     }
@@ -221,7 +221,7 @@ public class AoTDToolboxMisc {
         AoTDMarketData md = AoTDTradeManager.getInstance().getMarketData(market);
         if (md == null) return 0;
 
-        float basePrice = com.getCommoditySpec().getBasePrice();
+        float basePrice = com.getSpec().getBasePrice();
 
         // total potential export (your existing metric)
         int export = com.getSupplyDemandData().getExportExcludingDeficit();
@@ -251,14 +251,14 @@ public class AoTDToolboxMisc {
         // remaining export pool that could go to external markets (speculated)
         int externalPool = export - internalUnits - predictedContractUnits;
         if (externalPool < 0) externalPool = 0;
-        int producitonOutside = AoTDSectorProductionDemandDataUtils.getTotalEffectiveDemandFromSectorOutsideFromFactionIgnoreContracts(com.getCommoditySpec().getId(), market.getFactionId());
+        int producitonOutside = AoTDSectorProductionDemandDataUtils.getTotalEffectiveDemandFromSectorOutsideFromFactionIgnoreContracts(com.getSpec().getId(), market.getFactionId());
         externalPool = Math.min(externalPool, producitonOutside);
         // external only pays if there is demand outside faction
         boolean hasOutsideDemand = producitonOutside>0;
 
         double externalIncome = 0.0;
         if (hasOutsideDemand && externalPool > 0) {
-            externalIncome = externalPool * basePrice * AoTDCommodityEconSpecManager.getCutForCommodity(com.getCommoditySpec().getId(), false);
+            externalIncome = externalPool * basePrice * AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(), false);
         }
 
         double total = externalIncome;
@@ -271,7 +271,7 @@ public class AoTDToolboxMisc {
         AoTDMarketData md = AoTDTradeManager.getInstance().getMarketData(market);
         if (md == null) return 0;
 
-        float basePrice = com.getCommoditySpec().getBasePrice();
+        float basePrice = com.getSpec().getBasePrice();
 
         AoTDTradeContractManager.getInstance().ensurePredictionsUpToDate();
 
@@ -302,7 +302,7 @@ public class AoTDToolboxMisc {
         AoTDMarketData md = AoTDTradeManager.getInstance().getMarketData(market);
         if (md == null) return 0;
 
-        float basePrice = com.getCommoditySpec().getBasePrice();
+        float basePrice = com.getSpec().getBasePrice();
 
         AoTDTradeContractManager.getInstance().ensurePredictionsUpToDate();
 

@@ -35,7 +35,7 @@ public class AoTDCommodityInfoButton extends CustomButton {
     public void createContainerContent(CustomPanelAPI container) {
         if(buttonData instanceof AoTDCommodityOnMarket commodity){
             float iconSize = 31;
-            ImageViewer viewer = new ImageViewer(iconSize,iconSize,commodity.getCommoditySpec().getIconName()){
+            ImageViewer viewer = new ImageViewer(iconSize,iconSize,commodity.getSpec().getIconName()){
                 @Override
                 public void render(float alphaMult) {
                     this.spriteOfImage.setAlphaMult(alphaMult * this.alphaMult);

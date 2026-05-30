@@ -81,7 +81,7 @@ public class AoTDCommodityUITable extends UITableImpl {
             dropDownButton.createUI();
             tooltipOfImpl.addCustom(dropDownButton.getPanelOfImpl(),2f);
             AoTDCommodityTableDropDownButton bt = (AoTDCommodityTableDropDownButton) dropDownButton;
-            tooltipOfImpl.addTooltipToPrevious(new CommodityButtonOnHover(bt.commodity.getCommoditySpec(), bt.commodity.getMarket(),isInDialog), TooltipMakerAPI.TooltipLocation.BELOW,false);
+            tooltipOfImpl.addTooltipToPrevious(new CommodityButtonOnHover(bt.commodity.getSpec(), bt.commodity.getMarket(),isInDialog), TooltipMakerAPI.TooltipLocation.BELOW,false);
         }
         panelToWorkWith.addUIElement(tooltipOfImpl).inTL(0, 0);
         if (tooltipOfImpl.getExternalScroller() != null) {
@@ -115,7 +115,7 @@ public class AoTDCommodityUITable extends UITableImpl {
     public void advance(float amount) {
         super.advance(amount);
         handleSortButton(buttonCommodity,
-                Comparator.comparing(o -> o.commodity.getCommoditySpec().getName()));
+                Comparator.comparing(o -> o.commodity.getSpec().getName()));
 
         handleSortButton(buttonProd,
                 Comparator.comparingInt(o -> o.commodity.getSupplyDemandData().getTotalRawUnitsFromSupply()));
@@ -170,7 +170,7 @@ public class AoTDCommodityUITable extends UITableImpl {
     public void reportButtonPressed(CustomButton buttonPressed) {
         if(buttonPressed instanceof AoTDCommodityInfoButton infoButton){
             if(!isInDialog){
-                AshMisc.initPopUpDialog(new CommodityDetailDialog(market,infoButton.getData().getCommoditySpec().getId()),1250,665);
+                AshMisc.initPopUpDialog(new CommodityDetailDialog(market,infoButton.getData().getSpec().getId()),1250,665);
             }
             else if(parent!=null){
                 parent.commodity = infoButton.getData().getId();
