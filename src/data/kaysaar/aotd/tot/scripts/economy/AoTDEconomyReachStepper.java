@@ -52,7 +52,6 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
 
         if(report != null){
             final FDNode marketsNode = report.getNode(MonthlyReport.OUTPOSTS);
-            // TODO no need to assign the same values to the node.
 
             for (MarketAPI market : Misc.getPlayerMarkets(true)) {
                 final FDNode mNode = report.getNode(marketsNode, market.getId());

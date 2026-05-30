@@ -53,7 +53,6 @@ public class AoTDSectorProductionDemandDataUtils {
         return getTotalProductionFromFaction(commodityId,factionId) / total;
     }
 
-    // TODO there is no need for a set, because the market adder of ReachEconomy prevents duplicates
     public static List<MarketAPI> getFactionMarketsProducers(String commodityId, String factionId) {
         final List<MarketAPI> marketsToTraverse = factionId.equals(Factions.NEUTRAL) ?
             Global.getSector().getEconomy().getMarketsCopy() : Misc.getFactionMarkets(factionId);
@@ -78,7 +77,6 @@ public class AoTDSectorProductionDemandDataUtils {
         return result;
     }
 
-    // TODO again no set needed
     public static List<MarketAPI> getFactionMarketsConsumers(String commodityId, String factionId) {
         final List<MarketAPI> marketsToTraverse = factionId.equals(Factions.NEUTRAL) ?
             Global.getSector().getEconomy().getMarketsCopy() : Misc.getFactionMarkets(factionId);

@@ -33,9 +33,7 @@ public class AoTDOpenMarketPlugin extends OpenMarketPlugin {
     private static float getLimit(CommodityOnMarketAPI com, AoTDCommodityOnMarket commodity) {
         float supply = commodity.getSupplyDemandData().getTotalRawUnitsFromSupply();
         float demand = commodity.getSupplyDemandData().getTotalRawUnitsFromDemand();
-        if(com.getId().equals(Commodities.FOOD)){
-            String hehe = "he";
-        }
+
         float imports = demand-supply;
         float limit = 0f;
         if(imports>0&& commodity.getDef()<=0){

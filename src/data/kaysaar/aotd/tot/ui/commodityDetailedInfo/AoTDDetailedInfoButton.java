@@ -105,7 +105,7 @@ public class AoTDDetailedInfoButton extends CustomButton {
 
             TooltipMakerAPI tlMarketShare = container.createUIElement(AoTDDetailedCommodityUITable.widthMap.get("share"),height,false);
            if(showProducers){
-               tlMarketShare.addPara(String.format("%.1f", AoTDSectorProductionDemandDataUtils.getPercentageOfSectorProduction(commodity.getCommoditySpec().getId(),commodity.getSupplyDemandData().getTotalRawUnitsFromSupply())*100f)+"%",textOpad).setAlignment(Alignment.MID);
+               tlMarketShare.addPara(String.format("%.1f", AoTDSectorProductionDemandDataUtils.getPercentageOfSectorProduction(commodity.getSpec().getId(),commodity.getSupplyDemandData().getTotalRawUnitsFromSupply())*100f)+"%",textOpad).setAlignment(Alignment.MID);
            }
            else{
                tlMarketShare.addPara("---",Misc.getGrayColor(),textOpad).setAlignment(Alignment.MID);
