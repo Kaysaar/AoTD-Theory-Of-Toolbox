@@ -55,7 +55,7 @@ public class AoTDMarketDemand extends MarketDemand {
             float stockpile = Math.max(0f, commodity.getStockpile());
 
             if (includeTradeImpact) {
-                stockpile += getEffectiveRawTradeImpact(commodity);
+                stockpile += commodity.getCombinedTradeModQuantity();
             }
 
             if (stockpile < 0f) {
@@ -68,26 +68,5 @@ public class AoTDMarketDemand extends MarketDemand {
         return Math.max(0f, totalUtility);
     }
 
-    private static float getEffectiveRawTradeImpact(CommodityOnMarket commodity) {
-        float combined = commodity.getCombinedTradeModQuantity();
 
-        float rawSum =
-                commodity.getTradeMod().getModifiedValue()
-                        + commodity.getTradeModPlus().getModifiedValue()
-                        + commodity.getTradeModMinus().getModifiedValue();
-
-        if (Math.abs(rawSum) <= AOTD_MIN_TRADE_IMPACT) {
-            return combined;
-        }
-
-        if (Math.abs(combined) <= AOTD_MIN_TRADE_IMPACT) {
-            return rawSum;
-        }
-
-        if (Math.signum(rawSum) == Math.signum(combined)) {
-            return Math.abs(rawSum) >= Math.abs(combined) ? rawSum : combined;
-        }
-
-        return combined;
-    }
 }

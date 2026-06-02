@@ -239,7 +239,7 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
             float trade = getTradeMod().getModifiedValue()
                     + getTradeModPlus().getModifiedValue()
                     + getTradeModMinus().getModifiedValue();
-            float effectiveOversurplus = getSupplyDemandData().getTotalRawUnitsFromDemand() * 2;
+            float effectiveOversurplus = Math.max(getSupplyDemandData().getTotalRawUnitsFromDemand()*2,getSpec().getEconUnit()*3);
             return (int) Math.max(0, trade - effectiveOversurplus);
         }
         float trade = getTradeMod().getModifiedValue()
