@@ -170,7 +170,7 @@ public class AoTDCommodityUITable extends UITableImpl {
     public void reportButtonPressed(CustomButton buttonPressed) {
         if(buttonPressed instanceof AoTDCommodityInfoButton infoButton){
             if(!isInDialog){
-                AshMisc.initPopUpDialog(new CommodityDetailDialog(market,infoButton.getData().getSpec().getId()),1250,665);
+                AshMisc.initPopUpDialog(new CommodityDetailDialog(market,infoButton.getData().getSpec().getId()),1270,665);
             }
             else if(parent!=null){
                 parent.commodity = infoButton.getData().getId();
