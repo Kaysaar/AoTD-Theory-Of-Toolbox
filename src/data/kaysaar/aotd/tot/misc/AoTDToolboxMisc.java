@@ -341,7 +341,7 @@ public class AoTDToolboxMisc {
     }
 
     public static int getMaxShipped(MarketAPI marketFrom, MarketAPI towards, String commodityId) {
-        AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) marketFrom.getCommodityData(commodityId);
+        AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(marketFrom,commodityId);
         if (marketFrom.getFaction().equals(towards.getFaction())) {
             AoTDMarketData data = AoTDTradeManager.getInstance().getMarketData(marketFrom);
             int exportedToFaction = 0;

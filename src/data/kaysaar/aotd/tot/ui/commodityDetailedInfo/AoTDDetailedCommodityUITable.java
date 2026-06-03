@@ -29,7 +29,7 @@ public class AoTDDetailedCommodityUITable extends UITableImpl {
         this.commodityId = commodityId;
         if(dropDownButtons.isEmpty()){
             for (MarketAPI marketAPI : Global.getSector().getEconomy().getMarketsCopy()) {
-                AoTDCommodityOnMarket commodity = (AoTDCommodityOnMarket) marketAPI.getCommodityData(commodityId);
+                AoTDCommodityOnMarket commodity = AoTDCommodityOnMarket.getComMarketInstanceSave(marketAPI,commodityId);
                 if(isProduction&&commodity.getSupplyDemandData().getTotalRawUnitsFromSupply()>0){
                     AoTDCommodityTableDropDownButton bt = new AoTDCommodityTableDropDownButton(this,width-1,26,0,0,true,commodity,isProduction);
                     dropDownButtons.add(bt);
@@ -55,7 +55,7 @@ public class AoTDDetailedCommodityUITable extends UITableImpl {
         this.commodityId = commodityId;
         if(dropDownButtons.isEmpty()){
             for (MarketAPI marketAPI : Global.getSector().getEconomy().getMarketsCopy()) {
-                AoTDCommodityOnMarket commodity = (AoTDCommodityOnMarket) marketAPI.getCommodityData(commodityId);
+                AoTDCommodityOnMarket commodity = AoTDCommodityOnMarket.getComMarketInstanceSave(marketAPI,commodityId);
                 if(isProduction&&commodity.getSupplyDemandData().getTotalRawUnitsFromSupply()>0){
                     AoTDCommodityTableDropDownButton bt = new AoTDCommodityTableDropDownButton(this,width-1,26,0,0,true,commodity,isProduction);
                     dropDownButtons.add(bt);
@@ -104,7 +104,7 @@ public class AoTDDetailedCommodityUITable extends UITableImpl {
         }
         dropDownButtons.clear();
         for (MarketAPI marketAPI : Global.getSector().getEconomy().getMarketsCopy()) {
-            AoTDCommodityOnMarket commodity = (AoTDCommodityOnMarket) marketAPI.getCommodityData(commodityId);
+            AoTDCommodityOnMarket commodity = AoTDCommodityOnMarket.getComMarketInstanceSave(marketAPI,commodityId);
             if(isProduction&&commodity.getSupplyDemandData().getTotalRawUnitsFromSupply()>0){
                 AoTDCommodityTableDropDownButton bt = new AoTDCommodityTableDropDownButton(this,width-1,26,0,0,true,commodity,isProduction);
                 dropDownButtons.add(bt);

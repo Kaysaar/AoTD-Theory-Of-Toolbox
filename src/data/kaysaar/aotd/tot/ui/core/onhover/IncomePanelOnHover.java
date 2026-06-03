@@ -7,8 +7,10 @@ import com.fs.starfarer.api.combat.MutableStat;
 import com.fs.starfarer.api.ui.Alignment;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
+import com.fs.starfarer.campaign.econ.Market;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
 
 import java.awt.*;
 import java.util.Comparator;
@@ -43,6 +45,7 @@ public class IncomePanelOnHover implements TooltipMakerAPI.TooltipCreator {
         float totalIncomeFromExpectedTrade = 0;
         float totalIncomeFromContracts = 0;
         float upkeep = 0f;
+        AoTDEconomy.pruneCommoditiesThatMightAppear((Market) marketAPI);
         List<Industry> industryList = marketAPI.getIndustries().stream().sorted(new Comparator<Industry>() {
             @Override
             public int compare(Industry o1, Industry o2) {

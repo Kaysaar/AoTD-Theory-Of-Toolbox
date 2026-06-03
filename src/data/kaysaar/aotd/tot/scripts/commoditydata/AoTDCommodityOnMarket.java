@@ -17,6 +17,12 @@ import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
 
 public class AoTDCommodityOnMarket extends CommodityOnMarket {
+    public static AoTDCommodityOnMarket getComMarketInstanceSave(MarketAPI market,String id){
+        if(!(market.getCommodityData(id) instanceof AoTDCommodityOnMarket)){
+            AoTDEconomy.pruneCommoditiesThatMightAppear((Market) market);
+        }
+        return (AoTDCommodityOnMarket) market.getCommodityData(id);
+    }
 
     public AoTDCommodityOnMarket(Market market, String commodityId) {
         super(market, commodityId);

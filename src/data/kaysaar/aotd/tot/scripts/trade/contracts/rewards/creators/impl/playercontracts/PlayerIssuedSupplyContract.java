@@ -88,7 +88,7 @@ public class PlayerIssuedSupplyContract implements PlayerContractCreatorAPI {
 
     @Override
     public float getCutToPayForCommodity(String commodityId) {
-        return 0.5f;
+        return 1.2f;
     }
 
     @Override
@@ -110,7 +110,7 @@ public class PlayerIssuedSupplyContract implements PlayerContractCreatorAPI {
                     "Each ordered unit costs %s of its original market value. You may request up to %s of your faction's total production of a given commodity, and only one %s may be active at any time.",
                     3f,
                     Color.ORANGE,
-                    "50%",
+                    "150%",
                     "10%","Direct Procurement Contract"
             );
         }
@@ -134,7 +134,7 @@ public class PlayerIssuedSupplyContract implements PlayerContractCreatorAPI {
                     "Each ordered unit costs %s of its original market value. You may request up to %s of your faction's total production of a given commodity (%s for: %s), and only one %s may be active at any time.",
                     3f,
                     colors.toArray(new Color[0]),
-                    "50%",
+                    "150%",
                     "10%","100%",builder.toString(),"Direct Procurement Contract"
             );
 

@@ -64,7 +64,7 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
         tooltip.addTitle(spec.getName());
         tooltip.addPara(Global.getSettings().getDescription(spec.getId(), Description.Type.RESOURCE).getText1(), 3f);
 
-        AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) market.getCommodityData(spec.getId());
+        AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(market,spec.getId());
 
         if (!isInDialog) {
             tooltip.addPara("Click to view global market info", Misc.getPositiveHighlightColor(), 5f);
