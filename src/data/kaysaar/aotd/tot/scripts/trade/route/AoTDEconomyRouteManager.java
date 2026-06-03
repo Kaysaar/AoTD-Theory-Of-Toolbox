@@ -19,9 +19,11 @@ import com.fs.starfarer.api.impl.campaign.rulecmd.KantaCMD;
 import com.fs.starfarer.api.impl.campaign.shared.SharedData;
 import com.fs.starfarer.api.util.Misc;
 import com.fs.starfarer.api.util.WeightedRandomPicker;
+import com.fs.starfarer.campaign.econ.Market;
 import data.kaysaar.aotd.tot.intel.AoTDTradeFleetDepartureIntel;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
 import data.kaysaar.aotd.tot.scripts.economy.AoTdMainWorkTask2;
 
 import java.util.*;
@@ -253,6 +255,8 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
         }
     }
     public static AoTDEconomyFleetAssigmentAI.AoTDEconomyRouteData createData(MarketAPI from, MarketAPI to) {
+        AoTDEconomy.pruneCommoditiesThatMightAppear((Market) from);
+        AoTDEconomy.pruneCommoditiesThatMightAppear((Market) to);
         AoTDEconomyFleetAssigmentAI.AoTDEconomyRouteData smuggling = new AoTDEconomyFleetAssigmentAI.AoTDEconomyRouteData();
         smuggling.from = from;
         smuggling.to = to;
@@ -450,18 +454,18 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
             MarketAPI from = data.from;
             MarketAPI to = data.to;
             for (EconomyFleetAssignmentAI.CargoQuantityData cargoQuantityData : data.cargoReturn) {
-                AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) from.getCommodityData(cargoQuantityData.getCommodity().getId());
+                AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(from,cargoQuantityData.getCommodity().getId());
                 com.getExcDefData().deficit.addTemporaryModFlat(60,fleet.getId()+"_aotd_lost_trade","Recent Shipment Lost",cargoQuantityData.units);
                 AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getSpec());
             }
             if(!returning){
                 for (EconomyFleetAssignmentAI.CargoQuantityData cargoQuantityData : data.cargoDeliver) {
-                    AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) to.getCommodityData(cargoQuantityData.getCommodity().getId());
+                    AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(to,cargoQuantityData.getCommodity().getId());
                     com.getExcDefData().deficit.addTemporaryModFlat(60,fleet.getId()+"_aotd_lost_trade","Recent Shipment Lost",cargoQuantityData.units);
                     AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getSpec());
                 }
                 for (EconomyFleetAssignmentAI.CargoQuantityData cargoQuantityData : data.cargoReturn) {
-                    AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) to.getCommodityData(cargoQuantityData.getCommodity().getId());
+                    AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(to,cargoQuantityData.getCommodity().getId());
                     com.getExcDefData().excess.addTemporaryModFlat(60,fleet.getId()+"_aotd_lost_trade","Recent Shipment Lost",cargoQuantityData.units);
                     AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getSpec());
                 }

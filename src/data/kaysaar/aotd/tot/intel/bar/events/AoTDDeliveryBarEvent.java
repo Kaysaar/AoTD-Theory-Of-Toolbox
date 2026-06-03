@@ -8,8 +8,10 @@ import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.api.impl.campaign.intel.bar.events.DeliveryBarEvent;
 import com.fs.starfarer.api.impl.campaign.intel.bar.events.DeliveryMissionIntel;
 import com.fs.starfarer.api.util.WeightedRandomPicker;
+import com.fs.starfarer.campaign.econ.Market;
 import data.kaysaar.aotd.tot.intel.AoTDDeliveryMissionIntel;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +28,7 @@ public class AoTDDeliveryBarEvent extends DeliveryBarEvent {
         commodity = null;
 
         List<CommodityOnMarketAPI> commodities = new ArrayList<CommodityOnMarketAPI>();
+        AoTDEconomy.pruneCommoditiesThatMightAppear((Market) market);
         for (CommodityOnMarketAPI com : market.getCommoditiesCopy()) {
             AoTDCommodityOnMarket comAoTD = (AoTDCommodityOnMarket) com;
             if (com.isNonEcon()) continue;
@@ -49,7 +52,7 @@ public class AoTDDeliveryBarEvent extends DeliveryBarEvent {
             if (other.getEconGroup() != null && !other.getEconGroup().equals(market.getEconGroup())) continue;
 
             if (other.getStarSystem() == null) continue;
-
+            AoTDEconomy.pruneCommoditiesThatMightAppear((Market) other);
             //WeightedRandomPicker<T>
             for (CommodityOnMarketAPI com : commodities) {
                 //CommodityOnMarketAPI otherCom = other.getCommodityData(com.getId());

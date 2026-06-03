@@ -73,12 +73,12 @@ public class AoTDDetailedCommodityPanel implements ExtendedUIPanelPlugin {
         if (factionId.equals(Factions.NEUTRAL)) {
             for (FactionAPI factionAPI : AoTDToolboxMisc.getFactionsInEconomy()) {
                 for (MarketAPI factionMarket : Misc.getFactionMarkets(factionAPI)) {
-                    am += AoTDToolboxMisc.getExpectedMonthlyIncomeFromCommodity((AoTDCommodityOnMarket) factionMarket.getCommodityData(commodityId));
+                    am += AoTDToolboxMisc.getExpectedMonthlyIncomeFromCommodity(AoTDCommodityOnMarket.getComMarketInstanceSave(factionMarket,commodityId));
                 }
             }
         } else {
             for (MarketAPI factionMarket : Misc.getFactionMarkets(factionId)) {
-                am += AoTDToolboxMisc.getExpectedMonthlyIncomeFromCommodity((AoTDCommodityOnMarket) factionMarket.getCommodityData(commodityId));
+                am += AoTDToolboxMisc.getExpectedMonthlyIncomeFromCommodity(AoTDCommodityOnMarket.getComMarketInstanceSave(factionMarket,commodityId));
             }
         }
         if (am > 0) {
@@ -242,7 +242,7 @@ public class AoTDDetailedCommodityPanel implements ExtendedUIPanelPlugin {
         TooltipMakerAPI headerTooltip = section.createUIElement(width * 0.3f, height, false);
         float labelWidth = width * 0.3f;
         LabelAPI label = null;
-        AoTDCommodityOnMarket marketCom = (AoTDCommodityOnMarket) market.getCommodityData(commodityId);
+        AoTDCommodityOnMarket marketCom = AoTDCommodityOnMarket.getComMarketInstanceSave(market,commodityId);
         if (production) {
             label = headerTooltip.addPara(Misc.getWithDGS(marketCom.getSupplyDemandData().getTotalRawUnitsFromSupply()), Misc.getPositiveHighlightColor(), 0f);
         } else {
