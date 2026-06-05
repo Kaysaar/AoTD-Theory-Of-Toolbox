@@ -38,29 +38,26 @@ public class AoTDExcDefData {
     }
     public static final String EXT_TRADE_ID = "aotd_ext_trade";
     public static final String DEF_FROM_NEW_IND = "aotd_new_ind_demand";
-
-    /*
-     * Same-market anti-resell marker.
-     *
-     * clearExternalTrade() moves player-created excess into the local resources
-     * cargo and then clears trade mods. That is correct for economy state, but it
-     * also erases the only signal EffectivePriceCalculator can use to know that
-     * the excess was created by the player on this exact market. Without this
-     * marker the player can dump a huge amount, force excess, then buy it back at
-     * the excess floor.
-     */
-    public static final String LOCAL_PLAYER_DUMP_MEMORY_PREFIX = "$aotd_local_player_dump_";
-
     public void clearExternalTrade(AoTDCommodityOnMarket commodity) {
         int excessFromTrade = commodity.getExcessQuantityFromTrade();
         if(excessFromTrade>0){
-            if(commodity.getMarket() != null && commodity.getMarket().getMemoryWithoutUpdate() != null){
-                commodity.getMarket().getMemoryWithoutUpdate().set(
-                        LOCAL_PLAYER_DUMP_MEMORY_PREFIX + commodity.getId(),
-                        excessFromTrade,
-                        31f
-                );
+            /*
+             * When player-created excess is converted into local resources, the
+             * live trade mods are cleared below. Remember that this market/commodity
+             * has player-sold stock, otherwise the player can dump a huge amount,
+             * let it become excess, and buy it back below what they were paid.
+             */
+            try {
+                if (commodity.getMarket() != null && commodity.getMarket().getMemoryWithoutUpdate() != null) {
+                    commodity.getMarket().getMemoryWithoutUpdate().set(
+                            EffectivePriceCalculator.LOCAL_PLAYER_TRADE_MEMORY_PREFIX + commodity.getId(),
+                            Math.max(1f, excessFromTrade * Math.max(0.0001f, commodity.getUtilityOnMarket())),
+                            31f
+                    );
+                }
+            } catch (Throwable ignored) {
             }
+
             if(commodity.getMarket().hasSubmarket(Submarkets.LOCAL_RESOURCES)){
                 if(commodity.getMarket().getSubmarket(Submarkets.LOCAL_RESOURCES).getCargo()!=null){
                     commodity.getMarket().getSubmarket(Submarkets.LOCAL_RESOURCES).getCargo().addCommodity(commodity.getId(),commodity.getExcessQuantity());

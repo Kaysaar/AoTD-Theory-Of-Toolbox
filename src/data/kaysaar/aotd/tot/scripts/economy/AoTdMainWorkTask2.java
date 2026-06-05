@@ -62,6 +62,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
     private static final String CORE_MOD_ID = "core";
     private static final String AOTD_PRICE_MOD_ID = "aotd_price_state";
+    private static final String AOTD_STATE_PRESSURE_ANCHOR_PREFIX = "$aotd_price_pressure_anchor_";
 
     private static final float AOTD_REFERENCE_TRADE_QUANTITY = 500f;
 
@@ -77,15 +78,20 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
     /** Full excess can push prices down to 40% of base price. */
     private static final float AOTD_EXCESS_PRICE_FLOOR = 0.40f;
-    private static final float AOTD_EXCESS_SELL_SPREAD = 0.06f;
+    /** In excess, selling to the already-oversaturated market must be worse than buying from it. */
+    private static final float AOTD_EXCESS_SELL_SPREAD = -0.05f;
 
-    /** Legal deficit caps around 160% of base price. */
-    private static final float AOTD_DEFICIT_CENTER_MIN = 1.10f;
-    private static final float AOTD_DEFICIT_CENTER_MAX = 1.60f;
+    /**
+     * Deficit must be clearly better than blank/demand-only markets for selling.
+     * Small deficits now start noticeably above the normal 100%-110% sell band,
+     * while large legal deficits can become true trade opportunities.
+     */
+    private static final float AOTD_DEFICIT_CENTER_MIN = 1.35f;
+    private static final float AOTD_DEFICIT_CENTER_MAX = 2.20f;
 
-    /** Illegal deficit caps between 250% and 300% of base price, stable per market/commodity. */
-    private static final float AOTD_ILLEGAL_DEFICIT_CENTER_MIN = 2.50f;
-    private static final float AOTD_ILLEGAL_DEFICIT_CENTER_MAX = 3.00f;
+    /** Illegal deficit caps higher, stable per market/commodity. */
+    private static final float AOTD_ILLEGAL_DEFICIT_CENTER_MIN = 2.75f;
+    private static final float AOTD_ILLEGAL_DEFICIT_CENTER_MAX = 3.50f;
 
     private static final float AOTD_MIN_LOCAL_SPREAD = 0.06f;
     private static final float AOTD_GREED_FRACTION = 0.06f;
@@ -569,8 +575,16 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
             aotdCommodity.getExcDefData().applyDeficitDueToSuddenChangeOfDemand(aotdCommodity);
 
-            float officialDeficit = Math.max(0f, aotdCommodity.getDeficitQuantity());
-            float officialExcess = Math.max(0f, aotdCommodity.getExcessQuantity());
+            /*
+             * Use the CURRENT AoTD excess/deficit quantities for pricing stock.
+             *
+             * getDeficitQuantity()/getExcessQuantity() are the values the market UI
+             * already treats as the remaining deficit/excess after local trade mods.
+             * This is important for price growth: if an 8k excess has been drained
+             * to 0, pricing stock must also stop looking like +8k excess.
+             */
+            float currentDeficit = Math.max(0f, aotdCommodity.getDeficitQuantity());
+            float currentExcess = Math.max(0f, aotdCommodity.getExcessQuantity());
 
             /*
              * Real stock remains the actual AoTD supply and is used for availability/UI.
@@ -593,10 +607,10 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             pricingBasis = Math.max(pricingBasis, AOTD_REFERENCE_TRADE_QUANTITY);
 
             float pricingStockpile = pricingBasis;
-            if (officialExcess > officialDeficit && officialExcess >= AOTD_MIN_STATE_AMOUNT) {
-                pricingStockpile = pricingBasis + officialExcess;
-            } else if (officialDeficit > officialExcess && officialDeficit >= AOTD_MIN_STATE_AMOUNT) {
-                pricingStockpile = Math.max(floor, pricingBasis - officialDeficit);
+            if (currentExcess > currentDeficit && currentExcess >= AOTD_MIN_STATE_AMOUNT) {
+                pricingStockpile = pricingBasis + currentExcess;
+            } else if (currentDeficit > currentExcess && currentDeficit >= AOTD_MIN_STATE_AMOUNT) {
+                pricingStockpile = Math.max(floor, pricingBasis - currentDeficit);
             }
 
             aotdCommodity.setStocks(Math.round(realStocks));
@@ -658,7 +672,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             MarketAPI market,
             List<CommodityOnMarket> sameClassCommodities
     ) {
-        AoTDClassPriceState state = buildAoTDClassPriceState(sameClassCommodities);
+        AoTDClassPriceState state = buildAoTDClassPriceState(market, sameClassCommodities);
 
         /*
          * PriceCalculator base relation:
@@ -754,7 +768,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             minSell = AOTD_EXCESS_PRICE_FLOOR;
             maxSell = deficitMax;
             minBuy = AOTD_NORMAL_BUY_MIN;
-            maxBuy = Math.max(deficitMax, commodity.isIllegal() ? AOTD_ILLEGAL_DEFICIT_CENTER_MAX : 2.00f);
+            maxBuy = Math.max(deficitMax / AOTD_MAX_RESELL_RETURN_MULT, commodity.isIllegal() ? AOTD_ILLEGAL_DEFICIT_CENTER_MAX : 2.00f);
         } else if (state.hasExcess) {
             /*
              * Excess starts cheap. Buying should climb back toward normal as the
@@ -798,6 +812,9 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
                 blankTargets.buyMult / supplyWrapper
         );
 
+        AoTDPriceTargets stateStartTargets = getAoTDStateStartTargets(market, commodity, state, blankTargets);
+        AoTDPriceTargets stateExtremeTargets = getAoTDStateExtremeTargets(market, commodity, state, blankTargets);
+
         configureAoTDCalculator(
                 commodity.getDemandPrice(),
                 rawTargets,
@@ -806,7 +823,14 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
                 maxSell / demandWrapper,
                 minBuy / supplyWrapper,
                 maxBuy / supplyWrapper,
-                state.classStockpileUtility
+                state.classStockpileUtility,
+                state.mode,
+                state.mode < 0 ? state.excessUtility : (state.mode > 0 ? state.deficitUtility : 0f),
+                state.pressureDenom,
+                stateStartTargets.sellMult / demandWrapper,
+                stateStartTargets.buyMult / supplyWrapper,
+                stateExtremeTargets.sellMult / demandWrapper,
+                stateExtremeTargets.buyMult / supplyWrapper
         );
 
         configureAoTDCalculator(
@@ -817,7 +841,14 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
                 maxSell / demandWrapper,
                 minBuy / supplyWrapper,
                 maxBuy / supplyWrapper,
-                state.classStockpileUtility
+                state.classStockpileUtility,
+                state.mode,
+                state.mode < 0 ? state.excessUtility : (state.mode > 0 ? state.deficitUtility : 0f),
+                state.pressureDenom,
+                stateStartTargets.sellMult / demandWrapper,
+                stateStartTargets.buyMult / supplyWrapper,
+                stateExtremeTargets.sellMult / demandWrapper,
+                stateExtremeTargets.buyMult / supplyWrapper
         );
 
         commodity.getPlayerDemandPriceMod().unmodifyMult(AOTD_PRICE_MOD_ID);
@@ -883,7 +914,14 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             float maxSell,
             float minBuy,
             float maxBuy,
-            float neutralStockpileUtility
+            float neutralStockpileUtility,
+            int officialStateMode,
+            float officialStateUtility,
+            float officialStatePressureDenom,
+            float stateStartSellMult,
+            float stateStartBuyMult,
+            float stateExtremeSellMult,
+            float stateExtremeBuyMult
     ) {
         if (calculator instanceof EffectivePriceCalculator aotdCalculator) {
             aotdCalculator.setAoTDPriceModel(
@@ -900,13 +938,21 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
                     AOTD_CUSTOM_PRICE_STOCKPILE_DENOM_MULT,
                     AOTD_CUSTOM_PRICE_DENOM_MAX_REFERENCE_MULT,
                     AOTD_MAX_RESELL_RETURN_MULT,
-                    neutralStockpileUtility
+                    neutralStockpileUtility,
+                    officialStateMode,
+                    officialStateUtility,
+                    officialStatePressureDenom,
+                    stateStartSellMult,
+                    stateStartBuyMult,
+                    stateExtremeSellMult,
+                    stateExtremeBuyMult
             );
         }
     }
 
-    private static AoTDClassPriceState buildAoTDClassPriceState(List<CommodityOnMarket> sameClassCommodities) {
+    private static AoTDClassPriceState buildAoTDClassPriceState(MarketAPI market, List<CommodityOnMarket> sameClassCommodities) {
         AoTDClassPriceState state = new AoTDClassPriceState();
+        String stateAnchorKey = getAoTDStateAnchorKey(sameClassCommodities);
 
         for (CommodityOnMarket commodity : sameClassCommodities) {
             float utility = Math.max(0.0001f, commodity.getUtilityOnMarket());
@@ -921,44 +967,136 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
                 state.classRawDemandUtility += rawDemandUtility;
 
                 /*
-                 * Use official AoTD state, not raw supply - demand.
+                 * getDeficitQuantity()/getExcessQuantity() are the CURRENT remaining
+                 * state after local trade mods. getDef()/getExc() are the monthly
+                 * base state and are kept only as the pressure anchor.
                  *
-                 * getDeficitQuantity()/getExcessQuantity() include local trade impact,
-                 * so fulfilling a deficit or draining an excess moves price in the
-                 * correct direction without turning every raw mismatch into a state.
+                 * This avoids the 8k excess -> buy all -> still 40c bug: once the
+                 * remaining excess is 0, this state becomes blank, while the anchor
+                 * still remembers the original 8k so partial draining moves linearly.
                  */
-                float deficit = Math.max(0f, aotdCommodity.getDeficitQuantity());
-                float excess = Math.max(0f, aotdCommodity.getExcessQuantity());
+                float officialDeficit = Math.max(0f, aotdCommodity.getDef());
+                float officialExcess = Math.max(0f, aotdCommodity.getExc());
+                float currentDeficit = Math.max(0f, aotdCommodity.getDeficitQuantity());
+                float currentExcess = Math.max(0f, aotdCommodity.getExcessQuantity());
 
-                if (deficit > excess && deficit >= AOTD_MIN_STATE_AMOUNT) {
-                    state.deficitUtility += deficit * utility;
-                } else if (excess >= deficit && excess >= AOTD_MIN_STATE_AMOUNT) {
-                    state.excessUtility += excess * utility;
+                state.localTradeUtility += getAoTDLocalTradeQuantityForPricing(aotdCommodity) * utility;
+
+                state.rawDeficitUtility += Math.max(officialDeficit, currentDeficit) * utility;
+                state.rawExcessUtility += Math.max(officialExcess, currentExcess) * utility;
+
+                if (currentDeficit > currentExcess && currentDeficit >= AOTD_MIN_STATE_AMOUNT) {
+                    state.deficitUtility += currentDeficit * utility;
+                } else if (currentExcess >= currentDeficit && currentExcess >= AOTD_MIN_STATE_AMOUNT) {
+                    state.excessUtility += currentExcess * utility;
                 }
             } else {
                 state.classStockpileUtility += Math.max(0f, commodity.getStockpile()) * utility;
             }
         }
 
-        float pressureDenom = Math.max(
-                AOTD_REFERENCE_TRADE_QUANTITY,
-                Math.max(1f, state.classRawDemandUtility)
-        );
+        /*
+         * State pressure denominator is the amount that has to be cleared, not
+         * total raw demand. This makes excess/deficit prices move according to
+         * how close the player is to draining the excess or filling the deficit.
+         *
+         * Example: 8k excess starts at floor price. If the player buys 6k, the
+         * remaining 2k should be only 25% of the original pressure, so the buy
+         * price climbs toward blank/base while still staying inside excess bounds.
+         */
+        float pressureDenom = AOTD_REFERENCE_TRADE_QUANTITY;
 
-        if (state.deficitUtility > state.excessUtility && state.deficitUtility >= AOTD_MIN_STATE_AMOUNT) {
+        /*
+         * If getExcessQuantity()/getDeficitQuantity() and even getExc()/getDef()
+         * are zero after local player trade, keep the last monthly state anchor
+         * while the local trade displacement proves the player has interacted
+         * with that state.
+         *
+         * This is the exact buy-all-excess roundtrip case:
+         *   8k excess existed -> player buys all -> current excess is 0
+         *   sell-back must still be priced as an excess market, not blank.
+         */
+        float storedDeficitAnchor = getAoTDStoredStatePressureAnchor(market, stateAnchorKey, 1);
+        float storedExcessAnchor = getAoTDStoredStatePressureAnchor(market, stateAnchorKey, -1);
+        boolean localPlayerBoughtFromMarket = state.localTradeUtility < -0.0001f;
+        boolean localPlayerSoldToMarket = state.localTradeUtility > 0.0001f;
+
+        if (state.rawExcessUtility <= 0.0001f && storedExcessAnchor > 0.0001f && localPlayerBoughtFromMarket) {
+            state.rawExcessUtility = storedExcessAnchor;
+        }
+        if (state.rawDeficitUtility <= 0.0001f && storedDeficitAnchor > 0.0001f && localPlayerSoldToMarket) {
+            state.rawDeficitUtility = storedDeficitAnchor;
+        }
+
+        boolean activeDeficit = state.deficitUtility > state.excessUtility
+                && state.deficitUtility >= AOTD_MIN_STATE_AMOUNT;
+        boolean activeExcess = state.excessUtility >= state.deficitUtility
+                && state.excessUtility >= AOTD_MIN_STATE_AMOUNT;
+
+        boolean anchoredDeficit = !activeDeficit
+                && !activeExcess
+                && state.rawDeficitUtility > state.rawExcessUtility
+                && state.rawDeficitUtility >= AOTD_MIN_STATE_AMOUNT;
+        boolean anchoredExcess = !activeDeficit
+                && !activeExcess
+                && state.rawExcessUtility >= state.rawDeficitUtility
+                && state.rawExcessUtility >= AOTD_MIN_STATE_AMOUNT;
+
+        if (activeDeficit || anchoredDeficit) {
+            /*
+             * Active deficit: getDeficitQuantity() is still above zero, so the
+             * market should pay high sell prices according to remaining deficit.
+             *
+             * Anchored deficit: getDeficitQuantity() has been filled to zero, but
+             * getDef()/AoTDExcDefData says this market was deficit-anchored for
+             * this pricing window. In that state, sell prices return to blank,
+             * but buying back from the same market must still use the deficit
+             * markup curve via EffectivePriceCalculator.
+             */
             state.hasDeficit = true;
+            state.mode = 1;
+            state.pressureDenom = getAoTDStatePressureAnchor(
+                    market,
+                    stateAnchorKey,
+                    state.mode,
+                    Math.max(state.rawDeficitUtility, state.deficitUtility)
+            );
             state.classDemandUtility = state.classStockpileUtility + state.deficitUtility;
-            state.pressure = aotdClamp(state.deficitUtility / pressureDenom, 0f, 1f);
-        } else if (state.excessUtility >= state.deficitUtility && state.excessUtility >= AOTD_MIN_STATE_AMOUNT) {
+            state.pressure = aotdClamp(state.deficitUtility / state.pressureDenom, 0f, 1f);
+        } else if (activeExcess || anchoredExcess) {
+            /*
+             * Active excess: getExcessQuantity() is still above zero, so buying
+             * from the market should climb linearly from the excess floor toward
+             * blank as the remaining excess falls.
+             *
+             * Anchored excess: getExcessQuantity() is zero after the player bought
+             * the surplus, but getExc()/AoTDExcDefData still says this market was
+             * oversupplied. Buy prices return to blank, while selling back into
+             * this market must still use the low excess sell curve.
+             *
+             * This was the missing piece in v29: when current excess reached zero,
+             * state.mode became blank, so the calculator received blank extreme
+             * targets and could not apply the excess sell penalty even though the
+             * monthly AoTD excess anchor still existed.
+             */
             state.hasExcess = true;
+            state.mode = -1;
+            state.pressureDenom = getAoTDStatePressureAnchor(
+                    market,
+                    stateAnchorKey,
+                    state.mode,
+                    Math.max(state.rawExcessUtility, state.excessUtility)
+            );
             state.classDemandUtility = Math.max(1f, state.classStockpileUtility - state.excessUtility);
-            state.pressure = aotdClamp(state.excessUtility / pressureDenom, 0f, 1f);
+            state.pressure = aotdClamp(state.excessUtility / state.pressureDenom, 0f, 1f);
         } else {
+            state.pressureDenom = pressureDenom;
             /*
              * Blank market: force demand == stockpile so the neutral curve remains
              * around base price. Stable market-specific variation is applied as
              * explicit buy/sell targets, not by faking deficit/excess.
              */
+            state.mode = 0;
             state.classDemandUtility = Math.max(1f, state.classStockpileUtility);
             state.pressure = 0f;
         }
@@ -970,6 +1108,158 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
         aotdResetPriceBands(commodity.getDemandPrice());
         aotdResetPriceBands(commodity.getSupplyPrice());
+    }
+
+    private static float getAoTDLocalTradeQuantityForPricing(AoTDCommodityOnMarket commodity) {
+        if (commodity == null) {
+            return 0f;
+        }
+
+        float combined = commodity.getCombinedTradeModQuantity();
+        if (Math.abs(combined) > 0.0001f) {
+            return combined;
+        }
+
+        try {
+            float soldToMarket = 0f;
+            float boughtFromMarket = 0f;
+
+            if (commodity.getTradeModPlus() != null) {
+                soldToMarket += Math.abs(commodity.getTradeModPlus().getModifiedValue());
+            }
+            if (commodity.getTradeModMinus() != null) {
+                boughtFromMarket += Math.abs(commodity.getTradeModMinus().getModifiedValue());
+            }
+
+            float directional = soldToMarket - boughtFromMarket;
+            if (Math.abs(directional) > 0.0001f) {
+                return directional;
+            }
+
+            if (commodity.getTradeMod() != null) {
+                float trade = commodity.getTradeMod().getModifiedValue();
+                if (Math.abs(trade) > 0.0001f) {
+                    return trade;
+                }
+            }
+        } catch (Throwable ignored) {
+            /* Different decompiled/API paths may not expose all three mods. */
+        }
+
+        return 0f;
+    }
+
+    private static String getAoTDStateAnchorKey(List<CommodityOnMarket> sameClassCommodities) {
+        if (sameClassCommodities == null || sameClassCommodities.isEmpty()) {
+            return "unknown";
+        }
+
+        for (CommodityOnMarket commodity : sameClassCommodities) {
+            if (commodity == null || commodity.getId()==null) continue;
+
+            String demandClass = Global.getSettings().getCommoditySpec(commodity.getId()).getDemandClass();
+            if (demandClass != null && !demandClass.isEmpty()) {
+                return demandClass;
+            }
+        }
+
+        CommodityOnMarket first = sameClassCommodities.get(0);
+        if (first != null && first.getId() != null) {
+            return first.getId();
+        }
+
+        return "unknown";
+    }
+
+    private static float getAoTDStoredStatePressureAnchor(
+            MarketAPI market,
+            String stateAnchorKey,
+            int mode
+    ) {
+        if (market == null) {
+            return 0f;
+        }
+
+        try {
+            String key = AOTD_STATE_PRESSURE_ANCHOR_PREFIX + mode + "_" + stateAnchorKey;
+            Object value = market.getMemoryWithoutUpdate().get(key);
+            return value instanceof Number ? Math.max(0f, ((Number) value).floatValue()) : 0f;
+        } catch (Throwable ignored) {
+            return 0f;
+        }
+    }
+
+    private static float getAoTDStatePressureAnchor(
+            MarketAPI market,
+            String stateAnchorKey,
+            int mode,
+            float currentUtility
+    ) {
+        float safeCurrent = Math.max(0f, currentUtility);
+        float fallback = Math.max(AOTD_REFERENCE_TRADE_QUANTITY, safeCurrent);
+
+        if (market == null || safeCurrent <= 0f) {
+            return fallback;
+        }
+
+        try {
+            String key = AOTD_STATE_PRESSURE_ANCHOR_PREFIX + mode + "_" + stateAnchorKey;
+            Object value = market.getMemoryWithoutUpdate().get(key);
+            float stored = value instanceof Number ? Math.max(0f, ((Number) value).floatValue()) : 0f;
+
+            /*
+             * The anchor is the largest active state amount seen this month/window.
+             * This makes prices move linearly toward blank as excess/deficit is
+             * actually cleared instead of re-normalizing 2k/2k back to full pressure
+             * after the economy recalculates.
+             */
+            if (safeCurrent > stored || stored <= 0f) {
+                stored = safeCurrent;
+            }
+
+            market.getMemoryWithoutUpdate().set(key, stored, 31f);
+            return Math.max(AOTD_REFERENCE_TRADE_QUANTITY, stored);
+        } catch (Throwable ignored) {
+            return fallback;
+        }
+    }
+
+    private static AoTDPriceTargets getAoTDStateStartTargets(
+            MarketAPI market,
+            AoTDCommodityOnMarket commodity,
+            AoTDClassPriceState state,
+            AoTDPriceTargets blankTargets
+    ) {
+        if (state.hasDeficit) {
+            float start = commodity.isIllegal()
+                    ? AOTD_ILLEGAL_DEFICIT_CENTER_MIN
+                    : AOTD_DEFICIT_CENTER_MIN;
+            return new AoTDPriceTargets(start, start);
+        }
+
+        /* Excess starts from blank and moves toward the excess floor as pressure grows. */
+        return blankTargets;
+    }
+
+    private static AoTDPriceTargets getAoTDStateExtremeTargets(
+            MarketAPI market,
+            AoTDCommodityOnMarket commodity,
+            AoTDClassPriceState state,
+            AoTDPriceTargets blankTargets
+    ) {
+        if (state.hasDeficit) {
+            float max = getDeficitCenterMax(commodity);
+            return new AoTDPriceTargets(max, max / AOTD_MAX_RESELL_RETURN_MULT);
+        }
+
+        if (state.hasExcess) {
+            return new AoTDPriceTargets(
+                    AOTD_EXCESS_PRICE_FLOOR + AOTD_EXCESS_SELL_SPREAD,
+                    AOTD_EXCESS_PRICE_FLOOR
+            );
+        }
+
+        return blankTargets;
     }
 
     private static AoTDPriceTargets getAoTDBlankPriceTargets(
@@ -1185,11 +1475,20 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         float classDemandUtility;
         float classStockpileUtility;
         float classRawDemandUtility;
+        /** Original official state before local confirmed trade is applied. Used as pressure anchor. */
+        float rawDeficitUtility;
+        float rawExcessUtility;
+        /** Remaining state after local confirmed trade is applied. Used as current pressure. */
         float deficitUtility;
         float excessUtility;
+        /** Signed local player trade in utility units: positive = sold to market, negative = bought from market. */
+        float localTradeUtility;
         float pressure;
         boolean hasDeficit;
         boolean hasExcess;
+        /** -1 = excess, 0 = blank, 1 = deficit. */
+        int mode = 0;
+        float pressureDenom = AOTD_REFERENCE_TRADE_QUANTITY;
     }
 
     private static final class AoTDPriceTargets {
