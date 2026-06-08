@@ -149,6 +149,9 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
 
     @Override
     public void onAboutToStartGeneratingCodex() {
+        for (CommoditySpecAPI allCommoditySpec : Global.getSettings().getAllCommoditySpecs()) {
+
+        }
         if(Global.getSettings().getGameVersion().contains("0.98a")){
             if(!Global.getSettings().getGameVersion().equals("0.98a-RC8")){
                 throw  new RuntimeException("AoTD Theory of Toolbox: This version of mod for 0.98a game can only be run at exactly 0.98a-RC8 version ");

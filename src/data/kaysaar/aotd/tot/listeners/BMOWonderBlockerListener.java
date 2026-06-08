@@ -15,10 +15,16 @@ public class BMOWonderBlockerListener implements BuildingMenuListener {
         HashSet<String>all = new HashSet<>();
         for (Industry industry : marketAPI.getIndustries()) {
             if(industry instanceof GrandWonderAPI wonderAPI){
-                all.addAll(wonderAPI.getIndustriesToPreventFromAppearingInMenu(marketAPI));
+                if(wonderAPI.getIndustriesToPreventFromAppearingInMenu(marketAPI)!=null){
+                    all.addAll(wonderAPI.getIndustriesToPreventFromAppearingInMenu(marketAPI));
+
+                }
             }
             if(industry instanceof AoTDConstructionSite site &&industry.isUpgrading()){
-                all.addAll(site.getWonderAPI().getIndustriesToPreventFromAppearingInMenu(marketAPI));
+                if(site.getWonderAPI().getIndustriesToPreventFromAppearingInMenu(marketAPI)!=null){
+                    all.addAll(site.getWonderAPI().getIndustriesToPreventFromAppearingInMenu(marketAPI));
+
+                }
             }
         }
         GrandWonderTypeManager.getIndSpecsOfWonders().forEach(x->all.add(x.getId()));
