@@ -1,5 +1,6 @@
 package data.kaysaar.aotd.tot.scripts.commoditydata;
 
+import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.campaign.econ.PriceVariability;
@@ -180,13 +181,19 @@ public class EffectivePriceCalculator extends PriceCalculator {
     /**
      * Market demand price: player sells to market, so stock increases.
      */
+
     @Override
     public float getAddPrice(double stock, double amount) {
         if (amount <= 0d) return 0f;
-
+        if(commodity.isNonEcon()){
+            CommoditySpecAPI specAPI = Global.getSettings().getCommoditySpec(commodity.getId());
+            int trueAmount = (int) (amount/commodity.getUtilityOnMarket());
+            return (float) (specAPI.getBasePrice()*trueAmount);
+        }
         if (useAoTDPriceModel) {
             return getAoTDCustomTotalPrice(true, stock, amount);
         }
+
 
         return BasePriceCalculator.getUnitPrice(
                 TransactionDirection.ENTITY_BUYING,
@@ -203,7 +210,11 @@ public class EffectivePriceCalculator extends PriceCalculator {
     @Override
     public float getRemovePrice(double stock, double amount) {
         if (amount <= 0d) return 0f;
-
+        if(commodity.isNonEcon()){
+            CommoditySpecAPI specAPI = Global.getSettings().getCommoditySpec(commodity.getId());
+            int trueAmount = (int) (amount/commodity.getUtilityOnMarket());
+            return (float) (specAPI.getBasePrice()*trueAmount);
+        }
         if (useAoTDPriceModel) {
             return getAoTDCustomTotalPrice(false, stock, amount);
         }
