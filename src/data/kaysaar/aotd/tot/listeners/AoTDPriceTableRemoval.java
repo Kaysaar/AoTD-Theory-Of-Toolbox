@@ -5,26 +5,29 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CustomUIPanelPlugin;
 import com.fs.starfarer.api.campaign.PlanetAPI;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
-import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
+import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.ui.impl.StandardTooltipV2Expandable;
 import data.kaysaar.aotd.tot.listeners.ui.AoTDPointerToStarSystem;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
-import data.kaysaar.aotd.tot.scripts.economy.AoTDSectorProductionDemandDataUtils;
+import data.kaysaar.aotd.tot.scripts.economy.AoTdMainWorkTask2;
 import data.kaysaar.aotd.tot.scripts.submarket.aotd.AoTDOpenMarketPlugin;
 
 import java.awt.*;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
 public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
+
+    private static final int PRICE_QUANTITY = 500;
+    private static final int DISPLAY_LIMIT = 5;
+
     TooltipMakerAPI originalTooltip;
     CustomPanelAPI mainPanel;
     boolean removed = false;
@@ -36,7 +39,9 @@ public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
         this.originalTooltip = tooltipMakerAPI;
         this.commodityId = commodityId;
         this.mainPanel = Global.getSettings().createCustom(1, 1, this);
+
         yAdded = originalTooltip.getHeightSoFar();
+
         final PositionAPI pos = originalTooltip.getPosition();
         prevY = (int) (pos.getY() + pos.getHeight());
     }
@@ -59,292 +64,314 @@ public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
     @Override
     public void advance(float amount) {
         if (removed) return;
+        if (!(originalTooltip.getPrev() instanceof LabelAPI)) return;
 
-        if (originalTooltip.getPrev() instanceof LabelAPI label) {
-            if (label.getText().contains("Per unit prices assume")) {
-                UIPanelAPI holder = (UIPanelAPI) ReflectionUtilis.getChildrenCopy(originalTooltip).get(0);
-                List<UIComponentAPI> comps = ReflectionUtilis.getChildrenCopy((UIPanelAPI) holder);
-                int starter = comps.size();
-                int toRemove = 6;
+        LabelAPI label = (LabelAPI) originalTooltip.getPrev();
+        if (!label.getText().contains("Per unit prices assume")) return;
 
-                ArrayList<MarketAPI> commsBuy = new ArrayList<>();
-                ArrayList<MarketAPI> commsSell = new ArrayList<>();
+        rebuildTradeTooltip();
+    }
 
-                for (MarketAPI marketAPI : Global.getSector().getEconomy().getMarketsCopy()) {
-                    if (marketAPI.isHidden()) continue;
+    private void rebuildTradeTooltip() {
+        UIPanelAPI holder = (UIPanelAPI) ReflectionUtilis.getChildrenCopy(originalTooltip).get(0);
+        List<UIComponentAPI> comps = ReflectionUtilis.getChildrenCopy(holder);
 
-                    AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(marketAPI, commodityId);
+        ArrayList<SellRowData> sellRows = new ArrayList<>();
+        ArrayList<BuyRowData> buyRows = new ArrayList<>();
 
-                    int demand = com.getSupplyDemandData().getTotalRawUnitsFromDemand();
-                    if (demand > 0) {
-                        commsSell.add(marketAPI);
-                    }
+        buildRowsFromCache(sellRows, buyRows);
 
-                    int am = AoTDOpenMarketPlugin.getStockPileToolbox(com);
-                    if (am > 100) {
-                        commsBuy.add(marketAPI);
-                    }
-                }
+        sellRows.sort(new Comparator<SellRowData>() {
+            @Override
+            public int compare(SellRowData a, SellRowData b) {
+                int priceCompare = Integer.compare(b.pricePerUnit, a.pricePerUnit);
+                if (priceCompare != 0) return priceCompare;
 
-                commsSell.sort(new Comparator<MarketAPI>() {
-                    public int compare(MarketAPI var1x, MarketAPI var2x) {
-                        int price1 = getSellPricePerUnit(var1x, commodityId);
-                        int price2 = getSellPricePerUnit(var2x, commodityId);
+                return Integer.compare(b.demand, a.demand);
+            }
+        });
 
-                        int priceCompare = Integer.compare(price2, price1);
-                        if (priceCompare != 0) {
-                            return priceCompare;
-                        }
+        buyRows.sort(new Comparator<BuyRowData>() {
+            @Override
+            public int compare(BuyRowData a, BuyRowData b) {
+                int priceCompare = Integer.compare(a.pricePerUnit, b.pricePerUnit);
+                if (priceCompare != 0) return priceCompare;
 
-                        AoTDCommodityOnMarket com1 = AoTDCommodityOnMarket.getComMarketInstanceSave(var1x, commodityId);
-                        AoTDCommodityOnMarket com2 = AoTDCommodityOnMarket.getComMarketInstanceSave(var2x, commodityId);
+                return Integer.compare(b.availableForSort, a.availableForSort);
+            }
+        });
 
-                        int demand1 = com1.getSupplyDemandData().getTotalRawUnitsFromDemand();
-                        int demand2 = com2.getSupplyDemandData().getTotalRawUnitsFromDemand();
+        removeVanillaRows(holder, comps, sellRows.isEmpty(), buyRows.isEmpty());
 
-                        return Integer.compare(demand2, demand1);
-                    }
-                });
+        removed = true;
+        originalTooltip.addSpacer(0f).getPosition().inTL(5, yAdded);
+        originalTooltip.setHeightSoFar(yAdded);
 
-                commsBuy.sort(new Comparator<MarketAPI>() {
-                    public int compare(MarketAPI var1x, MarketAPI var2x) {
-                        int price1 = getBuyPricePerUnit(var1x, commodityId);
-                        int price2 = getBuyPricePerUnit(var2x, commodityId);
+        if (!sellRows.isEmpty()) {
+            addSellTable(sellRows);
+        }
 
-                        int priceCompare = Integer.compare(price1, price2);
-                        if (priceCompare != 0) {
-                            return priceCompare;
-                        }
+        if (!buyRows.isEmpty()) {
+            addBuyTable(buyRows);
+        }
 
-                        int available1 = getAvailableForBuy(var1x, commodityId);
-                        int available2 = getAvailableForBuy(var2x, commodityId);
+        if (sellRows.isEmpty() && buyRows.isEmpty()) {
+            originalTooltip.addPara("No trade data!", Misc.getGrayColor(), 10f);
+        } else {
+            addFootnotes();
+        }
 
-                        return Integer.compare(available2, available1);
-                    }
-                });
+        repositionTooltip();
+    }
 
-                if (commsSell.isEmpty()) {
-                    toRemove -= 2;
-                }
-                if (commsBuy.isEmpty()) {
-                    toRemove -= 2;
-                }
+    private void buildRowsFromCache(ArrayList<SellRowData> sellRows, ArrayList<BuyRowData> buyRows) {
+        AoTDTradePriceCache.CandidateSet candidates = AoTDTradePriceCache.getCandidates(commodityId);
 
-                toRemove = Math.min(toRemove, comps.size());
-                for (int i = 0; i < toRemove; i++) {
-                    int index = comps.size() - 1 - i;
-                    holder.removeComponent(comps.get(index));
-                }
+        for (AoTDTradePriceCache.Candidate candidate : candidates.sellCandidates) {
+            MarketAPI market = candidate.getMarket();
+            if (market == null || market.isHidden()) continue;
 
-                removed = true;
-                originalTooltip.addSpacer(0f).getPosition().inTL(5, yAdded);
-                originalTooltip.setHeightSoFar(yAdded);
+            AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(market, commodityId);
+            if (com == null) continue;
 
-                if (!commsSell.isEmpty()) {
-                    originalTooltip.addPara("Best places to sell:", 10f);
-                    originalTooltip.beginTable(
-                            Global.getSector().getPlayerFaction(),
-                            20f,
-                            "Price / 500*", 100,
-                            "Demand", 70,
-                            "Deficit", 70,
-                            "Location", 230,
-                            "Star System", 140,
-                            "Dist (LY)", 80
-                    );
+            int demand = com.getSupplyDemandData().getTotalRawUnitsFromDemand();
+            if (demand <= 0) continue;
 
-                    for (int i = 0; i < Math.min(5, commsSell.size()); i++) {
-                        MarketAPI bestMarket = commsSell.get(i);
-                        AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(bestMarket, commodityId);
+            SellRowData sell = new SellRowData();
+            sell.market = market;
+            sell.pricePerUnit = getSellPricePerUnit(market, commodityId);
+            sell.demand = demand;
+            sell.deficit = com.getDeficitQuantity();
+            sellRows.add(sell);
+        }
 
-                        int deficit = com.getDeficitQuantity();
-                        int demand = com.getSupplyDemandData().getTotalRawUnitsFromDemand();
-                        int price = getSellPricePerUnit(bestMarket, commodityId);
+        for (AoTDTradePriceCache.Candidate candidate : candidates.buyCandidates) {
+            MarketAPI market = candidate.getMarket();
+            if (market == null || market.isHidden()) continue;
+            if (!(market instanceof Market)) continue;
 
-                        String deficitString = "---";
-                        Color deficitStrColor = Misc.getGrayColor();
-                        if (deficit > 0) {
-                            deficitString = Misc.getWithDGS(deficit);
-                            deficitStrColor = Misc.getNegativeHighlightColor();
-                        }
+            AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(market, commodityId);
+            if (com == null) continue;
 
-                        String factionName = AoTDToolboxMisc.capitalizeFirst(bestMarket.getFaction().getDisplayName());
-                        String location = "In Hyperspace";
-                        Color locationColor = Misc.getGrayColor();
+            int supply = com.getSupplyDemandData().getTotalRawUnitsFromSupply();
+            int stableAvailable = (int) AoTdMainWorkTask2.getAoTDStableSharedSubmarketLimit((Market) market, com, supply);
+            int liveAvailable = AoTDOpenMarketPlugin.getStockPileToolbox(com);
 
-                        if (bestMarket.getStarSystem() != null) {
-                            StarSystemAPI system = bestMarket.getStarSystem();
-                            location = system.getBaseName();
-                            PlanetAPI star = system.getStar();
-                            if (star != null) {
-                                locationColor = star.getSpec().getIconColor();
-                            }
-                        }
+            // The table displays liveAvailable, so a market with liveAvailable == 0 must never appear
+            // even if the stable shared limit is still positive due to economy/cache state.
+            if (stableAvailable <= 0 || liveAvailable <= 0) continue;
 
-                        float distanceLY = Misc.getDistanceToPlayerLY(bestMarket.getPrimaryEntity());
+            int effectiveAvailable = Math.min(stableAvailable, liveAvailable);
+            if (effectiveAvailable <= 0) continue;
 
-                        Object row = originalTooltip.addRow(
-                                Color.ORANGE,
-                                Misc.getDGSCredits(price),
-                                Color.ORANGE,
-                                Misc.getWithDGS(demand),
-                                deficitStrColor,
-                                deficitString,
-                                Alignment.LMID,
-                                bestMarket.getFaction().getBaseUIColor(),
-                                bestMarket.getName() + " - " + factionName,
-                                locationColor,
-                                location,
-                                Color.ORANGE,
-                                Misc.getRoundedValueMaxOneAfterDecimal(distanceLY)
-                        );
+            BuyRowData buy = new BuyRowData();
+            buy.market = market;
+            buy.pricePerUnit = getBuyPricePerUnit(market, commodityId);
+            buy.availableForSort = effectiveAvailable;
+            buy.availableDisplay = liveAvailable;
+            buy.excess = com.getExcessQuantity();
+            buyRows.add(buy);
+        }
+    }
 
-                        Color finalLocationColor = locationColor;
-                        ReflectionUtilis.invokeMethodWithAutoProjection("setAfterCreate", row, new Runnable() {
-                            @Override
-                            public void run() {
-                                AoTDPointerToStarSystem pointer = new AoTDPointerToStarSystem(
-                                        (Float) ReflectionUtilis.invokeMethod("getHeight", row),
-                                        bestMarket.getLocationInHyperspace(),
-                                        finalLocationColor
-                                );
-                                Object columns = ReflectionUtilis.invokeMethodWithAutoProjection("getCol", row, 4);
-                                PositionAPI pos = (PositionAPI) ReflectionUtilis.invokeMethodWithAutoProjection(
-                                        "addComponent",
-                                        columns,
-                                        pointer.getMainPanel()
-                                );
-                                pos.inRMid(5f);
-                            }
-                        });
-                    }
+    private void removeVanillaRows(UIPanelAPI holder, List<UIComponentAPI> comps, boolean noSellRows, boolean noBuyRows) {
+        int toRemove = 6;
 
-                    originalTooltip.addTable("", 0, 10f);
-                }
+        if (noSellRows) {
+            toRemove -= 2;
+        }
+        if (noBuyRows) {
+            toRemove -= 2;
+        }
 
-                if (!commsBuy.isEmpty()) {
-                    originalTooltip.addPara("Best places to buy:", 10f);
-                    originalTooltip.beginTable(
-                            Global.getSector().getPlayerFaction(),
-                            20f,
-                            "Price / 500*", 100,
-                            "Available", 70,
-                            "Excess", 70,
-                            "Location", 230,
-                            "Star System", 140,
-                            "Dist (LY)", 80
-                    );
+        toRemove = Math.min(toRemove, comps.size());
 
-                    for (int i = 0; i < Math.min(5, commsBuy.size()); i++) {
-                        MarketAPI bestMarket = commsBuy.get(i);
-                        AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(bestMarket, commodityId);
+        for (int i = 0; i < toRemove; i++) {
+            int index = comps.size() - 1 - i;
+            holder.removeComponent(comps.get(index));
+        }
+    }
 
-                        int excess = com.getExcessQuantity();
-                        int demand = AoTDOpenMarketPlugin.getStockPileToolbox(com);
-                        int price = getBuyPricePerUnit(bestMarket, commodityId);
+    private void addSellTable(ArrayList<SellRowData> rows) {
+        originalTooltip.addPara("Best places to sell:", 10f);
+        originalTooltip.beginTable(
+                Global.getSector().getPlayerFaction(),
+                20f,
+                "Price / 500*", 100,
+                "Demand", 70,
+                "Deficit", 70,
+                "Location", 230,
+                "Star System", 140,
+                "Dist (LY)", 80
+        );
 
-                        String deficitString = "---";
-                        Color deficitStrColor = Misc.getGrayColor();
-                        if (excess > 0) {
-                            deficitString = Misc.getWithDGS(excess);
-                            deficitStrColor = Misc.getPositiveHighlightColor();
-                        }
+        int max = Math.min(DISPLAY_LIMIT, rows.size());
+        for (int i = 0; i < max; i++) {
+            SellRowData rowData = rows.get(i);
+            MarketAPI market = rowData.market;
 
-                        String factionName = AoTDToolboxMisc.capitalizeFirst(bestMarket.getFaction().getDisplayName());
-                        String location = "In Hyperspace";
-                        Color locationColor = Misc.getGrayColor();
+            String deficitString = "---";
+            Color deficitStrColor = Misc.getGrayColor();
+            if (rowData.deficit > 0) {
+                deficitString = Misc.getWithDGS(rowData.deficit);
+                deficitStrColor = Misc.getNegativeHighlightColor();
+            }
 
-                        if (bestMarket.getStarSystem() != null) {
-                            StarSystemAPI system = bestMarket.getStarSystem();
-                            location = system.getBaseName();
-                            PlanetAPI star = system.getStar();
-                            if (star != null) {
-                                locationColor = star.getSpec().getIconColor();
-                            }
-                        }
+            MarketDisplayData display = getMarketDisplayData(market);
 
-                        float distanceLY = Misc.getDistanceToPlayerLY(bestMarket.getPrimaryEntity());
+            Object row = originalTooltip.addRow(
+                    Color.ORANGE,
+                    Misc.getDGSCredits(rowData.pricePerUnit),
+                    Color.ORANGE,
+                    Misc.getWithDGS(rowData.demand),
+                    deficitStrColor,
+                    deficitString,
+                    Alignment.LMID,
+                    market.getFaction().getBaseUIColor(),
+                    market.getName() + " - " + display.factionName,
+                    display.locationColor,
+                    display.location,
+                    Color.ORANGE,
+                    Misc.getRoundedValueMaxOneAfterDecimal(display.distanceLY)
+            );
 
-                        Object row = originalTooltip.addRow(
-                                Color.ORANGE,
-                                Misc.getDGSCredits(price),
-                                Color.ORANGE,
-                                Misc.getWithDGS(demand),
-                                deficitStrColor,
-                                deficitString,
-                                Alignment.LMID,
-                                bestMarket.getFaction().getBaseUIColor(),
-                                bestMarket.getName() + " - " + factionName,
-                                locationColor,
-                                location,
-                                Color.ORANGE,
-                                Misc.getRoundedValueMaxOneAfterDecimal(distanceLY)
-                        );
+            attachStarSystemPointer(row, market, display.locationColor);
+        }
 
-                        Color finalLocationColor = locationColor;
-                        ReflectionUtilis.invokeMethodWithAutoProjection("setAfterCreate", row, new Runnable() {
-                            @Override
-                            public void run() {
-                                AoTDPointerToStarSystem pointer = new AoTDPointerToStarSystem(
-                                        (Float) ReflectionUtilis.invokeMethod("getHeight", row),
-                                        bestMarket.getLocationInHyperspace(),
-                                        finalLocationColor
-                                );
-                                Object columns = ReflectionUtilis.invokeMethodWithAutoProjection("getCol", row, 4);
-                                PositionAPI pos = (PositionAPI) ReflectionUtilis.invokeMethodWithAutoProjection(
-                                        "addComponent",
-                                        columns,
-                                        pointer.getMainPanel()
-                                );
-                                pos.inRMid(5f);
-                            }
-                        });
-                    }
+        originalTooltip.addTable("", 0, 10f);
+    }
 
-                    originalTooltip.addTable("", 0, 10f);
-                }
+    private void addBuyTable(ArrayList<BuyRowData> rows) {
+        originalTooltip.addPara("Best places to buy:", 10f);
+        originalTooltip.beginTable(
+                Global.getSector().getPlayerFaction(),
+                20f,
+                "Price / 500*", 100,
+                "Available", 70,
+                "Excess", 70,
+                "Location", 230,
+                "Star System", 140,
+                "Dist (LY)", 80
+        );
 
-                if (commsSell.isEmpty() && commsBuy.isEmpty()) {
-                    originalTooltip.addPara("No trade data!", Misc.getGrayColor(), 10f);
-                } else {
-                    float pos = Math.abs(this.originalTooltip.addPara(
-                            "*All values approximate. Prices do not include tariffs, which can be avoided through black market trade.",
-                            Misc.getGrayColor(),
-                            5f
-                    ).getPosition().getY());
+        int max = Math.min(DISPLAY_LIMIT, rows.size());
+        for (int i = 0; i < max; i++) {
+            BuyRowData rowData = rows.get(i);
+            MarketAPI market = rowData.market;
 
-                    originalTooltip.addPara(
-                            "*Per-unit prices assume buying or selling a batch of %s units. Each unit bought costs more as the market’s supply is reduced, and each unit sold brings in less as demand is fulfilled.",
-                            5f,
-                            Misc.getGrayColor(),
-                            Color.ORANGE,
-                            "500"
-                    );
+            String excessString = "---";
+            Color excessColor = Misc.getGrayColor();
+            if (rowData.excess > 0) {
+                excessString = Misc.getWithDGS(rowData.excess);
+                excessColor = Misc.getPositiveHighlightColor();
+            }
 
-                    originalTooltip.addPara(
-                            "*Deficit and excess values may change next month due to trade events, so they should be considered reliable only for the current month.",
-                            Misc.getGrayColor(),
-                            5f
-                    );
-                }
+            MarketDisplayData display = getMarketDisplayData(market);
 
-                final PositionAPI posit = originalTooltip.getPosition();
-                final int prevX = (int) posit.getX();
+            Object row = originalTooltip.addRow(
+                    Color.ORANGE,
+                    Misc.getDGSCredits(rowData.pricePerUnit),
+                    Color.ORANGE,
+                    Misc.getWithDGS(rowData.availableDisplay),
+                    excessColor,
+                    excessString,
+                    Alignment.LMID,
+                    market.getFaction().getBaseUIColor(),
+                    market.getName() + " - " + display.factionName,
+                    display.locationColor,
+                    display.location,
+                    Color.ORANGE,
+                    Misc.getRoundedValueMaxOneAfterDecimal(display.distanceLY)
+            );
 
-                ReflectionUtilis.invokeStaticMethodWithAutoProjection(
-                        StandardTooltipV2Expandable.class,
-                        "updateSizeAsUIElement",
-                        originalTooltip
-                );
+            attachStarSystemPointer(row, market, display.locationColor);
+        }
 
-                posit.inBL(0f, 0f);
+        originalTooltip.addTable("", 0, 10f);
+    }
 
-                final float currX = posit.getX();
-                final float currY = posit.getY() + posit.getHeight();
+    private void addFootnotes() {
+        originalTooltip.addPara(
+                "*All values approximate. Prices do not include tariffs, which can be avoided through black market trade.",
+                Misc.getGrayColor(),
+                5f
+        );
 
-                posit.inBL(prevX - currX, Math.max(prevY - currY, 30));
+        originalTooltip.addPara(
+                "*Per-unit prices assume buying or selling a batch of %s units. Each unit bought costs more as the market’s supply is reduced, and each unit sold brings in less as demand is fulfilled.",
+                5f,
+                Misc.getGrayColor(),
+                Color.ORANGE,
+                String.valueOf(PRICE_QUANTITY)
+        );
+
+        originalTooltip.addPara(
+                "*Deficit and excess values may change next month due to trade events, so they should be considered reliable only for the current month.",
+                Misc.getGrayColor(),
+                5f
+        );
+    }
+
+    private void repositionTooltip() {
+        final PositionAPI posit = originalTooltip.getPosition();
+        final int prevX = (int) posit.getX();
+
+        ReflectionUtilis.invokeStaticMethodWithAutoProjection(
+                StandardTooltipV2Expandable.class,
+                "updateSizeAsUIElement",
+                originalTooltip
+        );
+
+        posit.inBL(0f, 0f);
+
+        final float currX = posit.getX();
+        final float currY = posit.getY() + posit.getHeight();
+
+        posit.inBL(prevX - currX, Math.max(prevY - currY, 30));
+    }
+
+    private static MarketDisplayData getMarketDisplayData(MarketAPI market) {
+        MarketDisplayData data = new MarketDisplayData();
+
+        data.factionName = AoTDToolboxMisc.capitalizeFirst(market.getFaction().getDisplayName());
+        data.location = "In Hyperspace";
+        data.locationColor = Misc.getGrayColor();
+
+        if (market.getStarSystem() != null) {
+            StarSystemAPI system = market.getStarSystem();
+            data.location = system.getBaseName();
+
+            PlanetAPI star = system.getStar();
+            if (star != null) {
+                data.locationColor = star.getSpec().getIconColor();
             }
         }
+
+        data.distanceLY = Misc.getDistanceToPlayerLY(market.getPrimaryEntity());
+
+        return data;
+    }
+
+    private static void attachStarSystemPointer(final Object row, final MarketAPI market, final Color locationColor) {
+        ReflectionUtilis.invokeMethodWithAutoProjection("setAfterCreate", row, new Runnable() {
+            @Override
+            public void run() {
+                AoTDPointerToStarSystem pointer = new AoTDPointerToStarSystem(
+                        (Float) ReflectionUtilis.invokeMethod("getHeight", row),
+                        market.getLocationInHyperspace(),
+                        locationColor
+                );
+
+                Object columns = ReflectionUtilis.invokeMethodWithAutoProjection("getCol", row, 4);
+                PositionAPI pos = (PositionAPI) ReflectionUtilis.invokeMethodWithAutoProjection(
+                        "addComponent",
+                        columns,
+                        pointer.getMainPanel()
+                );
+
+                pos.inRMid(5f);
+            }
+        });
     }
 
     private static int getBuyPricePerUnit(MarketAPI market, String commodityId) {
@@ -355,13 +382,8 @@ public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
         return Math.round(market.getDemandPrice(commodityId, getQuantity(), true) / getQuantity());
     }
 
-    private static int getAvailableForBuy(MarketAPI market, String commodityId) {
-        AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(market, commodityId);
-        return AoTDOpenMarketPlugin.getStockPileToolbox(com);
-    }
-
     public static int getQuantity() {
-        return 500;
+        return PRICE_QUANTITY;
     }
 
     @Override
@@ -387,5 +409,27 @@ public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
     @Override
     public void clearUI() {
 
+    }
+
+    private static class SellRowData {
+        MarketAPI market;
+        int pricePerUnit;
+        int demand;
+        int deficit;
+    }
+
+    private static class BuyRowData {
+        MarketAPI market;
+        int pricePerUnit;
+        int availableForSort;
+        int availableDisplay;
+        int excess;
+    }
+
+    private static class MarketDisplayData {
+        String factionName;
+        String location;
+        Color locationColor;
+        float distanceLY;
     }
 }

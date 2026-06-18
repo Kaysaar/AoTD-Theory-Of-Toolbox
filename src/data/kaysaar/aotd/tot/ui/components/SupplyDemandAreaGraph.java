@@ -12,50 +12,49 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Orange "capacity" bar with:
- *  - GREEN surplus drawn ABOVE orange when supply > demand
- *  - RED shortage drawn INSIDE orange when demand > supply (i.e. within the orange area)
+ * Supply/Demand area graph.
  *
- * Orange cap (flat line):
- *   cap = max(demand) over points where demand <= supply
- *   fallback: if never met, cap = max(demand) so pure shortage is visible
- *
- * IMPORTANT:
- *  - The graph ALWAYS uses full height:
- *      highest point of (cap + max(supply-demand,0)) maps to panel top.
- *    This shrinks orange automatically when surplus is huge.
+ * Visual meaning:
+ *  - ORANGE = covered demand / existing production: baseline -> min(supply, demand)
+ *  - GREEN  = surplus: demand -> supply, when supply > demand
+ *  - RED    = shortage: supply -> demand, when demand > supply
  *
  * AA:
- *  - Green top AA (feather up)
- *  - Green bottom AA at cap (feather down)
- *  - Red bottom AA (feather down into orange)
- *  - Cap edge AA color is chosen by what is below the cap:
- *      red below -> red AA, orange below -> orange AA, green below -> skip (cap hidden)
- *  - AA is disabled only in a tiny window around diff-crossings (diff=0).
+ *  - Outer visible top edge is anti-aliased.
+ *  - Internal covered boundary is also anti-aliased:
+ *      green lower edge -> feather down into orange
+ *      red lower edge   -> feather down into orange
+ *
+ * This keeps orange visible when production exists, while avoiding orange fringe over red/green.
  */
 public class SupplyDemandAreaGraph implements ExtendedUIPanelPlugin {
 
+    private static final float EPS = 0.0001f;
+
     private final CustomPanelAPI mainPanel;
 
-    // panel-local Y samples [0..height] (callers should already scale into this)
+    // Panel-local Y samples [0..height].
     private final ArrayList<Float> supplyY = new ArrayList<>();
     private final ArrayList<Float> demandY = new ArrayList<>();
 
-    private Color greenFill  = new Color(41, 126, 65, 255);
+    private Color greenFill = new Color(41, 126, 65, 255);
     private Color orangeFill = new Color(178, 130, 34, 255);
-    private Color redFill    = new Color(161, 18, 18, 255);
+    private Color redFill = new Color(161, 18, 18, 255);
 
     private float alphaMult = 1f;
 
-    // overlap to eliminate cracks at sign crossings for filled geometry (screen px)
-    private float crossingOverlapPx = 1.25f;
-
-    // AA
     private boolean aaEnabled = true;
     private float aaFeatherPx = 1.25f;
 
-    // disable AA ONLY around sign-crossings (diff=0), in screen px
-    private float aaCrossCutPx = 1.5f;
+    /**
+     * Kept for compatibility with existing callers.
+     */
+    private float crossingOverlapPx = 0f;
+
+    /**
+     * Kept for compatibility with existing callers.
+     */
+    private float aaCrossCutPx = 0f;
 
     public SupplyDemandAreaGraph(float width, float height,
                                  List<Float> supplySamplesY,
@@ -65,47 +64,92 @@ public class SupplyDemandAreaGraph implements ExtendedUIPanelPlugin {
         createUI();
     }
 
-    @Override public CustomPanelAPI getMainPanel() { return mainPanel; }
-    @Override public void createUI() {}
-    @Override public void clearUI() {}
-    @Override public void positionChanged(PositionAPI position) {}
-    @Override public void renderBelow(float alphaMult) {}
-    @Override public void advance(float amount) {}
-    @Override public void processInput(List<InputEventAPI> events) {}
-    @Override public void buttonPressed(Object buttonId) {}
+    @Override
+    public CustomPanelAPI getMainPanel() {
+        return mainPanel;
+    }
 
-    // ---------------- settings ----------------
+    @Override
+    public void createUI() {
 
-    public void setAlphaMult(float alphaMult) { this.alphaMult = alphaMult; }
+    }
 
-    /** Green / Orange / Red */
+    @Override
+    public void clearUI() {
+
+    }
+
+    @Override
+    public void positionChanged(PositionAPI position) {
+
+    }
+
+    @Override
+    public void renderBelow(float alphaMult) {
+
+    }
+
+    @Override
+    public void advance(float amount) {
+
+    }
+
+    @Override
+    public void processInput(List<InputEventAPI> events) {
+
+    }
+
+    @Override
+    public void buttonPressed(Object buttonId) {
+
+    }
+
+    public void setAlphaMult(float alphaMult) {
+        this.alphaMult = alphaMult;
+    }
+
+    /**
+     * Green / Orange / Red.
+     */
     public void setColors(Color green, Color orange, Color red) {
         if (green != null) this.greenFill = green;
         if (orange != null) this.orangeFill = orange;
         if (red != null) this.redFill = red;
     }
 
-    /** Overlap used ONLY for fill triangles near diff crossings to avoid 1px cracks. */
-    public void setCrossingOverlapPx(float px) { this.crossingOverlapPx = Math.max(0f, px); }
+    public void setCrossingOverlapPx(float px) {
+        this.crossingOverlapPx = Math.max(0f, px);
+    }
 
-    public void setAAEnabled(boolean enabled) { this.aaEnabled = enabled; }
-    public void setAAFeatherPx(float px) { this.aaFeatherPx = Math.max(0f, px); }
+    public void setAAEnabled(boolean enabled) {
+        this.aaEnabled = enabled;
+    }
 
-    /** Disable AA only in this +/- px window around diff=0 crossing X. */
-    public void setAACrossCutPx(float px) { this.aaCrossCutPx = Math.max(0f, px); }
+    public void setAAFeatherPx(float px) {
+        this.aaFeatherPx = Math.max(0f, px);
+    }
+
+    public void setAACrossCutPx(float px) {
+        this.aaCrossCutPx = Math.max(0f, px);
+    }
 
     public void setData(List<Float> supplySamplesY, List<Float> demandSamplesY) {
         supplyY.clear();
         demandY.clear();
+
         if (supplySamplesY != null) supplyY.addAll(supplySamplesY);
         if (demandSamplesY != null) demandY.addAll(demandSamplesY);
 
         int n = Math.min(supplyY.size(), demandY.size());
-        while (supplyY.size() > n) supplyY.remove(supplyY.size() - 1);
-        while (demandY.size() > n) demandY.remove(demandY.size() - 1);
-    }
 
-    // ---------------- render ----------------
+        while (supplyY.size() > n) {
+            supplyY.remove(supplyY.size() - 1);
+        }
+
+        while (demandY.size() > n) {
+            demandY.remove(demandY.size() - 1);
+        }
+    }
 
     @Override
     public void render(float uiAlphaMult) {
@@ -113,45 +157,27 @@ public class SupplyDemandAreaGraph implements ExtendedUIPanelPlugin {
         if (n < 2) return;
 
         PositionAPI pos = mainPanel.getPosition();
-        float left   = pos.getX();
+
+        float left = pos.getX();
         float bottom = pos.getY();
-        float w      = pos.getWidth();
-        float h      = pos.getHeight();
-        float top    = bottom + h;
+        float width = pos.getWidth();
+        float height = pos.getHeight();
+        float top = bottom + height;
 
-        float step = w / (n - 1f);
-        float aMul = uiAlphaMult * this.alphaMult;
+        float step = width / (n - 1f);
+        float actualAlpha = uiAlphaMult * this.alphaMult;
 
-        ArrayList<P> pts = new ArrayList<>(n);
+        ArrayList<P> points = new ArrayList<>(n);
+
         for (int i = 0; i < n; i++) {
             float x = left + step * i;
 
-            // panel-local inputs (0..h) -> convert to world Y
-            float s = bottom + clamp(supplyY.get(i), 0f, h);
-            float d = bottom + clamp(demandY.get(i), 0f, h);
+            float s = bottom + clamp(supplyY.get(i), 0f, height);
+            float d = bottom + clamp(demandY.get(i), 0f, height);
 
-            pts.add(new P(x, s, d));
+            points.add(new P(x, s, d));
         }
 
-        // cap in world Y
-        float capY = computeOrangeCapY(bottom, pts);
-
-        // ---- vertical scale so max visible height hits panel top ----
-        float capRel = capY - bottom; // 0..h
-        float maxPositiveDiffRel = 0f;
-
-        for (P p : pts) {
-            float diffRel = (p.s - bottom) - (p.d - bottom);
-            if (diffRel > maxPositiveDiffRel) maxPositiveDiffRel = diffRel;
-        }
-
-        float maxVisibleRel = capRel + maxPositiveDiffRel;
-        if (maxVisibleRel < 1e-3f) maxVisibleRel = 1f;
-
-        float yScale = h / maxVisibleRel;
-        float capYScaled = bottom + capRel * yScale;
-
-        // GL base state
         GL11.glColorMask(true, true, true, true);
         GL11.glDisable(GL11.GL_STENCIL_TEST);
         GL11.glDisable(GL11.GL_ALPHA_TEST);
@@ -160,476 +186,383 @@ public class SupplyDemandAreaGraph implements ExtendedUIPanelPlugin {
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
 
-        // crisp overwrite for fills
-        GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ZERO);
+        // Normal alpha blending. This is safer than ONE/ZERO once AA is involved.
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
-        // 1) Orange bar (baseline -> cap)
-        drawRect(bottom, capYScaled, pts.get(0).x, pts.get(pts.size() - 1).x, orangeFill, aMul);
+        drawOrangeCoveredArea(bottom, top, points, orangeFill, actualAlpha);
+        drawGreenSurplusArea(bottom, top, points, greenFill, actualAlpha);
+        drawRedShortageArea(bottom, top, points, redFill, actualAlpha);
 
-        // 2) Red inside orange where diff<0 (band from cap+diff -> cap)
-        drawRedInsideOrangeScaled(bottom, top, capYScaled, yScale, pts, redFill, aMul, crossingOverlapPx);
-
-        // 3) Green above orange where diff>0 (band from cap -> cap+diff)
-        drawGreenAboveOrangeScaled(bottom, top, capYScaled, yScale, pts, greenFill, aMul, crossingOverlapPx);
-
-        // AA (with AA removed ONLY at crossings)
         if (aaEnabled && aaFeatherPx > 0f) {
-            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            // AA for the orange boundary against green/red.
+            // This is what was missing.
+            drawCoveredBoundaryAA(bottom, top, points, actualAlpha, aaFeatherPx);
 
-            // sloped AA
-            drawGreenTopEdgeAA_NoCrossScaled(bottom, top, capYScaled, yScale, pts, greenFill, aMul, aaFeatherPx, aaCrossCutPx);
-            drawRedBottomEdgeAA_NoCrossScaled(bottom, top, capYScaled, yScale, pts, redFill, aMul, aaFeatherPx, aaCrossCutPx);
-
-            // cap seam AA
-            drawGreenBottomEdgeAA_NoCrossScaled(bottom, top, capYScaled, yScale, pts, greenFill, aMul, aaFeatherPx, aaCrossCutPx);
-
-            // IMPORTANT FIX: cap edge AA color depends on what's below (red vs orange). No more orange fringe on red.
-            drawCapTopEdgeAA_ByBelow_NoCrossScaled(bottom, top, capYScaled, yScale, pts,
-                    orangeFill, redFill, aMul, aaFeatherPx, aaCrossCutPx);
+            // AA for the outer graph silhouette.
+            drawVisibleTopEdgeAA(bottom, top, points, actualAlpha, aaFeatherPx);
         }
 
         GL11.glDisable(GL11.GL_BLEND);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
     }
 
-    // =========================
-    // Data
-    // =========================
-
     private static class P {
-        final float x, s, d;
-        P(float x, float s, float d) { this.x = x; this.s = s; this.d = d; }
-    }
+        final float x;
+        final float s;
+        final float d;
 
-    private static float computeOrangeCapY(float baseline, List<P> pts) {
-        float capMet = baseline;
-        float maxDemand = baseline;
-
-        for (P p : pts) {
-            if (p.d > maxDemand) maxDemand = p.d;
-            if (p.d <= p.s && p.d > capMet) capMet = p.d;
+        P(float x, float s, float d) {
+            this.x = x;
+            this.s = s;
+            this.d = d;
         }
-
-        // If nothing was ever met, use maxDemand so shortage shows.
-        return (capMet > baseline) ? capMet : maxDemand;
     }
 
-    // =========================
-    // Fills (scaled)
-    // =========================
-
-    private static void drawRect(float y0, float y1, float x0, float x1, Color c, float alphaMult) {
-        setColor(c, alphaMult);
+    private void drawOrangeCoveredArea(float baseline, float top, List<P> points, Color color, float alphaMult) {
+        setColor(color, alphaMult);
         GL11.glBegin(GL11.GL_TRIANGLES);
 
-        GL11.glVertex2f(x0, y0);
-        GL11.glVertex2f(x0, y1);
-        GL11.glVertex2f(x1, y0);
+        for (int i = 0; i < points.size() - 1; i++) {
+            P a = points.get(i);
+            P b = points.get(i + 1);
 
-        GL11.glVertex2f(x1, y0);
-        GL11.glVertex2f(x0, y1);
-        GL11.glVertex2f(x1, y1);
+            float diffA = a.s - a.d;
+            float diffB = b.s - b.d;
 
-        GL11.glEnd();
-    }
+            if (crossesZero(diffA, diffB)) {
+                P mid = createCrossingPoint(a, b, diffA, diffB);
 
-    private static void drawRedInsideOrangeScaled(float baseline, float top, float capYScaled, float yScale,
-                                                  List<P> pts, Color red, float alphaMult, float overlapPx) {
-        setColor(red, alphaMult);
-        GL11.glBegin(GL11.GL_TRIANGLES);
-
-        for (int i = 0; i < pts.size() - 1; i++) {
-            P a = pts.get(i), b = pts.get(i + 1);
-
-            float diff0 = (a.s - a.d) * yScale;
-            float diff1 = (b.s - b.d) * yScale;
-
-            boolean on0 = diff0 < 0f;
-            boolean on1 = diff1 < 0f;
-            if (!on0 && !on1) continue;
-
-            if (on0 && on1) {
-                emitRedBand(baseline, top, capYScaled, a.x, diff0, b.x, diff1);
+                emitOrangePiece(baseline, top, a, mid);
+                emitOrangePiece(baseline, top, mid, b);
             } else {
-                float t = solveT(diff0, diff1, 0f);
-                float xm = lerp(a.x, b.x, t);
-
-                float xL = xm - overlapPx;
-                float xR = xm + overlapPx;
-
-                if (on0) emitRedBand(baseline, top, capYScaled, a.x, diff0, xR, 0f);
-                if (on1) emitRedBand(baseline, top, capYScaled, xL, 0f, b.x, diff1);
+                emitOrangePiece(baseline, top, a, b);
             }
         }
 
         GL11.glEnd();
     }
 
-    private static void emitRedBand(float baseline, float top, float capY, float x0, float diff0, float x1, float diff1) {
-        float yB0 = capY + diff0; // diff negative
-        float yB1 = capY + diff1;
-
-        yB0 = clamp(yB0, baseline, top);
-        yB1 = clamp(yB1, baseline, top);
-        float capC = clamp(capY, baseline, top);
-
-        if (yB0 >= capC && yB1 >= capC) return;
-
-        GL11.glVertex2f(x0, yB0);
-        GL11.glVertex2f(x0, capC);
-        GL11.glVertex2f(x1, yB1);
-
-        GL11.glVertex2f(x1, yB1);
-        GL11.glVertex2f(x0, capC);
-        GL11.glVertex2f(x1, capC);
-    }
-
-    private static void drawGreenAboveOrangeScaled(float baseline, float top, float capYScaled, float yScale,
-                                                   List<P> pts, Color green, float alphaMult, float overlapPx) {
-        setColor(green, alphaMult);
+    private void drawGreenSurplusArea(float baseline, float top, List<P> points, Color color, float alphaMult) {
+        setColor(color, alphaMult);
         GL11.glBegin(GL11.GL_TRIANGLES);
 
-        for (int i = 0; i < pts.size() - 1; i++) {
-            P a = pts.get(i), b = pts.get(i + 1);
+        for (int i = 0; i < points.size() - 1; i++) {
+            P a = points.get(i);
+            P b = points.get(i + 1);
 
-            float diff0 = (a.s - a.d) * yScale;
-            float diff1 = (b.s - b.d) * yScale;
+            float diffA = a.s - a.d;
+            float diffB = b.s - b.d;
 
-            boolean on0 = diff0 > 0f;
-            boolean on1 = diff1 > 0f;
-            if (!on0 && !on1) continue;
+            if (crossesZero(diffA, diffB)) {
+                P mid = createCrossingPoint(a, b, diffA, diffB);
 
-            if (on0 && on1) {
-                emitGreenBand(baseline, top, capYScaled, a.x, diff0, b.x, diff1);
+                emitGreenPiece(baseline, top, a, mid);
+                emitGreenPiece(baseline, top, mid, b);
             } else {
-                float t = solveT(diff0, diff1, 0f);
-                float xm = lerp(a.x, b.x, t);
-
-                float xL = xm - overlapPx;
-                float xR = xm + overlapPx;
-
-                if (on0) emitGreenBand(baseline, top, capYScaled, a.x, diff0, xR, 0f);
-                if (on1) emitGreenBand(baseline, top, capYScaled, xL, 0f, b.x, diff1);
+                emitGreenPiece(baseline, top, a, b);
             }
         }
 
         GL11.glEnd();
     }
 
-    private static void emitGreenBand(float baseline, float top, float capY, float x0, float diff0, float x1, float diff1) {
-        float yT0 = clamp(capY + diff0, baseline, top);
-        float yT1 = clamp(capY + diff1, baseline, top);
-        float capC = clamp(capY, baseline, top);
-
-        if (yT0 <= capC && yT1 <= capC) return;
-
-        GL11.glVertex2f(x0, capC);
-        GL11.glVertex2f(x0, yT0);
-        GL11.glVertex2f(x1, capC);
-
-        GL11.glVertex2f(x1, capC);
-        GL11.glVertex2f(x0, yT0);
-        GL11.glVertex2f(x1, yT1);
-    }
-
-    // =========================
-    // AA edges (scaled) with AA "hole" only at crossings
-    // =========================
-
-    /** Green TOP edge (feather UP). */
-    private static void drawGreenTopEdgeAA_NoCrossScaled(float baseline, float top, float capYScaled, float yScale,
-                                                         List<P> pts, Color c, float alphaMult,
-                                                         float featherPx, float aaCrossCutPx) {
-        float r = c.getRed()/255f, g = c.getGreen()/255f, b = c.getBlue()/255f;
-        float a = (c.getAlpha()/255f) * alphaMult;
-
+    private void drawRedShortageArea(float baseline, float top, List<P> points, Color color, float alphaMult) {
+        setColor(color, alphaMult);
         GL11.glBegin(GL11.GL_TRIANGLES);
 
-        for (int i = 0; i < pts.size() - 1; i++) {
-            P p0 = pts.get(i), p1 = pts.get(i + 1);
+        for (int i = 0; i < points.size() - 1; i++) {
+            P a = points.get(i);
+            P b = points.get(i + 1);
 
-            float diff0 = (p0.s - p0.d) * yScale;
-            float diff1 = (p1.s - p1.d) * yScale;
+            float diffA = a.s - a.d;
+            float diffB = b.s - b.d;
 
-            boolean on0 = diff0 > 0f;
-            boolean on1 = diff1 > 0f;
-            if (!on0 && !on1) continue;
+            if (crossesZero(diffA, diffB)) {
+                P mid = createCrossingPoint(a, b, diffA, diffB);
 
-            float y0 = clamp(capYScaled + diff0, baseline, top);
-            float y1 = clamp(capYScaled + diff1, baseline, top);
-
-            if (on0 && on1) {
-                aaStripVertical(p0.x, y0, p1.x, y1, +featherPx, r, g, b, a);
-                continue;
-            }
-
-            float t = solveT(diff0, diff1, 0f);
-            float xm = lerp(p0.x, p1.x, t);
-            float cutL = xm - aaCrossCutPx;
-            float cutR = xm + aaCrossCutPx;
-
-            if (on0) {
-                float xEnd = Math.min(p1.x, cutL);
-                if (xEnd > p0.x + 0.25f) {
-                    float tEnd = (xEnd - p0.x) / (p1.x - p0.x);
-                    float yEnd = clamp(capYScaled + lerp(diff0, diff1, tEnd), baseline, top);
-                    aaStripVertical(p0.x, y0, xEnd, yEnd, +featherPx, r, g, b, a);
-                }
-            }
-            if (on1) {
-                float xStart = Math.max(p0.x, cutR);
-                if (p1.x > xStart + 0.25f) {
-                    float tStart = (xStart - p0.x) / (p1.x - p0.x);
-                    float yStart = clamp(capYScaled + lerp(diff0, diff1, tStart), baseline, top);
-                    aaStripVertical(xStart, yStart, p1.x, y1, +featherPx, r, g, b, a);
-                }
+                emitRedPiece(baseline, top, a, mid);
+                emitRedPiece(baseline, top, mid, b);
+            } else {
+                emitRedPiece(baseline, top, a, b);
             }
         }
 
         GL11.glEnd();
     }
 
-    /** Red BOTTOM edge (feather DOWN into orange). */
-    private static void drawRedBottomEdgeAA_NoCrossScaled(float baseline, float top, float capYScaled, float yScale,
-                                                          List<P> pts, Color c, float alphaMult,
-                                                          float featherPx, float aaCrossCutPx) {
-        float r = c.getRed()/255f, g = c.getGreen()/255f, b = c.getBlue()/255f;
-        float a = (c.getAlpha()/255f) * alphaMult;
+    private static void emitOrangePiece(float baseline, float top, P a, P b) {
+        float yA = clamp(Math.min(a.s, a.d), baseline, top);
+        float yB = clamp(Math.min(b.s, b.d), baseline, top);
 
-        GL11.glBegin(GL11.GL_TRIANGLES);
+        if (yA <= baseline && yB <= baseline) return;
 
-        for (int i = 0; i < pts.size() - 1; i++) {
-            P p0 = pts.get(i), p1 = pts.get(i + 1);
-
-            float diff0 = (p0.s - p0.d) * yScale;
-            float diff1 = (p1.s - p1.d) * yScale;
-
-            boolean on0 = diff0 < 0f;
-            boolean on1 = diff1 < 0f;
-            if (!on0 && !on1) continue;
-
-            float y0 = clamp(capYScaled + diff0, baseline, top);
-            float y1 = clamp(capYScaled + diff1, baseline, top);
-
-            if (on0 && on1) {
-                aaStripVertical(p0.x, y0, p1.x, y1, -featherPx, r, g, b, a);
-                continue;
-            }
-
-            float t = solveT(diff0, diff1, 0f);
-            float xm = lerp(p0.x, p1.x, t);
-            float cutL = xm - aaCrossCutPx;
-            float cutR = xm + aaCrossCutPx;
-
-            if (on0) {
-                float xEnd = Math.min(p1.x, cutL);
-                if (xEnd > p0.x + 0.25f) {
-                    float tEnd = (xEnd - p0.x) / (p1.x - p0.x);
-                    float yEnd = clamp(capYScaled + lerp(diff0, diff1, tEnd), baseline, top);
-                    aaStripVertical(p0.x, y0, xEnd, yEnd, -featherPx, r, g, b, a);
-                }
-            }
-            if (on1) {
-                float xStart = Math.max(p0.x, cutR);
-                if (p1.x > xStart + 0.25f) {
-                    float tStart = (xStart - p0.x) / (p1.x - p0.x);
-                    float yStart = clamp(capYScaled + lerp(diff0, diff1, tStart), baseline, top);
-                    aaStripVertical(xStart, yStart, p1.x, y1, -featherPx, r, g, b, a);
-                }
-            }
-        }
-
-        GL11.glEnd();
+        emitBand(a.x, baseline, yA, b.x, baseline, yB);
     }
 
-    /** Green BOTTOM edge at cap (feather DOWN). */
-    private static void drawGreenBottomEdgeAA_NoCrossScaled(float baseline, float top, float capYScaled, float yScale,
-                                                            List<P> pts, Color c, float alphaMult,
-                                                            float featherPx, float aaCrossCutPx) {
-        float r = c.getRed()/255f, g = c.getGreen()/255f, b = c.getBlue()/255f;
-        float a = (c.getAlpha()/255f) * alphaMult;
+    private static void emitGreenPiece(float baseline, float top, P a, P b) {
+        float diffA = a.s - a.d;
+        float diffB = b.s - b.d;
 
-        float capC = clamp(capYScaled, baseline, top);
+        if (diffA <= EPS && diffB <= EPS) return;
 
-        GL11.glBegin(GL11.GL_TRIANGLES);
+        float lowerA = clamp(a.d, baseline, top);
+        float upperA = clamp(a.s, baseline, top);
 
-        for (int i = 0; i < pts.size() - 1; i++) {
-            P p0 = pts.get(i), p1 = pts.get(i + 1);
+        float lowerB = clamp(b.d, baseline, top);
+        float upperB = clamp(b.s, baseline, top);
 
-            float diff0 = (p0.s - p0.d) * yScale;
-            float diff1 = (p1.s - p1.d) * yScale;
+        if (upperA < lowerA) upperA = lowerA;
+        if (upperB < lowerB) upperB = lowerB;
 
-            boolean on0 = diff0 > 0f;
-            boolean on1 = diff1 > 0f;
-            if (!on0 && !on1) continue;
+        if (upperA <= lowerA && upperB <= lowerB) return;
 
-            if (on0 && on1) {
-                aaStripVertical(p0.x, capC, p1.x, capC, -featherPx, r, g, b, a);
-                continue;
-            }
+        emitBand(a.x, lowerA, upperA, b.x, lowerB, upperB);
+    }
 
-            float t = solveT(diff0, diff1, 0f);
-            float xm = lerp(p0.x, p1.x, t);
-            float cutL = xm - aaCrossCutPx;
-            float cutR = xm + aaCrossCutPx;
+    private static void emitRedPiece(float baseline, float top, P a, P b) {
+        float diffA = a.s - a.d;
+        float diffB = b.s - b.d;
 
-            if (on0) {
-                float xEnd = Math.min(p1.x, cutL);
-                if (xEnd > p0.x + 0.25f) {
-                    aaStripVertical(p0.x, capC, xEnd, capC, -featherPx, r, g, b, a);
-                }
-            }
-            if (on1) {
-                float xStart = Math.max(p0.x, cutR);
-                if (p1.x > xStart + 0.25f) {
-                    aaStripVertical(xStart, capC, p1.x, capC, -featherPx, r, g, b, a);
-                }
-            }
-        }
+        if (diffA >= -EPS && diffB >= -EPS) return;
 
-        GL11.glEnd();
+        float lowerA = clamp(a.s, baseline, top);
+        float upperA = clamp(a.d, baseline, top);
+
+        float lowerB = clamp(b.s, baseline, top);
+        float upperB = clamp(b.d, baseline, top);
+
+        if (upperA < lowerA) upperA = lowerA;
+        if (upperB < lowerB) upperB = lowerB;
+
+        if (upperA <= lowerA && upperB <= lowerB) return;
+
+        emitBand(a.x, lowerA, upperA, b.x, lowerB, upperB);
+    }
+
+    private static void emitBand(float xA, float lowerA, float upperA,
+                                 float xB, float lowerB, float upperB) {
+        GL11.glVertex2f(xA, lowerA);
+        GL11.glVertex2f(xA, upperA);
+        GL11.glVertex2f(xB, lowerB);
+
+        GL11.glVertex2f(xB, lowerB);
+        GL11.glVertex2f(xA, upperA);
+        GL11.glVertex2f(xB, upperB);
     }
 
     /**
-     * CAP TOP edge AA (feather UP), with color chosen by what is directly below cap:
-     *  - diff < 0 -> red is below cap => red AA
-     *  - diff >= 0 -> orange is below cap (or equal) => orange AA
-     *  - diff > 0 -> green covers cap => skip (cap not visible there)
+     * AA for the orange covered boundary.
      *
-     * Also cuts out a small window near diff=0 crossings.
+     * In surplus:
+     *   orange ends at demand, green starts at demand.
+     *   Use green AA feathering downward into orange.
+     *
+     * In shortage:
+     *   orange ends at supply, red starts at supply.
+     *   Use red AA feathering downward into orange.
+     *
+     * This makes the visible orange boundary smooth without drawing orange AA on top of red/green.
      */
-    private static void drawCapTopEdgeAA_ByBelow_NoCrossScaled(float baseline, float top,
-                                                               float capYScaled, float yScale,
-                                                               List<P> pts,
-                                                               Color orange, Color red,
-                                                               float alphaMult,
-                                                               float featherPx, float aaCrossCutPx) {
-
-        float capC = clamp(capYScaled, baseline, top);
-
-        // precompute colors
-        float or = orange.getRed()/255f, og = orange.getGreen()/255f, ob = orange.getBlue()/255f;
-        float oa = (orange.getAlpha()/255f) * alphaMult;
-
-        float rr = red.getRed()/255f, rg = red.getGreen()/255f, rb = red.getBlue()/255f;
-        float ra = (red.getAlpha()/255f) * alphaMult;
-
+    private void drawCoveredBoundaryAA(float baseline, float top, List<P> points,
+                                       float alphaMult, float featherPx) {
         GL11.glBegin(GL11.GL_TRIANGLES);
 
-        for (int i = 0; i < pts.size() - 1; i++) {
-            P p0 = pts.get(i), p1 = pts.get(i + 1);
+        for (int i = 0; i < points.size() - 1; i++) {
+            P a = points.get(i);
+            P b = points.get(i + 1);
 
-            float diff0 = (p0.s - p0.d) * yScale;
-            float diff1 = (p1.s - p1.d) * yScale;
+            float diffA = a.s - a.d;
+            float diffB = b.s - b.d;
 
-            boolean green0 = diff0 > 0f;
-            boolean green1 = diff1 > 0f;
+            if (crossesZero(diffA, diffB)) {
+                P mid = createCrossingPoint(a, b, diffA, diffB);
 
-            // If green covers this whole segment, cap isn't visible
-            if (green0 && green1) continue;
-
-            // Determine "below cap" color per endpoint (ignoring green case)
-            // red below if diff < 0, else orange below
-            int below0 = green0 ? 2 : (diff0 < 0f ? 1 : 0); // 2=green(hidden), 1=red, 0=orange
-            int below1 = green1 ? 2 : (diff1 < 0f ? 1 : 0);
-
-            // No transition in below-color and neither is green-hidden => draw whole segment in that color
-            if (below0 == below1 && below0 != 2) {
-                if (below0 == 1) aaStripVertical(p0.x, capC, p1.x, capC, +featherPx, rr, rg, rb, ra);
-                else             aaStripVertical(p0.x, capC, p1.x, capC, +featherPx, or, og, ob, oa);
-                continue;
-            }
-
-            // Otherwise: there is a crossing at diff=0 between visible types and/or green-hidden.
-            // We'll split at diff=0 and apply cut window around the join.
-            float t = solveT(diff0, diff1, 0f);
-            float xm = lerp(p0.x, p1.x, t);
-            float cutL = xm - aaCrossCutPx;
-            float cutR = xm + aaCrossCutPx;
-
-            // Left visible portion (if left endpoint isn't green-hidden)
-            if (below0 != 2) {
-                float xEnd = Math.min(p1.x, cutL);
-                if (xEnd > p0.x + 0.25f) {
-                    if (below0 == 1) aaStripVertical(p0.x, capC, xEnd, capC, +featherPx, rr, rg, rb, ra);
-                    else             aaStripVertical(p0.x, capC, xEnd, capC, +featherPx, or, og, ob, oa);
-                }
-            }
-
-            // Right visible portion (if right endpoint isn't green-hidden)
-            if (below1 != 2) {
-                float xStart = Math.max(p0.x, cutR);
-                if (p1.x > xStart + 0.25f) {
-                    if (below1 == 1) aaStripVertical(xStart, capC, p1.x, capC, +featherPx, rr, rg, rb, ra);
-                    else             aaStripVertical(xStart, capC, p1.x, capC, +featherPx, or, og, ob, oa);
-                }
+                emitCoveredBoundaryAAPiece(baseline, top, a, mid, alphaMult, featherPx);
+                emitCoveredBoundaryAAPiece(baseline, top, mid, b, alphaMult, featherPx);
+            } else {
+                emitCoveredBoundaryAAPiece(baseline, top, a, b, alphaMult, featherPx);
             }
         }
 
         GL11.glEnd();
     }
 
-    // =========================
-    // AA primitive: vertical feather strip
-    // =========================
+    private void emitCoveredBoundaryAAPiece(float baseline, float top, P a, P b,
+                                            float alphaMult, float featherPx) {
+        float diffA = a.s - a.d;
+        float diffB = b.s - b.d;
+
+        boolean surplus = diffA > EPS || diffB > EPS;
+        boolean shortage = diffA < -EPS || diffB < -EPS;
+
+        if (!surplus && !shortage) {
+            return;
+        }
+
+        Color color;
+
+        float yA;
+        float yB;
+
+        if (surplus) {
+            // Green begins at demand. Feather green down into orange.
+            color = greenFill;
+            yA = clamp(a.d, baseline, top);
+            yB = clamp(b.d, baseline, top);
+        } else {
+            // Red begins at supply. Feather red down into orange.
+            color = redFill;
+            yA = clamp(a.s, baseline, top);
+            yB = clamp(b.s, baseline, top);
+        }
+
+        float r = color.getRed() / 255f;
+        float g = color.getGreen() / 255f;
+        float bCol = color.getBlue() / 255f;
+        float aCol = (color.getAlpha() / 255f) * alphaMult;
+
+        aaStripVertical(a.x, yA, b.x, yB, -featherPx, r, g, bCol, aCol);
+    }
+
+    /**
+     * AA for the outer visible top edge of the graph.
+     */
+    private void drawVisibleTopEdgeAA(float baseline, float top, List<P> points,
+                                      float alphaMult, float featherPx) {
+        GL11.glBegin(GL11.GL_TRIANGLES);
+
+        for (int i = 0; i < points.size() - 1; i++) {
+            P a = points.get(i);
+            P b = points.get(i + 1);
+
+            float diffA = a.s - a.d;
+            float diffB = b.s - b.d;
+
+            if (crossesZero(diffA, diffB)) {
+                P mid = createCrossingPoint(a, b, diffA, diffB);
+
+                emitVisibleTopAAPiece(baseline, top, a, mid, alphaMult, featherPx);
+                emitVisibleTopAAPiece(baseline, top, mid, b, alphaMult, featherPx);
+            } else {
+                emitVisibleTopAAPiece(baseline, top, a, b, alphaMult, featherPx);
+            }
+        }
+
+        GL11.glEnd();
+    }
+
+    private void emitVisibleTopAAPiece(float baseline, float top, P a, P b,
+                                       float alphaMult, float featherPx) {
+        float diffA = a.s - a.d;
+        float diffB = b.s - b.d;
+
+        Color color;
+
+        if (diffA > EPS || diffB > EPS) {
+            color = greenFill;
+        } else if (diffA < -EPS || diffB < -EPS) {
+            color = redFill;
+        } else {
+            color = orangeFill;
+        }
+
+        float yA = clamp(Math.max(a.s, a.d), baseline, top);
+        float yB = clamp(Math.max(b.s, b.d), baseline, top);
+
+        if (yA <= baseline && yB <= baseline) return;
+
+        float r = color.getRed() / 255f;
+        float g = color.getGreen() / 255f;
+        float bCol = color.getBlue() / 255f;
+        float aCol = (color.getAlpha() / 255f) * alphaMult;
+
+        aaStripVertical(a.x, yA, b.x, yB, featherPx, r, g, bCol, aCol);
+    }
 
     private static void aaStripVertical(float x0, float y0, float x1, float y1,
                                         float dy,
                                         float r, float g, float b, float aInner) {
-        float x0o = x0, y0o = y0 + dy;
-        float x1o = x1, y1o = y1 + dy;
+        float x0Outer = x0;
+        float y0Outer = y0 + dy;
+
+        float x1Outer = x1;
+        float y1Outer = y1 + dy;
 
         GL11.glColor4f(r, g, b, aInner);
         GL11.glVertex2f(x0, y0);
+
         GL11.glColor4f(r, g, b, 0f);
-        GL11.glVertex2f(x0o, y0o);
+        GL11.glVertex2f(x0Outer, y0Outer);
+
         GL11.glColor4f(r, g, b, aInner);
         GL11.glVertex2f(x1, y1);
 
         GL11.glColor4f(r, g, b, aInner);
         GL11.glVertex2f(x1, y1);
+
         GL11.glColor4f(r, g, b, 0f);
-        GL11.glVertex2f(x0o, y0o);
+        GL11.glVertex2f(x0Outer, y0Outer);
+
         GL11.glColor4f(r, g, b, 0f);
-        GL11.glVertex2f(x1o, y1o);
+        GL11.glVertex2f(x1Outer, y1Outer);
     }
 
-    // =========================
-    // Utils
-    // =========================
+    private static P createCrossingPoint(P a, P b, float diffA, float diffB) {
+        float t = solveT(diffA, diffB, 0f);
+
+        return new P(
+                lerp(a.x, b.x, t),
+                lerp(a.s, b.s, t),
+                lerp(a.d, b.d, t)
+        );
+    }
+
+    private static boolean crossesZero(float a, float b) {
+        return (a > EPS && b < -EPS) || (a < -EPS && b > EPS);
+    }
 
     private static void setColor(Color c, float alphaMult) {
-        float r = c.getRed()/255f;
-        float g = c.getGreen()/255f;
-        float b = c.getBlue()/255f;
-        float a = (c.getAlpha()/255f) * alphaMult;
+        float r = c.getRed() / 255f;
+        float g = c.getGreen() / 255f;
+        float b = c.getBlue() / 255f;
+        float a = (c.getAlpha() / 255f) * alphaMult;
+
         GL11.glColor4f(r, g, b, a);
     }
 
-    private static float lerp(float a, float b, float t) { return a + (b - a) * t; }
-    private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    private static float clamp(float v, float lo, float hi) {
+        return Math.max(lo, Math.min(hi, v));
+    }
 
     private static float solveT(float v0, float v1, float target) {
-        float denom = (v1 - v0);
+        float denom = v1 - v0;
         if (Math.abs(denom) < 1e-6f) return 0.5f;
+
         float t = (target - v0) / denom;
         return clamp(t, 0f, 1f);
     }
 
     /**
-     * Convenience: convert integer values to PANEL-LOCAL Y samples [0..height].
-     * highest should be max across BOTH series.
+     * Converts integer values to panel-local Y samples [0..height].
+     * highest should be max across both supply and demand.
      */
     public static ArrayList<Float> createSeriesForGraph(float height, List<Integer> values, float highest) {
         ArrayList<Float> out = new ArrayList<>();
         if (values == null || values.isEmpty()) return out;
 
         float denom = Math.max(1f, highest);
+
         for (Integer v : values) {
-            float val = (v == null) ? 0f : v;
+            float val = v == null ? 0f : v;
             float y = (val / denom) * height;
+
             out.add(clamp(y, 0f, height));
         }
+
         return out;
     }
 }

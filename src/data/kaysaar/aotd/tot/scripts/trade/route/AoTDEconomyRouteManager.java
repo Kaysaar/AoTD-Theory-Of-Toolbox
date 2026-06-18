@@ -562,7 +562,7 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
 
         float stabilityFactor = 1f + from.getStabilityValue() / 20f;
 
-        float combat = Math.max(1f, tier * stabilityFactor * 0.5f) * 10f;
+        float combat = Math.max(1f, tier * stabilityFactor * 0.5f) * 15f;
         float freighter = tier * 2f * cargoFraction * 3f;
         float tanker = tier * 2f * fuelFraction * 3f;
         float transport = tier * 2f * personnelFraction * 3f;
@@ -619,7 +619,7 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
         data.cargoCap = fleet.getCargo().getMaxCapacity();
         data.fuelCap = fleet.getCargo().getMaxFuel();
         data.personnelCap = fleet.getCargo().getMaxPersonnel();
-        fleet.setFaction(Factions.INDEPENDENT,true);
+;
         //ShippingDisruption.getShippingDisruption(from).getShippingPenalty().addTemporaryModFlat(1f, "fwefwe", 1f);
 
         return fleet;

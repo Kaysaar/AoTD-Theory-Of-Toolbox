@@ -57,7 +57,7 @@ public class CurrentGrantWonderView implements ExtendedUIPanelPlugin {
         renderer.setPanel(panelImage);
         panel.init(panelImage,Global.getSettings().getSprite(wonderAPI.getCurrentImage()));
         panelHolder.addComponent(panelImage).inTL(mainPanel.getPosition().getWidth()/2-95,0);
-       GrandWonderTypeSpecAPI specAPI =  GrandWonderTypeManager.getSpec(wonderAPI.getWonderTypeId());
+         GrandWonderTypeSpecAPI specAPI =  GrandWonderTypeManager.getSpec(wonderAPI.getWonderTypeId());
         subTooltip.addCustom(panelHolder,0f).getPosition().inTL(0,-label.getPosition().getY()+7);
 
         BuildingMenuMisc.createTooltipForIndustry((BaseIndustry) wonderAPI, Industry.IndustryTooltipMode.ADD_INDUSTRY,tlContent,false,false,contentPanel.getPosition().getWidth()-15,true,false,false);

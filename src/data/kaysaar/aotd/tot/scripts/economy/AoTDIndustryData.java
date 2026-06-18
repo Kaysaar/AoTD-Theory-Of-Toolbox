@@ -79,7 +79,7 @@ public class AoTDIndustryData {
     public void applyEndOfMonthChange(MarketAPI market){
         statesOnMarket.clear();
         for (Industry industry : market.getIndustries()) {
-            if(!industry.isBuilding()||industry.getSpec().hasTag(AoTDIndTags.ALWAYS_ACTIVE_NON_PENDING)||industry instanceof PopulationAndInfrastructure || industry instanceof Spaceport){
+            if(!(industry.isBuilding()&&!industry.isUpgrading())||industry.getSpec().hasTag(AoTDIndTags.ALWAYS_ACTIVE_NON_PENDING)||industry instanceof PopulationAndInfrastructure || industry instanceof Spaceport){
                 statesOnMarket.put(industry.getId(), AoTDIndustryState.ALREADY_WORKING);
             }
 
