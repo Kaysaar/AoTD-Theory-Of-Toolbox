@@ -37,9 +37,9 @@ public class AoTDOpenMarketPlugin extends OpenMarketPlugin {
         float imports = demand-supply;
         float limit = 0f;
         if(imports>0&& commodity.getDef()<=0){
-            limit+=imports*ECON_UNIT_MULT_IMPORTS;
+            limit+=imports*0.05f;
         }
-        limit+=supply*ECON_UNIT_MULT_PRODUCTION;
+        limit+=supply*0.25f;
         limit-= commodity.getDeficitQuantity();
         limit+= commodity.getExcessQuantity();
         if(limit<=0)limit=0;

@@ -186,6 +186,10 @@ public class AoTDCommodityProductionDataTable extends UITableImpl {
             buttonGraph = tooltipOfButtons.addAreaCheckbox("Graph Data (Last "+GraphPeriodChosenButton.getLabelStringForMonth(months)+")", SortingState.NON_INITIALIZED, base, bg, bright, widthMap.get("graph"), 20, 0f);
 
         }
+        else if (months==Integer.MAX_VALUE){
+            buttonGraph = tooltipOfButtons.addAreaCheckbox("Graph Data ("+GraphPeriodChosenButton.getLabelStringForMonth(months)+")", SortingState.NON_INITIALIZED, base, bg, bright, widthMap.get("graph"), 20, 0f);
+
+        }
         else{
             buttonGraph = tooltipOfButtons.addAreaCheckbox("Graph Data (Last "+ GraphPeriodChosenButton.getNumber(months) +" "+GraphPeriodChosenButton.getLabelStringForMonth(months)+")", SortingState.NON_INITIALIZED, base, bg, bright, widthMap.get("graph"), 20, 0f);
 

@@ -2,6 +2,7 @@ package data.kaysaar.aotd.tot.ui.industry;
 
 import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.Industry;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
@@ -61,18 +62,25 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
         TooltipMakerAPI tooltipHeight = mainPanel.createUIElement(mainPanel.getPosition().getWidth(), 10000, false);
         TooltipMakerAPI firstHalf = mainPanel.createUIElement(mainPanel.getPosition().getWidth(), 100000, true);
         ind.getMarket().reapplyConditions();
+        boolean hasFreePort = ind.getMarket().isFreePort();
         for (Industry industry : ind.getMarket().getIndustries()) {
             if(!AoTDIndustryData.getInstance(industry.getMarket()).isPending(industry.getId())){
                 industry.reapply();
             }
         }
-        ind.createTooltip(mode, firstHalf, expanded);
+
         boolean needToAddIndustry = !ind.getMarket().hasIndustry(ind.getId());
         //addDialogMode = true;
-        if (!needToAddIndustry) {
-            ind.reapply();
+        if (needToAddIndustry) {
+            for (CommodityOnMarketAPI curr : ind.getMarket().getAllCommodities()) {
+                curr.getAvailableStat().setBaseValue(10000);
+            }
+            ind.apply();
+            ind.getMarket().reapplyConditions();
+            ind.apply();
         }
 
+        ind.createTooltip(mode, firstHalf, expanded);
         UIPanelAPI holder = (UIPanelAPI) ReflectionUtilis.getChildrenCopy(firstHalf).get(0);
         List<UIComponentAPI> comps = ReflectionUtilis.getChildrenCopy((UIPanelAPI) holder);
         int recordedPositionProducitonOnList, recordedPostitionDemandOnList;
@@ -139,6 +147,14 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
 
         mainPanel.getPosition().setSize(mainPanel.getPosition().getWidth(), lastRecordedY);
         mainPanel.addUIElement(tooltipHeight).inTL(0, 0);
+        if (needToAddIndustry) {
+            ind.unapply();
+            for (CommodityOnMarketAPI curr : ind.getMarket().getAllCommodities()) {
+                curr.getAvailableStat().setBaseValue(0);
+            }
+            ind.getMarket().reapplyConditions();
+        }
+        ind.getMarket().setFreePort(hasFreePort);
         this.tl = tooltipHeight;
 
     }

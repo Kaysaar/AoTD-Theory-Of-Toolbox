@@ -257,7 +257,7 @@ public class AoTDConstructionSite extends BaseIndustry {
                 if (daysPassedOnConstruction < allowedDays) {
                     daysPassedOnConstruction = Math.min(daysPassedOnConstruction + days, allowedDays);
                 }
-                float progress = Math.round(getBuildOrUpgradeProgress());
+                float progress = getBuildOrUpgradeProgress();
                 if (daysPassedOnConstruction >= totalDaysNeeded || progress >= 1f) {
                     daysPassedOnConstruction = totalDaysNeeded;
                     building = false;

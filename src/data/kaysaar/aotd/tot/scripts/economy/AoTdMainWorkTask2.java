@@ -618,7 +618,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         }
     }
 
-    private static float getAoTDStableSharedSubmarketLimit(
+    public static float getAoTDStableSharedSubmarketLimit(
             Market market,
             CommodityOnMarket commodity,
             float rawSupply

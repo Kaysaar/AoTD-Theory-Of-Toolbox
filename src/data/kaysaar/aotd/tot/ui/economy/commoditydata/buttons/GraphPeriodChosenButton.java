@@ -41,12 +41,23 @@ public class GraphPeriodChosenButton extends CustomButton {
         float iconSize = container.getPosition().getHeight()-6;
         TooltipMakerAPI tlContainer = container.createUIElement(container.getPosition().getWidth()-5,container.getPosition().getHeight(),false);
         tlContainer.setParaFont(Fonts.ORBITRON_20AA);
-        LabelAPI label = tlContainer.addPara("<= "+getCombinedLabelStringForPeriod(getMonths()),0f);
+        LabelAPI label;
+        if(getMonths()==Integer.MAX_VALUE){
+            label = tlContainer.addPara("From Start",0f);
+
+        }
+        else{
+            label = tlContainer.addPara("<= "+getCombinedLabelStringForPeriod(getMonths()),0f);
+
+        }
         label.getPosition().inTL(0,container.getPosition().getHeight()/2-(label.computeTextHeight(label.getText())/2));
         container.addUIElement(tlContainer).inTL(5,0);
 
     }
     public static String getCombinedLabelStringForPeriod(int month){
+        if(month==Integer.MAX_VALUE){
+            return "From Start";
+        }
         return getNumber(month)+" "+getLabelStringForMonth(month);
     }
     public static String getLabelStringForMonth(int month){
@@ -63,6 +74,7 @@ public class GraphPeriodChosenButton extends CustomButton {
         return "Cycles";
     }
     public static String getNumber(float month){
+        if(month == Integer.MAX_VALUE)return "";
         if(month<12){
             return String.format("%d",(int)month);
         }

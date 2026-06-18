@@ -228,9 +228,17 @@ public class AoTDDetailedCommodityPanel implements ExtendedUIPanelPlugin {
     public CustomPanelAPI createContractSection(float width, float height, AoTDTradeContract market) {
         CustomPanelAPI section = Global.getSettings().createCustom(width, height, null);
         TooltipMakerAPI headerTooltip = section.createUIElement(width - height - 10, height, false);
+        TooltipMakerAPI test = section.createUIElement(10000,height,false);
         ImageViewer viewer = new ImageViewer(height, height, market.getIconName());
         section.addComponent(viewer.getComponentPanel()).inTL(0, 0);
-        LabelAPI label = headerTooltip.addPara(market.getNameOfContract() + " " + market.getContractType(), market.getColorOfContractName(), 0f);
+        LabelAPI labelT = test.addPara(market.getNameOfContract() + " " + market.getContractType(), market.getColorOfContractName(), 0f);
+        LabelAPI label;
+        if(market.isIssuedByPlayer()){
+             label = headerTooltip.addPara(market.getContractType() + " " + market.getSubTypeOfContractString(), market.getColorOfContractName(), 0f);
+        }
+        else{
+             label = headerTooltip.addPara(market.getNameOfContract() + " " + market.getContractType(), market.getColorOfContractName(), 0f);
+        }
         label.getPosition().inTL(0, height / 2 - (label.computeTextHeight(label.getText()) / 2));
         section.addUIElement(headerTooltip).inTL(height + 5, 0);
         return section;

@@ -97,11 +97,15 @@ public class AoTDFactionTradeData {
     public ArrayList<Integer> getProductionFromMonths(int startingCycle, int startingMonth, String commodityId, int monthsBack) {
         ArrayList<Integer> result = new ArrayList<>();
         if (monthsBack <= 0) return result;
+
         if (!hasSetStartingDate) return result;
 
         int cycle = startingCycle;
         int month = startingMonth;
-
+        if(startingMonth==0){
+            cycle--;
+            month=12;
+        }
         for (int i = 0; i < monthsBack; i++) {
             if (isBeforeStartOfHistory(cycle, month)) break;
 
@@ -136,6 +140,10 @@ public class AoTDFactionTradeData {
 
         int cycle = startingCycle;
         int month = startingMonth;
+        if(startingMonth==0){
+            cycle--;
+            month=12;
+        }
 
         for (int i = 0; i < monthsBack; i++) {
             if (isBeforeStartOfHistory(cycle, month)) break;
