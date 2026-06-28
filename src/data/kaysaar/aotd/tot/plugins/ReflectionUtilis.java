@@ -29,6 +29,7 @@ public class ReflectionUtilis {
     private static final MethodHandle setMethodAccessable;
     private static final MethodHandle getModifiersHandle;
     private static final MethodHandle  getParameterTypesHandle;
+    private static final MethodHandle isMethodVarArgsHandle;
     private static final MethodHandle  getFieldTypeHandle;
     private static final MethodHandle getDeclaredConstructorsHandle;
     private static final Class<?>  fileclass;
@@ -56,6 +57,7 @@ public class ReflectionUtilis {
             setMethodAccessable = lookup.findVirtual(methodClass, "setAccessible", MethodType.methodType(Void.TYPE, boolean.class));
             getModifiersHandle = lookup.findVirtual(methodClass, "getModifiers", MethodType.methodType(int.class));
             getParameterTypesHandle = lookup.findVirtual(methodClass, "getParameterTypes", MethodType.methodType(Class[].class));
+            isMethodVarArgsHandle = lookup.findVirtual(methodClass, "isVarArgs", MethodType.methodType(boolean.class));
 
             constructorClass = Class.forName("java.lang.reflect.Constructor", false, Class.class.getClassLoader());
             getDeclaredConstructorsHandle = lookup.findVirtual(constructorClass, "getParameterTypes", MethodType.methodType(Class[].class));
@@ -862,58 +864,19 @@ public class ReflectionUtilis {
 
     public static Object invokeStaticMethodWithAutoProjection(Class<?> targetClass, String methodName, Object... arguments) {
         try {
-            // Find the method by its name and parameter types
-            Object[] methods = targetClass.getDeclaredMethods();
-
-            Object matchingMethod = null;
-            Class<?>[] parameterTypes = null;
-
-            for (Object method : methods) {
-                // Get the method name dynamically
-                String currentName = (String) getMethodNameHandle.invoke(method);
-
-                // Check if names match and method is static
-                int modifiers = (int) getModifiersHandle.invoke(method);
-                if (currentName.equals(methodName) && (modifiers & 0x0008) != 0) { // Static check
-                    // Retrieve parameter types
-                    parameterTypes = (Class<?>[]) getParameterTypesHandle.invoke(method);
-                    if(parameterTypes.length== arguments.length){
-                        matchingMethod = method;
-                        break;
-                    }
-
-                }
+            ResolvedMethod resolved = resolveBestMethod(targetClass, methodName, true, arguments);
+            if (resolved == null) {
+                throw new NoSuchMethodException("Static method " + methodName + " not found in class hierarchy of " + targetClass.getName() +
+                        " for " + ((arguments == null) ? 0 : arguments.length) + " args");
             }
 
-            if (matchingMethod == null) {
-                throw new NoSuchMethodException("Static method " + methodName + " not found in class " + targetClass.getName());
-            }
-
-            // Project arguments to the correct types
-            Object[] projectedArgs = new Object[parameterTypes.length];
-            for (int i = 0; i < parameterTypes.length; i++) {
-                Object arg = (arguments.length > i) ? arguments[i] : null;
-
-                if (arg == null) {
-                    if (parameterTypes[i].isPrimitive()) {
-                        throw new IllegalArgumentException("Null cannot be used for primitive type: " + parameterTypes[i].getName());
-                    }
-                    projectedArgs[i] = null;
-                } else {
-                    projectedArgs[i] = convertArgument(arg, parameterTypes[i]);
-                }
-            }
-
-            // Ensure the method is accessible
-            setMethodAccessable.invoke(matchingMethod, true);
-
-            // Invoke the static method (pass null as the instance for static methods)
-            return invokeMethodHandle.invoke(matchingMethod, null, projectedArgs);
+            setMethodAccessable.invoke(resolved.method, true);
+            return invokeMethodHandle.invoke(resolved.method, null, resolved.projectedArguments);
         } catch (Throwable e) {
             if (e instanceof InvocationTargetException) {
                 Throwable cause = ((InvocationTargetException) e).getTargetException();
                 System.err.println("Root cause of InvocationTargetException: " + cause.getClass().getName());
-                cause.printStackTrace(); // Print root cause
+                cause.printStackTrace();
             } else {
                 e.printStackTrace();
             }
@@ -962,86 +925,343 @@ public class ReflectionUtilis {
 
 
 
-    public static Object invokeMethodWithAutoProjection(String methodName, Object instance, Object... arguments) {
-        // Retrieve the method and its parameter types
-        Pair<Object, Class<?>[]> methodPair = getMethodFromSuperclass(methodName, instance);
+    private static final int MODIFIER_STATIC = 0x0008;
+    private static final int METHOD_SCORE_IMPOSSIBLE = Integer.MAX_VALUE / 4;
 
-        // Check if the method was found
-        if (methodPair == null) {
-            try {
-                throw new NoSuchMethodException("Method " + methodName + " not found in class hierarchy of " + instance.getClass().getName());
-            } catch (NoSuchMethodException e) {
-                throw new RuntimeException(e);
-            }
+    private static final class ResolvedMethod {
+        final Object method;
+        final Class<?>[] parameterTypes;
+        final Object[] projectedArguments;
+        final int score;
+
+        private ResolvedMethod(Object method, Class<?>[] parameterTypes, Object[] projectedArguments, int score) {
+            this.method = method;
+            this.parameterTypes = parameterTypes;
+            this.projectedArguments = projectedArguments;
+            this.score = score;
         }
+    }
 
-        Object method = methodPair.one;
-        Class<?>[] parameterTypes = methodPair.two;
+    /**
+     * Finds the best overload instead of returning the first method that has this name.
+     * Lower score wins:
+     *  - exact type / primitive-box match
+     *  - widening numeric conversion
+     *  - assignable reference type
+     *  - safe auto conversions from convertArgumentAuto(...)
+     *  - varargs as fallback
+     */
+    private static ResolvedMethod resolveBestMethod(Class<?> startClass, String methodName, boolean requireStatic, Object... arguments) {
+        if (arguments == null) arguments = new Object[0];
 
-        // Prepare arguments by projecting them to the correct types
-        Object[] projectedArgs = new Object[parameterTypes.length];
-        for (int index = 0; index < parameterTypes.length; index++) {
-            Object arg = (arguments.length > index) ? arguments[index] : null;
+        ResolvedMethod best = null;
+        Class<?> currentClass = startClass;
+        int classDepth = 0;
 
-            if (arg == null) {
-                // If the expected type is a primitive type, throw an exception
-                if (parameterTypes[index].isPrimitive()) {
-                    throw new IllegalArgumentException("Argument at index " + index + " cannot be null for primitive type " + parameterTypes[index].getName());
-                }
-                projectedArgs[index] = null; // Keep nulls as null for reference types
-            } else {
-                // Try to convert the argument to the expected parameter type
+        while (currentClass != null) {
+            Object[] methods = currentClass.getDeclaredMethods();
+
+            for (Object method : methods) {
                 try {
-                    projectedArgs[index] = convertArgument(arg, parameterTypes[index]);
-                } catch (Exception e) {
-                    throw new IllegalArgumentException("Cannot convert argument at index " + index + " to " + parameterTypes[index].getName(), e);
+                    String currentName = (String) getMethodNameHandle.invoke(method);
+                    if (!methodName.equals(currentName)) continue;
+
+                    int modifiers = (int) getModifiersHandle.invoke(method);
+                    boolean isStatic = (modifiers & MODIFIER_STATIC) != 0;
+                    if (requireStatic != isStatic) continue;
+
+                    Class<?>[] parameterTypes = (Class<?>[]) getParameterTypesHandle.invoke(method);
+                    boolean varArgs = (boolean) isMethodVarArgsHandle.invoke(method);
+
+                    Object[] projectedArgs = projectMethodArgs(arguments, parameterTypes, varArgs);
+                    if (projectedArgs == null) continue;
+
+                    int score = scoreMethodArguments(arguments, parameterTypes, varArgs);
+                    if (score >= METHOD_SCORE_IMPOSSIBLE) continue;
+
+                    // Prefer methods declared lower in the inheritance tree. Prefer fixed arity over varargs.
+                    score += classDepth * 10;
+                    if (varArgs) score += 25;
+
+                    if (best == null || score < best.score) {
+                        best = new ResolvedMethod(method, parameterTypes, projectedArgs, score);
+                    }
+                } catch (Throwable inner) {
+                    inner.printStackTrace();
                 }
             }
+
+            currentClass = currentClass.getSuperclass();
+            classDepth++;
         }
 
-        // Ensure the method is accessible
+        return best;
+    }
+
+    private static Object[] projectMethodArgs(Object[] arguments, Class<?>[] parameterTypes, boolean varArgs) {
         try {
-            setMethodAccessable.invoke(method, true);
-        } catch (Throwable e) {
-            throw new RuntimeException(e);
+            if (arguments == null) arguments = new Object[0];
+
+            if (!varArgs) {
+                if (parameterTypes.length != arguments.length) return null;
+
+                Object[] projected = new Object[parameterTypes.length];
+                for (int i = 0; i < parameterTypes.length; i++) {
+                    projected[i] = convertArgumentAuto(arguments[i], parameterTypes[i]);
+                }
+                return projected;
+            }
+
+            if (parameterTypes.length == 0) {
+                return arguments.length == 0 ? new Object[0] : null;
+            }
+
+            int fixedCount = parameterTypes.length - 1;
+            if (arguments.length < fixedCount) return null;
+
+            Object[] projected = new Object[parameterTypes.length];
+            for (int i = 0; i < fixedCount; i++) {
+                projected[i] = convertArgumentAuto(arguments[i], parameterTypes[i]);
+            }
+
+            Class<?> varArrayType = parameterTypes[fixedCount];
+            Class<?> varComponentType = varArrayType.getComponentType();
+            if (varComponentType == null) return null;
+
+            int varCount = arguments.length - fixedCount;
+
+            // Caller already supplied the whole vararg array.
+            if (varCount == 1 && arguments[fixedCount] != null && varArrayType.isInstance(arguments[fixedCount])) {
+                projected[fixedCount] = arguments[fixedCount];
+                return projected;
+            }
+
+            Object varArray = java.lang.reflect.Array.newInstance(varComponentType, varCount);
+            for (int i = 0; i < varCount; i++) {
+                Object converted = convertArgumentAuto(arguments[fixedCount + i], varComponentType);
+                java.lang.reflect.Array.set(varArray, i, converted);
+            }
+            projected[fixedCount] = varArray;
+            return projected;
+        } catch (Throwable ignored) {
+            return null;
         }
-        // Invoke the method with the projected arguments
+    }
+
+    private static int scoreMethodArguments(Object[] arguments, Class<?>[] parameterTypes, boolean varArgs) {
+        if (arguments == null) arguments = new Object[0];
+
+        if (!varArgs) {
+            if (parameterTypes.length != arguments.length) return METHOD_SCORE_IMPOSSIBLE;
+
+            int score = 0;
+            for (int i = 0; i < parameterTypes.length; i++) {
+                int singleScore = scoreSingleArgument(arguments[i], parameterTypes[i]);
+                if (singleScore >= METHOD_SCORE_IMPOSSIBLE) return METHOD_SCORE_IMPOSSIBLE;
+                score += singleScore;
+            }
+            return score;
+        }
+
+        if (parameterTypes.length == 0) return arguments.length == 0 ? 0 : METHOD_SCORE_IMPOSSIBLE;
+
+        int fixedCount = parameterTypes.length - 1;
+        if (arguments.length < fixedCount) return METHOD_SCORE_IMPOSSIBLE;
+
+        int score = 0;
+        for (int i = 0; i < fixedCount; i++) {
+            int singleScore = scoreSingleArgument(arguments[i], parameterTypes[i]);
+            if (singleScore >= METHOD_SCORE_IMPOSSIBLE) return METHOD_SCORE_IMPOSSIBLE;
+            score += singleScore;
+        }
+
+        Class<?> varArrayType = parameterTypes[fixedCount];
+        Class<?> varComponentType = varArrayType.getComponentType();
+        if (varComponentType == null) return METHOD_SCORE_IMPOSSIBLE;
+
+        int varCount = arguments.length - fixedCount;
+        if (varCount == 1 && arguments[fixedCount] != null && varArrayType.isInstance(arguments[fixedCount])) {
+            return score + scoreSingleArgument(arguments[fixedCount], varArrayType);
+        }
+
+        for (int i = 0; i < varCount; i++) {
+            int singleScore = scoreSingleArgument(arguments[fixedCount + i], varComponentType);
+            if (singleScore >= METHOD_SCORE_IMPOSSIBLE) return METHOD_SCORE_IMPOSSIBLE;
+            score += singleScore + 2;
+        }
+
+        return score;
+    }
+
+    private static int scoreSingleArgument(Object arg, Class<?> targetType) {
+        if (arg == null) {
+            if (targetType.isPrimitive()) return METHOD_SCORE_IMPOSSIBLE;
+            return targetType == Object.class ? 120 : 100;
+        }
+
+        Class<?> argType = arg.getClass();
+        Class<?> boxedTarget = boxType(targetType);
+
+        if (boxedTarget == argType) return 0;
+        if (targetType.isAssignableFrom(argType)) return 10 + inheritanceDistance(argType, targetType);
+
+        if (isNumericType(boxedTarget) && arg instanceof Number) {
+            int argRank = numericRank(argType);
+            int targetRank = numericRank(boxedTarget);
+            if (argRank >= 0 && targetRank >= 0) {
+                if (targetRank >= argRank) return 5 + (targetRank - argRank); // widening
+                return 40 + (argRank - targetRank); // narrowing, allowed but worse
+            }
+            return 45;
+        }
+
+        if ((boxedTarget == Boolean.class && arg instanceof Boolean) ||
+                (boxedTarget == Character.class && arg instanceof Character)) {
+            return 0;
+        }
+
+        if ((boxedTarget == Boolean.class || boxedTarget == Character.class) && arg instanceof CharSequence) {
+            return 70;
+        }
+
+        if (targetType == String.class || CharSequence.class.isAssignableFrom(targetType)) {
+            return 60;
+        }
+
+        if (targetType.isEnum() && (arg instanceof CharSequence || arg instanceof Number)) {
+            return 75;
+        }
+
+        if (fileclass != null && fileclass.isAssignableFrom(targetType) && arg instanceof CharSequence) {
+            return 80;
+        }
+
         try {
-            return invokeMethodHandle.invoke(method, instance, projectedArgs);
+            convertArgumentAuto(arg, targetType);
+            return 95;
+        } catch (Throwable ignored) {
+            return METHOD_SCORE_IMPOSSIBLE;
+        }
+    }
+
+    private static int inheritanceDistance(Class<?> source, Class<?> target) {
+        if (source == null || target == null) return 50;
+        if (source.equals(target)) return 0;
+
+        if (target.isInterface()) {
+            return implementsInterface(source, target) ? 5 : 50;
+        }
+
+        int distance = 0;
+        Class<?> current = source;
+        while (current != null) {
+            if (current.equals(target)) return distance;
+            current = current.getSuperclass();
+            distance++;
+        }
+        return 50;
+    }
+
+    private static boolean implementsInterface(Class<?> source, Class<?> targetInterface) {
+        if (source == null || targetInterface == null) return false;
+        for (Class<?> iface : source.getInterfaces()) {
+            if (iface.equals(targetInterface) || implementsInterface(iface, targetInterface)) return true;
+        }
+        return implementsInterface(source.getSuperclass(), targetInterface);
+    }
+
+    private static Class<?> boxType(Class<?> type) {
+        if (type == null || !type.isPrimitive()) return type;
+        if (type == int.class) return Integer.class;
+        if (type == long.class) return Long.class;
+        if (type == double.class) return Double.class;
+        if (type == float.class) return Float.class;
+        if (type == short.class) return Short.class;
+        if (type == byte.class) return Byte.class;
+        if (type == boolean.class) return Boolean.class;
+        if (type == char.class) return Character.class;
+        if (type == void.class) return Void.class;
+        return type;
+    }
+
+    private static boolean isNumericType(Class<?> type) {
+        return type == Byte.class || type == Short.class || type == Integer.class || type == Long.class ||
+                type == Float.class || type == Double.class;
+    }
+
+    private static int numericRank(Class<?> type) {
+        Class<?> boxed = boxType(type);
+        if (boxed == Byte.class) return 1;
+        if (boxed == Short.class) return 2;
+        if (boxed == Integer.class) return 3;
+        if (boxed == Long.class) return 4;
+        if (boxed == Float.class) return 5;
+        if (boxed == Double.class) return 6;
+        return -1;
+    }
+
+    public static Object invokeMethodWithAutoProjection(String methodName, Object instance, Object... arguments) {
+        if (instance == null) {
+            throw new IllegalArgumentException("Cannot invoke method " + methodName + " on null instance");
+        }
+
+        try {
+            ResolvedMethod resolved = resolveBestMethod(instance.getClass(), methodName, false, arguments);
+            if (resolved == null) {
+                throw new NoSuchMethodException("Method " + methodName + " not found in class hierarchy of " + instance.getClass().getName() +
+                        " for " + ((arguments == null) ? 0 : arguments.length) + " args");
+            }
+
+            setMethodAccessable.invoke(resolved.method, true);
+            return invokeMethodHandle.invoke(resolved.method, instance, resolved.projectedArguments);
         } catch (Throwable e) {
+            if (e instanceof InvocationTargetException) {
+                Throwable cause = ((InvocationTargetException) e).getTargetException();
+                System.err.println("Root cause of InvocationTargetException: " + cause.getClass().getName());
+                cause.printStackTrace();
+            } else {
+                e.printStackTrace();
+            }
             throw new RuntimeException(e);
         }
     }
 
     // Helper function to convert an argument to the expected type
     public static Object convertArgument(Object arg, Class<?> targetType) {
+        if (arg == null) {
+            if (targetType.isPrimitive()) {
+                throw new IllegalArgumentException("null cannot be converted to primitive " + targetType.getName());
+            }
+            return null;
+        }
+
         if (targetType.isAssignableFrom(arg.getClass())) {
             return arg; // Use as-is if types match
-        } else if (targetType.isPrimitive()) {
-            // Handle primitive types by boxing
-            if (targetType == int.class) {
-                return ((Number) arg).intValue();
-            } else if (targetType == long.class) {
-                return ((Number) arg).longValue();
-            } else if (targetType == double.class) {
-                return ((Number) arg).doubleValue();
-            } else if (targetType == float.class) {
-                return ((Number) arg).floatValue();
-            } else if (targetType == short.class) {
-                return ((Number) arg).shortValue();
-            } else if (targetType == byte.class) {
-                return ((Number) arg).byteValue();
-            } else if (targetType == boolean.class) {
-                return arg;
-            } else if (targetType == char.class) {
-                return arg;
-            } else {
-                throw new IllegalArgumentException("Unsupported primitive type: " + targetType.getName());
-            }
-        } else {
-            // For reference types, perform a cast if possible
-            return targetType.cast(arg);
         }
+
+        Class<?> boxedTarget = boxType(targetType);
+
+        if (boxedTarget == Integer.class) {
+            return ((Number) arg).intValue();
+        } else if (boxedTarget == Long.class) {
+            return ((Number) arg).longValue();
+        } else if (boxedTarget == Double.class) {
+            return ((Number) arg).doubleValue();
+        } else if (boxedTarget == Float.class) {
+            return ((Number) arg).floatValue();
+        } else if (boxedTarget == Short.class) {
+            return ((Number) arg).shortValue();
+        } else if (boxedTarget == Byte.class) {
+            return ((Number) arg).byteValue();
+        } else if (boxedTarget == Boolean.class) {
+            if (arg instanceof Boolean) return arg;
+            throw new IllegalArgumentException("Cannot convert " + arg.getClass().getName() + " to boolean");
+        } else if (boxedTarget == Character.class) {
+            if (arg instanceof Character) return arg;
+            throw new IllegalArgumentException("Cannot convert " + arg.getClass().getName() + " to char");
+        }
+
+        return targetType.cast(arg);
     }
     public static Object invokeStaticMethod(Class<?> targetClass, String methodName, Object... arguments) {
         try {
@@ -1127,7 +1347,7 @@ public class ReflectionUtilis {
                 }
 
                 // Move to the superclass dynamically
-                currentClass = (Class<?>) invokeMethodHandle.invoke(currentClass, "getSuperclass");
+                currentClass = currentClass.getSuperclass();
             }
 
             // Return null if no matching method is found

@@ -25,6 +25,8 @@ public class ChoosePeriodPopUp extends PopUpUI {
         monthsIntervals.add(36);
         monthsIntervals.add(48);
         monthsIntervals.add(60);
+        monthsIntervals.add(120);
+
         monthsIntervals.add(Integer.MAX_VALUE);
     }
     public  ChoosePeriodPopUp(int currChosenFaction,EconomyCommodityData data) {
