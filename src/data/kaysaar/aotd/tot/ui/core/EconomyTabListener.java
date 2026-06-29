@@ -77,7 +77,7 @@ public class EconomyTabListener implements CommandTabListener {
 
     @Override
     public void performRecalculations(UIComponentAPI uiComponentAPI) {
-        ButtonAPI button = tryToGetButtonProd("holdings");
+        ButtonAPI button = tryToGetButtonProd("domain");
         if(button==null){
             button = tryToGetButtonProd("colonies");
         }

@@ -1,7 +1,9 @@
 package data.kaysaar.aotd.tot.ui.starsystems.stuctures;
 
+import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Tags;
@@ -38,6 +40,7 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
         if (contentPanel != null) {
             mainPanel.removeComponent(contentPanel);
         }
+        FactionAPI faction = AshMisc.getClaimingFaction(system.getCenter());
 
         contentPanel = Global.getSettings().createCustom(
                 mainPanel.getPosition().getWidth(),
@@ -102,7 +105,7 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
         LabelAPI label = tooltipBottom.addPara("System Structures: %s / %s", 0f, Misc.getGrayColor(), Color.ORANGE, "" + total, totalAtAllPos+"");
         label.getPosition().inTL(contentPanel.getPosition().getWidth() - label.computeTextWidth(label.getText()) - 5, 1);
         float x = contentPanel.getPosition().getWidth() - label.computeTextWidth(label.getText()) - 5;
-        ButtonAPI bt = tooltipBottom.addButton("Manage Star System", null, Misc.getBasePlayerColor(), Misc.getDarkPlayerColor(), Alignment.MID, CutStyle.TL_BR, Math.min(x-20, 300), 25, 0f);
+        ButtonAPI bt = tooltipBottom.addButton("Manage Star System", null, faction.getBaseUIColor(), faction.getDarkUIColor(), Alignment.MID, CutStyle.TL_BR, Math.min(x-20, 300), 25, 0f);
         bt.setShortcut(Keyboard.KEY_A, true);
         bt.setEnabled(false);
         tooltipBottom.addTooltipToPrevious(new TooltipMakerAPI.TooltipCreator() {

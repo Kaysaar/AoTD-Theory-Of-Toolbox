@@ -1,4 +1,3 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/SurplusConsumptionUtils.java
 package data.kaysaar.aotd.tot.scripts.trade;
 
 import java.util.HashMap;

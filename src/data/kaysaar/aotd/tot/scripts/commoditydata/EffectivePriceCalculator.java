@@ -5,10 +5,13 @@ import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.campaign.econ.PriceVariability;
 import com.fs.starfarer.api.combat.StatBonus;
+import com.fs.starfarer.api.combat.MutableStat;
 import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.PriceCalculator;
 
 import data.kaysaar.aotd.tot.scripts.commoditydata.BasePriceCalculator.TransactionDirection;
+
+import java.util.Map;
 
 /**
  * Final AoTD player trade price calculator.
@@ -34,6 +37,13 @@ public class EffectivePriceCalculator extends PriceCalculator {
 
     /** Minimum base AoTD excess/deficit amount that keeps a market anchored to that state. */
     private static final float AOTD_MIN_STATE_AMOUNT = 1f;
+
+    /**
+     * Tiny reverse trades should not trigger the full 0.85 anti-resell clamp.
+     * Start almost neutral, then move toward maxResellReturnMult as the local
+     * same-market trade gets closer to the reference batch size.
+     */
+    private static final float AOTD_SMALL_TRADE_RESELL_RETURN_MULT = 0.98f;
 
     /**
      * Persistent local trade marker used only for same-market anti-resell.
@@ -316,6 +326,25 @@ public class EffectivePriceCalculator extends PriceCalculator {
          * punished here, so buying from excess still climbs normally instead of
          * jumping above base.
          */
+        float sameMarketBoughtQuantity = getSameMarketBoughtFromMarketQuantity();
+        float sameMarketSoldQuantity = getSameMarketSoldToMarketQuantity();
+        float sameMarketNetQuantity = sameMarketSoldQuantity - sameMarketBoughtQuantity;
+
+        /*
+         * Anti-resell direction must use the NET local position, not the total
+         * number of buy/sell legs.
+         *
+         * Example:
+         *   buy 1 fuel  -> net = -1, selling back is capped
+         *   sell 1 fuel -> net = 0, price returns to normal movement
+         *
+         * If we keep using "any buy_ exists" / "any sell_ exists", both flags
+         * stay true after the roundtrip and the buyback floor keeps price stuck
+         * around 30 forever.
+         */
+        boolean hasPrefixedBuyMemory = sameMarketNetQuantity < -0.0001f;
+        boolean hasPrefixedSellMemory = sameMarketNetQuantity > 0.0001f;
+
         float playerBoughtFromThisMarketUtility = getPlayerBoughtFromThisMarketUtility(existingTradeUtility);
         float playerSoldToThisMarketUtility = getPlayerSoldToThisMarketUtility(existingTradeUtility);
 
@@ -363,21 +392,24 @@ public class EffectivePriceCalculator extends PriceCalculator {
             float buyWrapper = getFinalWrapperMult(false);
             float currentBuyRaw = getStateAwareBaseMult(false, netUtilityAtThisUnit, denom, existingTradeUtility);
             float currentBuyFinal = currentBuyRaw * buyWrapper;
-            float sellFinalCap = currentBuyFinal * maxResellReturnMult;
+            float sellFinalCap = currentBuyFinal * getGradualAntiResellReturnMult(Math.max(playerBoughtFromThisMarketUtility, Math.abs(antiResellTradeUtility)), transactionOnlyUtility);
             float rawSellCap = sellFinalCap / sellWrapper;
             mult = Math.min(mult, Math.max(0.01f, rawSellCap));
         }
 
-        if (playerSellingToMarket && playerBoughtFromThisMarketUtility > 0.0001f) {
+        if (playerSellingToMarket
+                && playerBoughtFromThisMarketUtility > 0.0001f
+                && (hasPrefixedBuyMemory || existingTradeUtility < -0.0001f)) {
             float sellWrapper = getFinalWrapperMult(true);
             float buyWrapper = getFinalWrapperMult(false);
 
             float referenceBuyFinal = antiResellReferenceBuyMult * buyWrapper;
-            float sellFinalCap = referenceBuyFinal * maxResellReturnMult;
+            float sellFinalCap = referenceBuyFinal * getGradualAntiResellReturnMult(playerBoughtFromThisMarketUtility, transactionOnlyUtility);
             float rawSellCap = sellFinalCap / sellWrapper;
             mult = Math.min(mult, Math.max(0.01f, rawSellCap));
         } else if (!playerSellingToMarket
                 && playerSoldToThisMarketUtility > 0.0001f
+                && (hasPrefixedSellMemory || rememberedSameMarketDump)
                 && !(buyingFromRealExcessThatStillExists && !rememberedSameMarketDump)) {
             float sellWrapper = getFinalWrapperMult(true);
             float buyWrapper = getFinalWrapperMult(false);
@@ -389,45 +421,30 @@ public class EffectivePriceCalculator extends PriceCalculator {
              */
             float referenceSellFinal = antiResellReferenceSellMult * sellWrapper;
 
-            float buyFinalFloor = referenceSellFinal / maxResellReturnMult;
+            float buyFinalFloor = referenceSellFinal / getGradualAntiResellReturnMult(playerSoldToThisMarketUtility, transactionOnlyUtility);
             float rawBuyFloor = buyFinalFloor / buyWrapper;
             mult = Math.max(mult, Math.max(0.01f, rawBuyFloor));
         }
 
         /*
-         * Blank-state anti-resell is intentionally broad, like v12. This is the
-         * case that fixed the universal "buy for 7k, sell for 7.7k" bug: after
-         * any local trade exists, same-market buy must be higher than same-market
-         * sell.
+         * Blank-state anti-resell must also be directional.
          *
-         * Excess/deficit state remains directional, because broad enforcement there
-         * was what made continuing to buy from excess jump above base.
+         * The old broad rule was:
+         *   officialStateMode == 0 && any local trade history => force buy > sell
+         *
+         * That fixed simple buy->sell arbitrage, but it also punished continuing
+         * in the SAME direction. Example:
+         *   base 25, blank sell reference 1.05, max return 0.85
+         *   next buy floor = 25 * 1.05 / 0.85 = 30.88 ~= 31
+         *
+         * That is exactly the reported "buying one unit makes price jump from 25
+         * to 31" bug. The anti-resell rule should only apply to reverse trades:
+         * - bought from this market -> cap selling back;
+         * - sold to this market    -> floor buying back.
          */
-        if (officialStateMode == 0 && hasAnyAntiResellHistory) {
-            float sellRawNow = getStateAwareBaseMult(true, netUtilityAtThisUnit, denom, existingTradeUtility);
-            float buyRawNow = getStateAwareBaseMult(false, netUtilityAtThisUnit, denom, existingTradeUtility);
-
-            float sellWrapper = getFinalWrapperMult(true);
-            float buyWrapper = getFinalWrapperMult(false);
-
-            float sellFinalNow = sellRawNow * sellWrapper;
-            float buyFinalNow = buyRawNow * buyWrapper;
-
-            float blankSellFinal = antiResellReferenceSellMult * sellWrapper;
-            float blankBuyFinal = antiResellReferenceBuyMult * buyWrapper;
-
-            if (playerSellingToMarket) {
-                float referenceBuyFinal = Math.max(buyFinalNow, blankBuyFinal);
-                float sellFinalCap = referenceBuyFinal * maxResellReturnMult;
-                float rawSellCap = sellFinalCap / sellWrapper;
-                mult = Math.min(mult, Math.max(0.01f, rawSellCap));
-            } else {
-                float referenceSellFinal = Math.max(sellFinalNow, blankSellFinal);
-                float buyFinalFloor = referenceSellFinal / maxResellReturnMult;
-                float rawBuyFloor = buyFinalFloor / buyWrapper;
-                mult = Math.max(mult, Math.max(0.01f, rawBuyFloor));
-            }
-        } else if (antiResellTradeUtility < -0.0001f && playerSellingToMarket) {
+        if (antiResellTradeUtility < -0.0001f
+                && playerSellingToMarket
+                && (hasPrefixedBuyMemory || existingTradeUtility < -0.0001f)) {
             float buyRawNow = getStateAwareBaseMult(false, netUtilityAtThisUnit, denom, existingTradeUtility);
             float sellWrapper = getFinalWrapperMult(true);
             float buyWrapper = getFinalWrapperMult(false);
@@ -436,11 +453,12 @@ public class EffectivePriceCalculator extends PriceCalculator {
             float blankBuyFinal = antiResellReferenceBuyMult * buyWrapper;
             float referenceBuyFinal = Math.max(buyFinalNow, blankBuyFinal);
 
-            float sellFinalCap = referenceBuyFinal * maxResellReturnMult;
+            float sellFinalCap = referenceBuyFinal * getGradualAntiResellReturnMult(playerBoughtFromThisMarketUtility, transactionOnlyUtility);
             float rawSellCap = sellFinalCap / sellWrapper;
             mult = Math.min(mult, Math.max(0.01f, rawSellCap));
         } else if (antiResellTradeUtility > 0.0001f
                 && !playerSellingToMarket
+                && (hasPrefixedSellMemory || rememberedSameMarketDump)
                 && !(buyingFromRealExcessThatStillExists && !rememberedSameMarketDump)) {
             float sellRawNow = getStateAwareBaseMult(true, netUtilityAtThisUnit, denom, existingTradeUtility);
             float sellWrapper = getFinalWrapperMult(true);
@@ -450,7 +468,7 @@ public class EffectivePriceCalculator extends PriceCalculator {
             float blankSellFinal = antiResellReferenceSellMult * sellWrapper;
             float referenceSellFinal = Math.max(sellFinalNow, blankSellFinal);
 
-            float buyFinalFloor = referenceSellFinal / maxResellReturnMult;
+            float buyFinalFloor = referenceSellFinal / getGradualAntiResellReturnMult(playerSoldToThisMarketUtility, transactionOnlyUtility);
             float rawBuyFloor = buyFinalFloor / buyWrapper;
             mult = Math.max(mult, Math.max(0.01f, rawBuyFloor));
         }
@@ -678,14 +696,24 @@ public class EffectivePriceCalculator extends PriceCalculator {
             return 0f;
         }
 
+        float utility = getUtilityOnMarketSafe();
+
         /*
-         * Main source of truth: MarketDemand stockpile utility already includes
-         * local trade impact. If it is below the neutral economy-update baseline,
-         * the player has bought from this same market.
-         *
-         * This is more reliable than trusting tradeModPlus/tradeModMinus names,
-         * since their sign can vary between vanilla/AoTD paths and UI previews.
+         * Direction comes from prefixed legs, but AMOUNT must be net.
+         * If the player bought 1 and then sold 1, both prefixes still exist;
+         * treating the buy_ leg as active forever keeps sell-back/buyback clamps
+         * alive even though the local position is neutral again.
          */
+        float bought = getSameMarketBoughtFromMarketQuantity();
+        float sold = getSameMarketSoldToMarketQuantity();
+        if (bought > 0.0001f || sold > 0.0001f) {
+            float netBought = bought - sold;
+            return Math.max(0f, netBought * utility);
+        }
+
+        /* Signed stock/trade displacement fallback for calculators that do not
+         * have prefixed trade memory yet. Negative means stock was removed from
+         * the market, i.e. the player bought from this market. */
         if (existingTradeUtility < -0.0001f) {
             return -existingTradeUtility;
         }
@@ -694,18 +722,9 @@ public class EffectivePriceCalculator extends PriceCalculator {
             return 0f;
         }
 
-        /* Fallback for old saves or calculators configured before neutral utility exists. */
-        float utility = getUtilityOnMarketSafe();
-        float combined = commodity.getCombinedTradeModQuantity();
-        if (combined < -0.0001f) {
-            return -combined * utility;
-        }
-
-        try {
-            if (commodity.getTradeModMinus() != null) {
-                return Math.abs(commodity.getTradeModMinus().getModifiedValue()) * utility;
-            }
-        } catch (Throwable ignored) {
+        float signed = getSignedLiveTradeQuantityFallback();
+        if (signed < -0.0001f) {
+            return -signed * utility;
         }
 
         return 0f;
@@ -716,17 +735,32 @@ public class EffectivePriceCalculator extends PriceCalculator {
             return 0f;
         }
 
+        float utility = getUtilityOnMarketSafe();
+        float signedFallback = getSignedLiveTradeQuantityFallback();
         float remembered = getRememberedSameMarketTradeUtility();
-        if (remembered > 0.0001f) {
-            return remembered;
-        }
+
+        /* Same rule as bought: prefix identifies the leg, net decides whether
+         * there is still a sell position to punish. */
+        float bought = getSameMarketBoughtFromMarketQuantity();
+        float sold = getSameMarketSoldToMarketQuantity();
 
         /*
-         * Main source of truth: above-neutral stockpile means the player has sold
-         * into this same market. This avoids treating a staged/confirmed BUY from
-         * an already-excess market as previous selling just because one live trade
-         * mod happens to be positive.
+         * Player-created dump memory represents stock the player previously sold
+         * that was converted into local resources and had its live trade mods
+         * cleared. If buy_ legs appear later, they should reduce that remembered
+         * net sold position gradually instead of disabling it instantly.
          */
+        if (remembered > 0.0001f && signedFallback >= -0.0001f && existingTradeUtility >= -0.0001f) {
+            float rememberedNetSold = remembered + (sold - bought) * utility;
+            return Math.max(0f, rememberedNetSold);
+        }
+
+        if (bought > 0.0001f || sold > 0.0001f) {
+            float netSold = sold - bought;
+            return Math.max(0f, netSold * utility);
+        }
+
+        /* Positive displacement means stock was added to the market. */
         if (existingTradeUtility > 0.0001f) {
             return existingTradeUtility;
         }
@@ -735,53 +769,48 @@ public class EffectivePriceCalculator extends PriceCalculator {
             return 0f;
         }
 
-        /* Fallback for old saves or calculators configured before neutral utility exists. */
-        float utility = getUtilityOnMarketSafe();
-        float combined = commodity.getCombinedTradeModQuantity();
-        if (combined > 0.0001f) {
-            return combined * utility;
-        }
-
-        try {
-            if (commodity.getTradeModPlus() != null) {
-                return Math.abs(commodity.getTradeModPlus().getModifiedValue()) * utility;
-            }
-        } catch (Throwable ignored) {
+        if (signedFallback > 0.0001f) {
+            return signedFallback * utility;
         }
 
         return 0f;
     }
 
     private float getAntiResellTradeUtility(double stock, float existingTradeUtility) {
+        if (commodity != null) {
+            float utility = getUtilityOnMarketSafe();
+
+            /*
+             * Net from remembered transaction legs.
+             * sold > bought => positive market stock displacement.
+             * bought > sold => negative market stock displacement.
+             *
+             * Important: if both legs exist but net is zero, return zero and do
+             * not fall through to stale stock/trade fallbacks. That exact case is
+             * buy 1 -> sell 1, where price should return to normal.
+             */
+            float sold = getSameMarketSoldToMarketQuantity();
+            float bought = getSameMarketBoughtFromMarketQuantity();
+            float remembered = getRememberedSameMarketTradeUtility();
+
+            if (remembered > 0.0001f) {
+                return remembered + (sold - bought) * utility;
+            }
+
+            if (sold > 0.0001f || bought > 0.0001f) {
+                return (sold - bought) * utility;
+            }
+        }
+
         if (Math.abs(existingTradeUtility) > 0.0001f) {
             return existingTradeUtility;
         }
 
         if (commodity != null) {
             float utility = getUtilityOnMarketSafe();
-
-            float combined = commodity.getCombinedTradeModQuantity();
-            if (Math.abs(combined) > 0.0001f) {
-                return combined * utility;
-            }
-
-            try {
-                float trade = 0f;
-                if (commodity.getTradeMod() != null) {
-                    trade += commodity.getTradeMod().getModifiedValue();
-                }
-                if (commodity.getTradeModPlus() != null) {
-                    trade += commodity.getTradeModPlus().getModifiedValue();
-                }
-                if (commodity.getTradeModMinus() != null) {
-                    trade += commodity.getTradeModMinus().getModifiedValue();
-                }
-
-                if (Math.abs(trade) > 0.0001f) {
-                    return trade * utility;
-                }
-            } catch (Throwable ignored) {
-                /* API/decompiled variants may differ. getCombinedTradeModQuantity() is still the main path. */
+            float signed = getSignedLiveTradeQuantityFallback();
+            if (Math.abs(signed) > 0.0001f) {
+                return signed * utility;
             }
         }
 
@@ -793,25 +822,35 @@ public class EffectivePriceCalculator extends PriceCalculator {
             return false;
         }
 
-        if (Math.abs(commodity.getCombinedTradeModQuantity()) > 0.0001f) {
-            return true;
+        float bought = getSameMarketBoughtFromMarketQuantity();
+        float sold = getSameMarketSoldToMarketQuantity();
+        if (bought > 0.0001f || sold > 0.0001f) {
+            return Math.abs(sold - bought) > 0.0001f;
         }
 
         try {
-            if (commodity.getTradeMod() != null && Math.abs(commodity.getTradeMod().getModifiedValue()) > 0.0001f) {
-                return true;
-            }
-            if (commodity.getTradeModPlus() != null && Math.abs(commodity.getTradeModPlus().getModifiedValue()) > 0.0001f) {
-                return true;
-            }
-            if (commodity.getTradeModMinus() != null && Math.abs(commodity.getTradeModMinus().getModifiedValue()) > 0.0001f) {
+            float combined = commodity.getCombinedTradeModQuantity();
+            if (Math.abs(combined) > 0.0001f) {
                 return true;
             }
         } catch (Throwable ignored) {
-            return false;
         }
 
-        return false;
+        try {
+            float trade = 0f;
+            if (commodity.getTradeMod() != null) {
+                trade += commodity.getTradeMod().getModifiedValue();
+            }
+            if (commodity.getTradeModPlus() != null) {
+                trade += commodity.getTradeModPlus().getModifiedValue();
+            }
+            if (commodity.getTradeModMinus() != null) {
+                trade += commodity.getTradeModMinus().getModifiedValue();
+            }
+            return Math.abs(trade) > 0.0001f;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private boolean hasRememberedSameMarketTrade() {
@@ -857,26 +896,22 @@ public class EffectivePriceCalculator extends PriceCalculator {
 
     private float getSameMarketTradeDisplacementUtility(double stock) {
         /*
-         * Price movement must be based on how much of the monthly state was
-         * actually eaten/filled by player trade. In some vanilla UI paths the
-         * stock argument does not move enough while the trade mods already do;
-         * that made an 8k excess stay priced like a full 8k excess even after
-         * the player bought most of it.
-         *
-         * Use the larger signed displacement between:
-         * - stockpile utility minus neutral economy-update utility;
-         * - live same-market trade mods converted to utility.
-         *
-         * Do not add them together, because on paths where both are correct they
-         * describe the same local trade impact and summing would double-count it.
+         * First use leg-separated transaction memory from mod-id prefixes.
+         * If prefixed legs exist, their NET is authoritative, even when the net
+         * is zero. This prevents buy+sell roundtrips from falling through to
+         * stale stock displacement and keeping prices high.
          */
+        if (hasAnyPrefixedSameMarketTradeLeg()) {
+            return getPrefixTradeDisplacementUtility();
+        }
+
         float stockDisplacement = 0f;
         boolean hasNeutral = neutralStockpileUtility >= 0f;
         if (hasNeutral) {
             stockDisplacement = (float) (stock - neutralStockpileUtility);
         }
 
-        float tradeModDisplacement = getLiveTradeModDisplacementUtility();
+        float tradeModDisplacement = getLiveTradeModDisplacementUtilityFallback();
 
         if (Math.abs(tradeModDisplacement) > Math.abs(stockDisplacement)) {
             return tradeModDisplacement;
@@ -889,42 +924,123 @@ public class EffectivePriceCalculator extends PriceCalculator {
         return tradeModDisplacement;
     }
 
-    private float getLiveTradeModDisplacementUtility() {
+    private float getPrefixTradeDisplacementUtility() {
         if (commodity == null) return 0f;
 
         float utility = getUtilityOnMarketSafe();
-        float combined = commodity.getCombinedTradeModQuantity();
-        if (Math.abs(combined) > 0.0001f) {
-            return combined * utility;
+        float sold = getSameMarketSoldToMarketQuantity();
+        float bought = getSameMarketBoughtFromMarketQuantity();
+        return (sold - bought) * utility;
+    }
+
+    private boolean hasAnyPrefixedSameMarketTradeLeg() {
+        return getSameMarketSoldToMarketQuantity() > 0.0001f
+                || getSameMarketBoughtFromMarketQuantity() > 0.0001f;
+    }
+
+    private float getLiveTradeModDisplacementUtilityFallback() {
+        if (commodity == null) return 0f;
+
+        float utility = getUtilityOnMarketSafe();
+        float signed = getSignedLiveTradeQuantityFallback();
+        if (Math.abs(signed) > 0.0001f) {
+            return signed * utility;
+        }
+
+        return 0f;
+    }
+
+    private float getSignedLiveTradeQuantityFallback() {
+        if (commodity == null) return 0f;
+
+        /*
+         * This is the net trade displacement Starsector exposes. Prefer it over
+         * adding the three MutableStat containers, because the containers can keep
+         * separate buy_ and sell_ legs and therefore look non-zero even after the
+         * net local position was neutralized.
+         */
+        try {
+            float combined = commodity.getCombinedTradeModQuantity();
+            if (Math.abs(combined) > 0.0001f) {
+                return combined;
+            }
+        } catch (Throwable ignored) {
         }
 
         try {
-            float soldToMarket = 0f;
-            float boughtFromMarket = 0f;
-
+            float trade = 0f;
+            if (commodity.getTradeMod() != null) {
+                trade += commodity.getTradeMod().getModifiedValue();
+            }
             if (commodity.getTradeModPlus() != null) {
-                soldToMarket += Math.abs(commodity.getTradeModPlus().getModifiedValue());
+                trade += commodity.getTradeModPlus().getModifiedValue();
             }
             if (commodity.getTradeModMinus() != null) {
-                boughtFromMarket += Math.abs(commodity.getTradeModMinus().getModifiedValue());
+                trade += commodity.getTradeModMinus().getModifiedValue();
             }
 
-            float directional = soldToMarket - boughtFromMarket;
-            if (Math.abs(directional) > 0.0001f) {
-                return directional * utility;
-            }
-
-            if (commodity.getTradeMod() != null) {
-                float trade = commodity.getTradeMod().getModifiedValue();
-                if (Math.abs(trade) > 0.0001f) {
-                    return trade * utility;
-                }
+            if (Math.abs(trade) > 0.0001f) {
+                return trade;
             }
         } catch (Throwable ignored) {
             /* Different decompiled/API paths may not expose all three mods. */
         }
 
         return 0f;
+    }
+
+    private float getSameMarketSoldToMarketQuantity() {
+        if (commodity == null) return 0f;
+
+        /*
+         * Direction is encoded by the mod id prefix, not by the sign. Some
+         * Starsector paths store sell_/buy_ entries as positive flat values and
+         * some as negative, depending on which trade stat container is used.
+         * For direction detection we only care that a sell_ or buy_ leg exists.
+         */
+        return Math.max(0f,
+                sumAbsModsWithPrefix(commodity.getTradeMod(), "sell_")
+                        + sumAbsModsWithPrefix(commodity.getTradeModPlus(), "sell_")
+                        + sumAbsModsWithPrefix(commodity.getTradeModMinus(), "sell_")
+        );
+    }
+
+    private float getSameMarketBoughtFromMarketQuantity() {
+        if (commodity == null) return 0f;
+
+        /* Same rule as sell_: prefix decides direction, absolute value is size. */
+        return Math.max(0f,
+                sumAbsModsWithPrefix(commodity.getTradeMod(), "buy_")
+                        + sumAbsModsWithPrefix(commodity.getTradeModPlus(), "buy_")
+                        + sumAbsModsWithPrefix(commodity.getTradeModMinus(), "buy_")
+        );
+    }
+
+    private static float sumAbsModsWithPrefix(MutableStat stat, String prefix) {
+        if (stat == null || prefix == null) return 0f;
+
+        float total = 0f;
+        try {
+            for (Map.Entry<String, MutableStat.StatMod> entry : stat.getFlatMods().entrySet()) {
+                if (entry == null || entry.getKey() == null || entry.getValue() == null) continue;
+                if (!entry.getKey().startsWith(prefix)) continue;
+
+                total += Math.abs(entry.getValue().value);
+            }
+        } catch (Throwable ignored) {
+            return 0f;
+        }
+
+        return total;
+    }
+
+    private float getGradualAntiResellReturnMult(float historyUtility, float transactionUtility) {
+        float utility = getUtilityOnMarketSafe();
+        float denom = Math.max(1f, referenceTradeQuantity * utility);
+        float pressure = clamp((Math.abs(historyUtility) + Math.abs(transactionUtility)) / denom, 0f, 1f);
+
+        float softReturn = clamp(AOTD_SMALL_TRADE_RESELL_RETURN_MULT, maxResellReturnMult, 0.999f);
+        return lerp(softReturn, maxResellReturnMult, pressure);
     }
 
     private float getUtilityOnMarketSafe() {

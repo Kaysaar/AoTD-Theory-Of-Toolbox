@@ -54,10 +54,6 @@ public class AoTDSectorExternalIndex {
             if (net > 0) {
                 float bonus = 0;
                 int supply = net;
-                if(commodity instanceof AoTDCommodityOnMarket commodityOnMarket){
-//                    int excess = commodityOnMarket.getExcessQuantity();
-//                    float bonusMult = AoTDCommodityEconSpecManager.getEconSpec(commodityId).supplyMult
-                }
                 float w = computeOfferWeight(md.outsideWeight, bonus,false);
                 exportersByCommodity.computeIfAbsent(commodityId, k -> new ArrayList<>())
                         .add(new Offer(market, md, supply, w));
