@@ -77,7 +77,7 @@ public class MarketConditionWidget implements ExtendedUIPanelPlugin {
 
                 @Override
                 public float getTooltipWidth(Object tooltipParam) {
-                    return 400;
+                    return 500;
                 }
 
                 @Override

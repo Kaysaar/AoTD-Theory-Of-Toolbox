@@ -1,27 +1,35 @@
-package data.kaysaar.aotd.tot.ui.starsystems;
+package data.kaysaar.aotd.tot.ui;
 
 import ashlib.data.plugins.coreui.CommandTabTracker;
 import ashlib.data.plugins.coreui.CommandUIPlugin;
 import ashlib.data.plugins.misc.AshMisc;
+import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
 import ashlib.data.plugins.ui.plugins.UILinesRenderer;
+import com.fs.graphics.util.Fader;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
+import data.kaysaar.aotd.tot.ui.core.EconomyTabListener;
+import data.kaysaar.aotd.tot.ui.economy.EconomyCommodityData;
+import data.kaysaar.aotd.tot.ui.economy.EconomyFactionIncome;
+import data.kaysaar.aotd.tot.ui.economy.EconomyTradeDealsData;
+import data.kaysaar.aotd.tot.ui.starsystems.StarSystemHoldingsUI;
 import org.lwjgl.input.Keyboard;
 
 import java.awt.*;
 import java.util.List;
 import java.util.Map;
 
-public class HoldingsUIPanel extends CommandUIPlugin {
-
-    UILinesRenderer renderer;
+public class DomainUIPanel extends CommandUIPlugin {
     StarSystemHoldingsUI starSystemAndPlanetUI;
     Object original;
+    EconomyCommodityData economyCommodityData;
+    EconomyTradeDealsData economyTradeDealsData;
+    EconomyFactionIncome factionIncome;
     public static boolean sentSignalForUpdate = false;
 
-    public HoldingsUIPanel(float width, float height) {
+    public DomainUIPanel(float width, float height) {
         super(width, height);
     }
 
@@ -37,7 +45,7 @@ public class HoldingsUIPanel extends CommandUIPlugin {
 
     @Override
     public String getTabStateId() {
-        return "holdings";
+        return "domain";
     }
 
     public CustomPanelAPI getMainPanel() {
@@ -45,7 +53,6 @@ public class HoldingsUIPanel extends CommandUIPlugin {
     }
 
     public void init(String panelToShowcase, Object data) {
-        renderer = new UILinesRenderer(0f);
         original = ReflectionUtilis.invokeMethodWithAutoProjection("getColoniesPanel",data);
         this.panelForPlugins = mainPanel.createCustomPanel(mainPanel.getPosition().getWidth(), mainPanel.getPosition().getHeight() - 45, null);
         if (!AshMisc.isStringValid(panelToShowcase)) {
@@ -58,14 +65,21 @@ public class HoldingsUIPanel extends CommandUIPlugin {
                 break;
             }
         }
-
-
-        if (currentlyChosen != null) {
-            panelForPlugins.addComponent(panelMap.get(currentlyChosen)).inTL(0, 0);
+        for (CustomPanelAPI value : panelMap.values()) {
+            panelForPlugins.addComponent(value).inTL(0,0);
         }
-
+        if (currentlyChosen != null) {
+            for (Map.Entry<ButtonAPI, CustomPanelAPI> entry : panelMap.entrySet()) {
+                Fader fader = (Fader) ReflectionUtilis.invokeMethodWithAutoProjection("getFader",entry.getValue());
+                if(entry.getKey().equals(currentlyChosen)) {
+                    fader.forceIn();
+                }
+                else{
+                    fader.forceOut();
+                }
+            }
+        }
         this.mainPanel.addComponent(panelForPlugins).inTL(0, 35);
-        renderer.setPanel(panelForPlugins);
     }
 
     public void clearUI(boolean clearMusic) {
@@ -93,13 +107,7 @@ public class HoldingsUIPanel extends CommandUIPlugin {
     }
 
 
-    public void resetCurrentPlugin(ButtonAPI newButton) {
-        if (currentlyChosen != null) {
-            this.panelForPlugins.removeComponent(panelMap.get(currentlyChosen));
-        }
-        currentlyChosen = newButton;
-        this.panelForPlugins.addComponent(panelMap.get(currentlyChosen)).inTL(0, 0);
-    }
+
 
     @Override
     public void processInput(List<InputEventAPI> events) {
@@ -131,7 +139,8 @@ public class HoldingsUIPanel extends CommandUIPlugin {
         this.buttonPanel = this.mainPanel.createCustomPanel(mainPanel.getPosition().getWidth(), 25, null);
         UILinesRenderer renderer = new UILinesRenderer(0f);
         CustomPanelAPI panelHelper = this.buttonPanel.createCustomPanel(490, 0.5f, renderer);
-//        renderer.setPanel(panelHelper);
+        ButtonAPI tradeData, incomeData, commData;
+
         TooltipMakerAPI buttonTooltip = buttonPanel.createUIElement(mainPanel.getPosition().getWidth(), 20, false);
         Color base, bg;
         base = Global.getSector().getPlayerFaction().getBaseUIColor();
@@ -139,18 +148,37 @@ public class HoldingsUIPanel extends CommandUIPlugin {
         customProd = buttonTooltip.addButton("Star Systems & Colonies", null, base, bg, Alignment.MID, CutStyle.TOP, 205, 20, 0f);
         research = buttonTooltip.addButton("Warehouses", null, base, bg, Alignment.MID, CutStyle.TOP, 150, 20, 0f);
 
+        commData = buttonTooltip.addButton("Commodity Data", null, base, bg, Alignment.MID, CutStyle.TOP, 150, 20, 0f);
+        tradeData = buttonTooltip.addButton("Trade Contracts", null, base, bg, Alignment.MID, CutStyle.TOP, 150, 20, 0f);
+
+        commData.setShortcut(Keyboard.KEY_T, false);
+        tradeData.setShortcut(Keyboard.KEY_Y, false);
+
         customProd.setShortcut(Keyboard.KEY_R, false);
         customProd.getPosition().inTL(0, 0);
 
-        research.setShortcut(Keyboard.KEY_W, false);
-        research.getPosition().inTL(206, 0);
+        research.setShortcut(Keyboard.KEY_R, false);
+        research.getPosition().rightOfMid(customProd,1);
+        commData.getPosition().rightOfMid(research,1);
+        tradeData.getPosition().rightOfMid(commData,1);
+
+        insertStarSystemPanel(customProd);
+        insertCommDataPanel(commData);
+        insertTradeDataPanel(tradeData);
 
         buttonPanel.addUIElement(buttonTooltip).inTL(0, 0);
         buttonPanel.addComponent(panelHelper).inTL(0, 20);
         mainPanel.addComponent(buttonPanel).inTL(0, 10);
-        insertStarSystemPanel(customProd);
-    }
 
+    }
+    @Override
+    public void resetCurrentPlugin(ButtonAPI newButton) {
+        super.resetCurrentPlugin(newButton);
+        if(panelMap.get(newButton).getPlugin() instanceof ExtendedUIPanelPlugin plugin){
+            if(panelMap.get(newButton).getPlugin() instanceof StarSystemHoldingsUI)return;
+            plugin.createUI();
+        }
+    }
     private void insertStarSystemPanel(ButtonAPI tiedButton) {
         if (starSystemAndPlanetUI == null) {
             starSystemAndPlanetUI = new StarSystemHoldingsUI(panelForPlugins.getPosition().getWidth()-5, panelForPlugins.getPosition().getHeight(),original);
@@ -159,7 +187,28 @@ public class HoldingsUIPanel extends CommandUIPlugin {
         panelMap.put(tiedButton, starSystemAndPlanetUI.getMainPanel());
     }
 
+    private void insertCommDataPanel(ButtonAPI tiedButton) {
+        if (economyCommodityData == null) {
+            economyCommodityData = new EconomyCommodityData(EconomyTabListener.WIDTH,EconomyTabListener.HEIGHT);
+        }
 
+        panelMap.put(tiedButton, economyCommodityData.getMainPanel());
+    }
+
+    private void insertTradeDataPanel(ButtonAPI tiedButton) {
+        if (economyTradeDealsData == null) {
+            economyTradeDealsData = new EconomyTradeDealsData(EconomyTabListener.WIDTH, EconomyTabListener.HEIGHT);
+        }
+
+        panelMap.put(tiedButton, economyTradeDealsData.getMainPanel());
+    }
+    private void insertFactionIncome(ButtonAPI tiedButton) {
+        if (factionIncome == null) {
+            factionIncome = new EconomyFactionIncome(EconomyTabListener.WIDTH, EconomyTabListener.HEIGHT);
+        }
+
+        panelMap.put(tiedButton,factionIncome.getMainPanel());
+    }
     public void playSound(ButtonAPI button) {
 
     }

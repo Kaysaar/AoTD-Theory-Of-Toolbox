@@ -1,6 +1,7 @@
 package data.kaysaar.aotd.tot.plugins;
 
 
+import ashlib.data.plugins.coreui.CommandTabListener;
 import ashlib.data.plugins.coreui.CommandTabMemoryManager;
 import com.fs.starfarer.api.BaseModPlugin;
 import com.fs.starfarer.api.Global;
@@ -66,7 +67,7 @@ import data.kaysaar.aotd.tot.strings.AoTDTradeTags;
 import data.kaysaar.aotd.tot.ui.core.CommoditiesPanelInjector;
 import data.kaysaar.aotd.tot.ui.core.EconomyTabListener;
 import data.kaysaar.aotd.tot.ui.core.GrandProjectLabelInjector;
-import data.kaysaar.aotd.tot.ui.core.HoldingsTabListener;
+import data.kaysaar.aotd.tot.ui.core.DomainTabListener;
 import exerelin.campaign.submarkets.Nex_BlackMarketPlugin;
 import exerelin.campaign.submarkets.Nex_LocalResourcesSubmarketPlugin;
 import exerelin.campaign.submarkets.Nex_MilitarySubmarketPlugin;
@@ -294,7 +295,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
     public void onGameLoad(boolean newGame) {
         AoTDCommodityEconSpecManager.loadSpecs();
         if(newGame){
-            CommandTabMemoryManager.getInstance().setLastCheckedTab("holdings");
+            CommandTabMemoryManager.getInstance().setLastCheckedTab("domain");
         }
         Global.getSector().getListenerManager().addListener(new AoTDGrandWonderBtnListener(),true);
         Global.getSector().getListenerManager().addListener(new AoTDGrandWonderDecivListener(),true);
@@ -312,8 +313,10 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         Global.getSector().getListenerManager().addListener(new BMOWonderBlockerListener(),true);
         Global.getSector().addTransientScript(new IndustryTooltipPlacer());
         ColonyUIListener.refresh();
-        Global.getSector().getListenerManager().addListener(new EconomyTabListener(),true);
-        Global.getSector().getListenerManager().addListener(new HoldingsTabListener(),true);
+        Global.getSector().getListenerManager().addListener(new DomainTabListener(),true);
+        if(CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("economy")){
+            CommandTabMemoryManager.getInstance().setLastCheckedTab("domain");
+        }
         Global.getSector().getListenerManager().addListener(new AoTDToobloxIndustryListener(), true);
         Global.getSector().addTransientScript(new DelayedActionScript(0.1f) {
             @Override

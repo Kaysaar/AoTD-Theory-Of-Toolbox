@@ -16,9 +16,10 @@ public class HoldingsUtilis {
         ArrayList<StarSystemAPI> systems = new ArrayList<>();
         for (StarSystemAPI starSystem : Global.getSector().getStarSystems()) {
             if (starSystem.getCenter() == null) continue;
-            if (Global.getSector().getEconomy().getMarkets(starSystem.getCenter().getContainingLocation()).stream().anyMatch(x -> x.getFaction() != null && x.getFaction().isPlayerFaction())) {
+            if (Global.getSector().getEconomy().getMarkets(starSystem.getCenter().getContainingLocation()).stream().anyMatch(x -> (x.getFaction() != null && x.getFaction().isPlayerFaction())||x.isPlayerOwned())) {
                 systems.add(starSystem);
             }
+
         }
         return systems;
     }
@@ -27,6 +28,8 @@ public class HoldingsUtilis {
         ArrayList<MarketAPI> systems = new ArrayList<>();
         for (MarketAPI market : Global.getSector().getEconomy().getMarkets(system)) {
             if (market.getFaction() != null && market.getFaction().getId().equals(faction.getId())) {
+                systems.add(market);
+            } else if (faction.isPlayerFaction()&&market.isPlayerOwned()) {
                 systems.add(market);
             }
         }

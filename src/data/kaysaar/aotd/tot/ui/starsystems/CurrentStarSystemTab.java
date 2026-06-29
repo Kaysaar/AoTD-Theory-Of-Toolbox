@@ -4,6 +4,7 @@ import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
 import ashlib.data.plugins.ui.models.resizable.map.MapMainComponent;
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
@@ -46,7 +47,8 @@ public class CurrentStarSystemTab implements ExtendedUIPanelPlugin {
             mapMainComponent = new MapMainComponent(contentPanel.getPosition().getWidth()-5,contentPanel.getPosition().getHeight()*0.4f,currStarSystem);
             TooltipMakerAPI tooltip = contentPanel.createUIElement(mapMainComponent.getMainPanel().getPosition().getWidth(),mapMainComponent.getMainPanel().getPosition().getHeight()+40,false);
             tooltip.setParaFont(Fonts.ORBITRON_20AA);
-            tooltip.addPara(currStarSystem.getName(), Misc.getBasePlayerColor(),0f).setAlignment(Alignment.MID);
+            FactionAPI faction = AshMisc.getClaimingFaction(currStarSystem.getCenter());
+            tooltip.addPara(currStarSystem.getName(), faction.getBaseUIColor(),0f).setAlignment(Alignment.MID);
             tooltip.addCustom(mapMainComponent.getMainPanel(),3f);
             contentPanel.addUIElement(tooltip).inTL(0,0);
             createStarSystemInfoSection();
