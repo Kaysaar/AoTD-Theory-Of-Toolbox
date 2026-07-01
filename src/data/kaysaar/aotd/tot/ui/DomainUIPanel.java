@@ -10,7 +10,9 @@ import com.fs.graphics.util.Fader;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
+import com.fs.starfarer.campaign.econ.reach.MainWorkTask;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
 import data.kaysaar.aotd.tot.ui.core.EconomyTabListener;
 import data.kaysaar.aotd.tot.ui.economy.EconomyCommodityData;
 import data.kaysaar.aotd.tot.ui.economy.EconomyFactionIncome;
@@ -179,7 +181,20 @@ public class DomainUIPanel extends CommandUIPlugin {
         super.resetCurrentPlugin(newButton);
         CommandTabMemoryManager.getInstance().getTabStates().put(getTabStateId(),newButton.getText().toLowerCase());
         if(panelMap.get(newButton).getPlugin() instanceof ExtendedUIPanelPlugin plugin){
-            if(panelMap.get(newButton).getPlugin() instanceof StarSystemHoldingsUI)return;
+            MainWorkTask.EconWorkParams params = new MainWorkTask.EconWorkParams();
+
+            params.withIncomeAndUpkeep = false;
+            params.withStockpileUpdate = true;
+            params.withImmigration = true;
+
+            if(panelMap.get(newButton).getPlugin() instanceof StarSystemHoldingsUI holdingsUI){
+                AoTDEconomy.getInstance().getReachEconomy().nextStepForPlayer(params);
+                holdingsUI.table.dropDownButtons.forEach(x->{
+                    x.resetUI();
+                    x.createUI();
+                });
+                return;
+            }
             plugin.createUI();
         }
     }

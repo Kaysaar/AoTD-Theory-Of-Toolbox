@@ -17,7 +17,7 @@ import java.util.List;
 public class StarSystemHoldingsUI implements ExtendedUIPanelPlugin {
     CustomPanelAPI mainPanel,contentPanel;
 
-    StarSystemHoldingTable table;
+    public StarSystemHoldingTable table;
     CurrentStarSystemTab currSystem;
     Object originalPanel;
     ButtonAPI adminButton;

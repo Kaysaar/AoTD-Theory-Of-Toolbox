@@ -85,6 +85,14 @@ public class StarSystemHoldingDropDown extends DropDownButton {
             }
             mainButton.createUI();
         }
+        else{
+            buttons.forEach(x->{
+                x.clearUI();
+                x.createUI();
+            });
+            mainButton.clearUI();
+            mainButton.createUI();
+        }
         if (!isDropped) {
             tooltipOfImpl.addCustom(mainButton.getPanel(), 5f).getPosition().inTL(0, 0);
         } else {

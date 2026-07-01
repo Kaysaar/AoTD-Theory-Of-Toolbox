@@ -25,6 +25,12 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
         this.economy = economy;
     }
 
+    public void doForPlayerOnly(){
+        AoTDTradeManager.getInstance().getPlayerManager().computeInternalTrade();
+        refreshPlayerContractPredictionsOnMainThread();
+        notifyEconomyListeners();
+
+    }
     @Override
     public void doNextBatch() {
         if (isDone()) return;
