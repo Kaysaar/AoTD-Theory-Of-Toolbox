@@ -31,7 +31,7 @@ public class StarSystemHoldingTable extends UITableImpl {
     static {
         widthMap.put("name", 180);
         widthMap.put("data", 355);
-        widthMap.put("income", 140);
+        widthMap.put("income", 100);
         widthMap.put("admin", 75);
     }
     public static void reDestributeAdditionalWidth(float additionalWidth) {
