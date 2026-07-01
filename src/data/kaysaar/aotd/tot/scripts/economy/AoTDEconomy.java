@@ -47,6 +47,9 @@ public class AoTDEconomy extends Economy {
         }
         return null;
     }
+    public AoTDReachEconomy getReachEconomy(){
+        return (AoTDReachEconomy) getEconomy();
+    }
     public AoTDEconomy(boolean b, Economy currentEconomyToReplace) {
         super(b);
         ArrayList<MarketAPI>current = new ArrayList<>(currentEconomyToReplace.getMarkets());
@@ -63,6 +66,7 @@ public class AoTDEconomy extends Economy {
             initCommodities((Market) market);
         }
     }
+
 
     @Override
     public void nextStep(MainWorkTask.EconWorkParams econWorkParams) {

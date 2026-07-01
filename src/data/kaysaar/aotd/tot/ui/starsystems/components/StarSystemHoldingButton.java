@@ -124,7 +124,7 @@ public class StarSystemHoldingButton extends CustomButton {
             }
             MarketConditionWidget panel = new MarketConditionWidget((width / 2) - 5, height - 10, market);
             ItemWidget itemPanel = new ItemWidget((width / 2) - 5, height - 10, market);
-            tooltipConditions.addCustom(panel.getMainPanel(), 4f);
+            tooltipConditions.addCustom(panel.getMainPanel(), 5f);
             tooltipItems.addCustom(itemPanel.getMainPanel(), 5f);
             float startingX = StarSystemHoldingTable.getStartingX("data");
             container.addUIElement(tooltipConditions).inTL(startingX, 5);
