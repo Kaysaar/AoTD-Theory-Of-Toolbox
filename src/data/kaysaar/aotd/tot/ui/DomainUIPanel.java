@@ -1,5 +1,6 @@
 package data.kaysaar.aotd.tot.ui;
 
+import ashlib.data.plugins.coreui.CommandTabMemoryManager;
 import ashlib.data.plugins.coreui.CommandTabTracker;
 import ashlib.data.plugins.coreui.CommandUIPlugin;
 import ashlib.data.plugins.misc.AshMisc;
@@ -15,6 +16,7 @@ import data.kaysaar.aotd.tot.ui.economy.EconomyCommodityData;
 import data.kaysaar.aotd.tot.ui.economy.EconomyFactionIncome;
 import data.kaysaar.aotd.tot.ui.economy.EconomyTradeDealsData;
 import data.kaysaar.aotd.tot.ui.starsystems.StarSystemHoldingsUI;
+import data.kaysaar.aotd.tot.ui.warehouses.WarehouseSectionUI;
 import org.lwjgl.input.Keyboard;
 
 import java.awt.*;
@@ -27,6 +29,7 @@ public class DomainUIPanel extends CommandUIPlugin {
     EconomyCommodityData economyCommodityData;
     EconomyTradeDealsData economyTradeDealsData;
     EconomyFactionIncome factionIncome;
+    WarehouseSectionUI warehouseSectionUI;
     public static boolean sentSignalForUpdate = false;
 
     public DomainUIPanel(float width, float height) {
@@ -40,7 +43,7 @@ public class DomainUIPanel extends CommandUIPlugin {
 
     @Override
     public boolean doesPlayCustomSoundWhenEnteredEntireTab() {
-        return true;
+        return false;
     }
 
     @Override
@@ -135,11 +138,11 @@ public class DomainUIPanel extends CommandUIPlugin {
     }
 
     public void createButtonsAndMainPanels() {
-        ButtonAPI research, megastructures, customProd, sp;
+        ButtonAPI research, customProd;
         this.buttonPanel = this.mainPanel.createCustomPanel(mainPanel.getPosition().getWidth(), 25, null);
         UILinesRenderer renderer = new UILinesRenderer(0f);
         CustomPanelAPI panelHelper = this.buttonPanel.createCustomPanel(490, 0.5f, renderer);
-        ButtonAPI tradeData, incomeData, commData;
+        ButtonAPI tradeData, commData;
 
         TooltipMakerAPI buttonTooltip = buttonPanel.createUIElement(mainPanel.getPosition().getWidth(), 20, false);
         Color base, bg;
@@ -165,7 +168,7 @@ public class DomainUIPanel extends CommandUIPlugin {
         insertStarSystemPanel(customProd);
         insertCommDataPanel(commData);
         insertTradeDataPanel(tradeData);
-
+        insertWarehouseUI(research);
         buttonPanel.addUIElement(buttonTooltip).inTL(0, 0);
         buttonPanel.addComponent(panelHelper).inTL(0, 20);
         mainPanel.addComponent(buttonPanel).inTL(0, 10);
@@ -174,6 +177,7 @@ public class DomainUIPanel extends CommandUIPlugin {
     @Override
     public void resetCurrentPlugin(ButtonAPI newButton) {
         super.resetCurrentPlugin(newButton);
+        CommandTabMemoryManager.getInstance().getTabStates().put(getTabStateId(),newButton.getText().toLowerCase());
         if(panelMap.get(newButton).getPlugin() instanceof ExtendedUIPanelPlugin plugin){
             if(panelMap.get(newButton).getPlugin() instanceof StarSystemHoldingsUI)return;
             plugin.createUI();
@@ -186,7 +190,13 @@ public class DomainUIPanel extends CommandUIPlugin {
 
         panelMap.put(tiedButton, starSystemAndPlanetUI.getMainPanel());
     }
+    private void insertWarehouseUI(ButtonAPI tiedButton) {
+        if (warehouseSectionUI == null) {
+            warehouseSectionUI = new WarehouseSectionUI(panelForPlugins.getPosition().getWidth()-5, panelForPlugins.getPosition().getHeight());
+        }
 
+        panelMap.put(tiedButton, warehouseSectionUI.getMainPanel());
+    }
     private void insertCommDataPanel(ButtonAPI tiedButton) {
         if (economyCommodityData == null) {
             economyCommodityData = new EconomyCommodityData(EconomyTabListener.WIDTH,EconomyTabListener.HEIGHT);

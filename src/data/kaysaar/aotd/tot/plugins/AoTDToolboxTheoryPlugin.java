@@ -314,7 +314,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         Global.getSector().addTransientScript(new IndustryTooltipPlacer());
         ColonyUIListener.refresh();
         Global.getSector().getListenerManager().addListener(new DomainTabListener(),true);
-        if(CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("economy")){
+        if(CommandTabMemoryManager.getInstance().getLastCheckedTab()!=null &&(CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("economy"))||CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("colonies")){
             CommandTabMemoryManager.getInstance().setLastCheckedTab("domain");
         }
         Global.getSector().getListenerManager().addListener(new AoTDToobloxIndustryListener(), true);
