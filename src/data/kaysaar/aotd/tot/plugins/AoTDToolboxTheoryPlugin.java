@@ -34,6 +34,7 @@ import data.kaysaar.aotd.tot.codex.AoTDToTIndustryEntryCodex;
 import data.kaysaar.aotd.tot.industries.AoTDToolboxPopAndInfra;
 import data.kaysaar.aotd.tot.intel.bar.events.AoTDDeliveryBarEventCreator;
 import data.kaysaar.aotd.tot.listeners.*;
+import data.kaysaar.aotd.tot.produciton.specs.AoTDProductionSpecManager;
 import data.kaysaar.aotd.tot.raids.AoTDStandardGroundRaidObjectivesCreator;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
 import data.kaysaar.aotd.tot.scripts.coreui.IndustryTooltipPlacer;
@@ -120,11 +121,8 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         CivilianSupplyProgram creatorAPI4 = new CivilianSupplyProgram();
         AoTDPlayerContractCreatorManager.addCreator(creatorAPI4.getBaseIdForContract(),creatorAPI4);
 
-
-
-
-
     }
+
 
     public String getIndustryStringBasedOnOrder(int positionOnList, String... ids) {
         if (ids == null || ids.length == 0) return null;
@@ -152,9 +150,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
 
     @Override
     public void onAboutToStartGeneratingCodex() {
-        for (CommoditySpecAPI allCommoditySpec : Global.getSettings().getAllCommoditySpecs()) {
-
-        }
+        AoTDProductionSpecManager.generateSpecsForAllStuff();
         if(Global.getSettings().getGameVersion().contains("0.98a")){
             if(!Global.getSettings().getGameVersion().equals("0.98a-RC8")){
                 throw  new RuntimeException("AoTD Theory of Toolbox: This version of mod for 0.98a game can only be run at exactly 0.98a-RC8 version ");
@@ -314,9 +310,12 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         Global.getSector().addTransientScript(new IndustryTooltipPlacer());
         ColonyUIListener.refresh();
         Global.getSector().getListenerManager().addListener(new DomainTabListener(),true);
-        if(CommandTabMemoryManager.getInstance().getLastCheckedTab()!=null &&(CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("economy"))||CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("colonies")){
-            CommandTabMemoryManager.getInstance().setLastCheckedTab("domain");
+        if(CommandTabMemoryManager.getInstance().getLastCheckedTab()!=null ){
+            if(CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("economy")||CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("colonies")){
+                CommandTabMemoryManager.getInstance().setLastCheckedTab("domain");
+            }
         }
+
         Global.getSector().getListenerManager().addListener(new AoTDToobloxIndustryListener(), true);
         Global.getSector().addTransientScript(new DelayedActionScript(0.1f) {
             @Override
@@ -350,7 +349,6 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         Global.getSector().getListenerManager().addListener(listener,true);
         Global.getSector().getListenerManager().removeListenerOfClass(StandardGroundRaidObjectivesCreator.class);
         Global.getSector().getListenerManager().addListener(new AoTDStandardGroundRaidObjectivesCreator(),true);
-     ;
     }
 
     @Override

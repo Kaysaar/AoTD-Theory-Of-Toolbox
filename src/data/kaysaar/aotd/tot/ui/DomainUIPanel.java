@@ -91,9 +91,7 @@ public class DomainUIPanel extends CommandUIPlugin {
         ;
         panelMap.clear();
         mainPanel.removeComponent(panelForPlugins);
-        if (clearMusic) {
-            pauseSound();
-        }
+
 
     }
 

@@ -23,5 +23,6 @@
     <orderEntry type="library" name="niko_stationAugments" level="project" />
     <orderEntry type="library" name="VideoLib" level="project" />
     <orderEntry type="library" name="HMI" level="project" />
+    <orderEntry type="library" name="Vok" level="project" />
   </component>
 </module>
