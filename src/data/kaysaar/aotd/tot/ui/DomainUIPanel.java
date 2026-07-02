@@ -179,12 +179,9 @@ public class DomainUIPanel extends CommandUIPlugin {
         super.resetCurrentPlugin(newButton);
         CommandTabMemoryManager.getInstance().getTabStates().put(getTabStateId(),newButton.getText().toLowerCase());
         if(panelMap.get(newButton).getPlugin() instanceof ExtendedUIPanelPlugin plugin){
-            MainWorkTask.EconWorkParams params = new MainWorkTask.EconWorkParams();
-            params.withIncomeAndUpkeep = false;
-            params.withStockpileUpdate = true;
-            params.withImmigration = true;
+
             if(panelMap.get(newButton).getPlugin() instanceof StarSystemHoldingsUI holdingsUI){
-                AoTDEconomy.getInstance().getReachEconomy().nextStepForPlayer(params);
+
                 holdingsUI.table.dropDownButtons.forEach(x->{
                     x.resetUI();
                     x.createUI();

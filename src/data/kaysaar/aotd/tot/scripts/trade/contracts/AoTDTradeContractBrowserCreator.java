@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/contracts/AoTDTradeContractBrowserCreator.java
+
 package data.kaysaar.aotd.tot.scripts.trade.contracts;
 
 import com.fs.starfarer.api.Global;
