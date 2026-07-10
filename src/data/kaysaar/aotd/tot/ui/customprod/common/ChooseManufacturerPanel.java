@@ -8,12 +8,10 @@ import com.fs.starfarer.api.ui.CustomPanelAPI;
 import com.fs.starfarer.api.ui.PositionAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.ui.RowData;
 import data.kaysaar.aotd.tot.ui.UIData;
-import data.ui.patrolfleet.templates.shiplist.components.RowData;
 
 import java.util.*;
-
-import static data.ui.patrolfleet.templates.shiplist.components.BaseOptionPanelManager.extractManufacturer;
 
 
 public class ChooseManufacturerPanel implements ExtendedUIPanelPlugin {
@@ -45,7 +43,31 @@ public class ChooseManufacturerPanel implements ExtendedUIPanelPlugin {
     public CustomPanelAPI getMainPanel() {
         return mainPanel;
     }
+    public static String extractManufacturer(String input) {
+        String[] parts = input.split("\\(");
+        StringBuilder result = new StringBuilder(parts[0].trim());
 
+        // List to store extracted sections
+        ArrayList<String> extractedParts = new ArrayList<>();
+
+        // Process all sections inside parentheses
+        for (int i = 1; i < parts.length; i++) {
+            String section = parts[i].replace(")", "").trim();
+            extractedParts.add(section);
+        }
+
+        // Check the last section; remove it if it's purely numeric
+        if (!extractedParts.isEmpty() && extractedParts.get(extractedParts.size() - 1).matches("\\d+")) {
+            extractedParts.remove(extractedParts.size() - 1);
+        }
+
+        // Rebuild the string with valid sections
+        for (String part : extractedParts) {
+            result.append(" (").append(part).append(")");
+        }
+
+        return result.toString();
+    }
     @Override
     public void createUI() {
         buttons.clear();

@@ -102,7 +102,7 @@ public class AoTDFactionTradeData {
 
         int cycle = startingCycle;
         int month = startingMonth;
-        if(startingMonth==0){
+        if(startingMonth<=0){
             cycle--;
             month=12;
         }
@@ -140,7 +140,7 @@ public class AoTDFactionTradeData {
 
         int cycle = startingCycle;
         int month = startingMonth;
-        if(startingMonth==0){
+        if(startingMonth<=0){
             cycle--;
             month=12;
         }

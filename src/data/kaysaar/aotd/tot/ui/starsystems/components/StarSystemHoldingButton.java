@@ -60,7 +60,16 @@ public class StarSystemHoldingButton extends CustomButton {
     public void createContainerContent(CustomPanelAPI container) {
 
         if (buttonData instanceof StarSystemAPI system) {
-            EntityWithNameComponent component = new EntityWithNameComponent(system.getCenter(), true, StarSystemHoldingTable.widthMap.get("name"), 50);
+            SectorEntityToken center = system.getCenter();
+            SectorEntityToken star = system.getStar();
+            EntityWithNameComponent component = null;
+            if(star!=null){
+                component = new EntityWithNameComponent(star, true, StarSystemHoldingTable.widthMap.get("name"), 50);
+            }
+            else{
+                component = new EntityWithNameComponent(center, true, StarSystemHoldingTable.widthMap.get("name"), 50);
+
+            }
             component.createUI();
             container.addComponent(component.getMainPanel()).inTL(-indent, 8);
 

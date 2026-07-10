@@ -160,7 +160,7 @@ public class DomainUIPanel extends CommandUIPlugin {
         customProd.setShortcut(Keyboard.KEY_R, false);
         customProd.getPosition().inTL(0, 0);
 
-        research.setShortcut(Keyboard.KEY_R, false);
+        research.setShortcut(Keyboard.KEY_U, false);
         research.getPosition().rightOfMid(customProd,1);
         commData.getPosition().rightOfMid(research,1);
         tradeData.getPosition().rightOfMid(commData,1);

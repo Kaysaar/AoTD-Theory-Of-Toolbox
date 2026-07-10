@@ -14,7 +14,6 @@ import com.fs.starfarer.ui.impl.CargoTooltipFactory;
 import com.fs.starfarer.ui.impl.StandardTooltipV2;
 import com.fs.starfarer.ui.impl.StandardTooltipV2Expandable;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
-import data.ui.patrolfleet.templates.shiplist.components.RowData;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
