@@ -34,7 +34,9 @@ public class ProductionBrowserSection implements ExtendedUIPanelPlugin {
     protected ChooseManufacturerPanel chooseManufacturerPanel;
     protected ChooseSizePanel chooseSizePanel;
     protected ChooseTypeInfo chooseTypeInfo;
-
+    protected LinkedHashMap<String,Integer>sizes = new LinkedHashMap<>();
+    protected LinkedHashMap<String,Integer>types = new LinkedHashMap<>();
+    protected LinkedHashMap<String,Integer> manus = new LinkedHashMap<>();
     protected CustomPanelAPI mainPanel;
     protected CustomPanelAPI contentPanel;
 
@@ -317,7 +319,7 @@ public class ProductionBrowserSection implements ExtendedUIPanelPlugin {
 
         AoTDProductionUIData.populateByType(prodType);
 
-        createFilterPanels();
+
 
         float remHeight = contentPanel.getPosition().getHeight() - 64 - tl.getPosition().getHeight() - 30 - 20;
         float heightOfManus = getManufacturerPanelHeight();
@@ -340,13 +342,25 @@ public class ProductionBrowserSection implements ExtendedUIPanelPlugin {
         }
 
         list.getButtonsStorage().forEach(x -> x.setListener(createListenerForButton(x)));
+        list.getButtonsStorage().forEach(x -> {
+            manus.merge(x.getSpec().getManufacturer(), 1, Integer::sum);
+            manus.merge("All Designs", 1, Integer::sum);
 
+            sizes.merge(x.getSpec().getSize(), 1, Integer::sum);
+            sizes.merge("All Sizes", 1, Integer::sum);
+
+            types.merge(x.getSpec().getTypeString(), 1, Integer::sum);
+            types.merge("All Types", 1, Integer::sum);
+        });
+        manus = AshMisc.sortByValueDescending(manus);
+        sizes = AshMisc.sortByValueDescending(sizes);
+        types = AshMisc.sortByValueDescending(types);
 
         list.createUI();
         contentPanel.addComponent(list.getMainPanel()).inTL(-5, 50);
 
         createManufacturerPanel(sectionsHeight, heightOfManus);
-
+        createFilterPanels();
         mainPanel.addComponent(contentPanel).inTL(0, 0);
     }
 
@@ -354,7 +368,7 @@ public class ProductionBrowserSection implements ExtendedUIPanelPlugin {
         if (shouldShowTypeChooser()) {
             chooseTypeInfo = new ChooseTypeInfo(
                     contentPanel.getPosition().getWidth(),
-                    AoTDProductionUIData.getTypeInfoBasedOnType(prodType)
+                    types
             );
             contentPanel.addComponent(chooseTypeInfo.getMainPanel())
                     .inTL(
@@ -369,7 +383,7 @@ public class ProductionBrowserSection implements ExtendedUIPanelPlugin {
         if (shouldShowSizeChooser()) {
             chooseSizePanel = new ChooseSizePanel(
                     contentPanel.getPosition().getWidth(),
-                    AoTDProductionUIData.getSizeInfoBasedOnType(prodType)
+                    sizes
             );
             contentPanel.addComponent(chooseSizePanel.getMainPanel())
                     .inTL(
@@ -384,7 +398,7 @@ public class ProductionBrowserSection implements ExtendedUIPanelPlugin {
         chooseManufacturerPanel = new ChooseManufacturerPanel(
                 contentPanel.getPosition().getWidth(),
                 heightOfManus,
-                AoTDProductionUIData.getManInfoBasedOnType(prodType)
+                manus
         );
 
         contentPanel.addComponent(chooseManufacturerPanel.getMainPanel())
@@ -604,6 +618,9 @@ public class ProductionBrowserSection implements ExtendedUIPanelPlugin {
             list.clearUI();
             list = null;
         }
+        sizes.clear();
+        manus.clear();
+        types.clear();
 
         resetHeaderButtons();
         columnLayout = null;
