@@ -43,6 +43,9 @@ public class CommodityAmountSection implements ExtendedUIPanelPlugin {
         else{
             this.maxNumber = 10;
             perSegment = Math.floorDiv(maxNumber,10);
+            if (perSegment<=0) {
+                perSegment = 1;
+            }
             this.currSegment = currNumber/perSegment;
             if(this.currSegment>=this.maxNumber){
                 this.currSegment=this.maxNumber;
