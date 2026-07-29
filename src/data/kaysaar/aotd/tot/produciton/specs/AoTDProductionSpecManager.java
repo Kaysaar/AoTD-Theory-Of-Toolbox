@@ -88,7 +88,7 @@ public class AoTDProductionSpecManager {
         for (ShipHullSpecAPI allShipHullSpec : Global.getSettings().getAllShipHullSpecs()) {
             if (allShipHullSpec.getHints().contains(ShipHullSpecAPI.ShipTypeHints.STATION)) continue;
             if (allShipHullSpec.getHints().contains(ShipHullSpecAPI.ShipTypeHints.MODULE)) continue;
-            if (allShipHullSpec.getHints().contains(ShipHullSpecAPI.ShipTypeHints.UNBOARDABLE)) continue;
+//            if (allShipHullSpec.getHints().contains(ShipHullSpecAPI.ShipTypeHints.UNBOARDABLE)) continue; // Made automated ships disappear from production
             if (allShipHullSpec.getHints().contains(ShipHullSpecAPI.ShipTypeHints.UNDER_PARENT)) continue;
             if (allShipHullSpec.getHullSize().equals(ShipAPI.HullSize.FIGHTER)) continue;
             if (allShipHullSpec.hasTag(Tags.MODULE_HULL_BAR_ONLY)) continue;
