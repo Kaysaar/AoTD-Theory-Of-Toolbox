@@ -34,7 +34,9 @@ public class AoTDToolboxFoodProdCanceler extends BaseMarketConditionPlugin {
         }
 
         if((Global.LOADING_SAVE&&AoTDToolboxTheoryPlugin.afterSaveState)||runningPrePlayerEconomy){
-            pruneCommoditiesThatMightAppear((Market) market);
+            if (market instanceof Market) {
+                pruneCommoditiesThatMightAppear((Market) market);
+            }
         }
         for (Industry industry : market.getIndustries()) {
             industry.getSupply(Commodities.FOOD).getQuantity().unmodify(prodId);
