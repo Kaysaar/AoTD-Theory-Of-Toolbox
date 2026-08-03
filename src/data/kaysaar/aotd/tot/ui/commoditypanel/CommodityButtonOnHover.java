@@ -85,7 +85,7 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
             int unknown = 0;
             for (Industry industry : market.getIndustries()) {
                 int raw = com.getSupplyDemandData().getRawSupplyFromIndustry(industry);
-                if(industry.isHidden()){
+                if(industry.isHidden()&&!industry.getSpec().hasTag("aotd_show_in_commodity_even_hidden")){
                     unknown+=raw;
                     continue;
                 }
@@ -121,7 +121,7 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
             tooltip.setBulletedListMode(BaseIntelPlugin.BULLET);
             for (Industry industry : market.getIndustries()) {
                 int raw = com.getSupplyDemandData().getRawDemandFromIndustry(industry);
-                if(industry.isHidden()){
+                if(industry.isHidden()&&!industry.getSpec().hasTag("aotd_show_in_commodity_even_hidden")){
                     unknown+=raw;
                     continue;
                 }
