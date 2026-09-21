@@ -37,6 +37,33 @@ public class ReflectionUtilis {
     private static final Class<?> fileReaderClass;
     private static final Class<?> bufferedReaderClass;
     private static final Class<?> readerClass;
+    private static final Class<?> inputStreamClass;
+    private static final Class<?> inputStreamReaderClass;
+    private static final Class<?> outputStreamClass;
+    private static final Class<?> urlClass;
+    private static final Class<?> urlConnectionClass;
+    private static final Class<?> httpURLConnectionClass;
+
+    private static final MethodHandle urlCtorHandle;
+    private static final MethodHandle urlOpenConnectionHandle;
+    private static final MethodHandle urlConnectionSetConnectTimeoutHandle;
+    private static final MethodHandle urlConnectionSetReadTimeoutHandle;
+    private static final MethodHandle urlConnectionSetDoOutputHandle;
+    private static final MethodHandle urlConnectionSetUseCachesHandle;
+    private static final MethodHandle urlConnectionSetRequestPropertyHandle;
+    private static final MethodHandle urlConnectionGetOutputStreamHandle;
+    private static final MethodHandle urlConnectionGetInputStreamHandle;
+    private static final MethodHandle httpURLConnectionSetRequestMethodHandle;
+    private static final MethodHandle httpURLConnectionGetResponseCodeHandle;
+    private static final MethodHandle httpURLConnectionGetErrorStreamHandle;
+    private static final MethodHandle httpURLConnectionDisconnectHandle;
+    private static final MethodHandle outputStreamWriteHandle;
+    private static final MethodHandle outputStreamFlushHandle;
+    private static final MethodHandle outputStreamCloseHandle;
+    private static final MethodHandle inputStreamCloseHandle;
+    private static final MethodHandle inputStreamReaderCtorHandle;
+    private static final MethodHandle bufferedReaderReadLineHandle;
+
     private static final MethodHandle fileGetParentFileHandle;
     private static final MethodHandle fileGetNameHandle;
     private static final MethodHandle fileCtorParentChildHandle;
@@ -66,6 +93,127 @@ public class ReflectionUtilis {
             fileReaderClass = Class.forName("java.io.FileReader", false, Class.class.getClassLoader());
             bufferedReaderClass = Class.forName("java.io.BufferedReader", false, Class.class.getClassLoader());
             readerClass = Class.forName("java.io.Reader", false, Class.class.getClassLoader());
+
+            inputStreamClass = Class.forName("java.io.InputStream", false, Class.class.getClassLoader());
+            inputStreamReaderClass = Class.forName("java.io.InputStreamReader", false, Class.class.getClassLoader());
+            outputStreamClass = Class.forName("java.io.OutputStream", false, Class.class.getClassLoader());
+
+            urlClass = Class.forName("java.net.URL", false, Class.class.getClassLoader());
+            urlConnectionClass = Class.forName("java.net.URLConnection", false, Class.class.getClassLoader());
+            httpURLConnectionClass = Class.forName("java.net.HttpURLConnection", false, Class.class.getClassLoader());
+
+            urlCtorHandle = lookup.findConstructor(
+                    urlClass,
+                    MethodType.methodType(Void.TYPE, String.class)
+            );
+
+            urlOpenConnectionHandle = lookup.findVirtual(
+                    urlClass,
+                    "openConnection",
+                    MethodType.methodType(urlConnectionClass)
+            );
+
+            urlConnectionSetConnectTimeoutHandle = lookup.findVirtual(
+                    urlConnectionClass,
+                    "setConnectTimeout",
+                    MethodType.methodType(Void.TYPE, int.class)
+            );
+
+            urlConnectionSetReadTimeoutHandle = lookup.findVirtual(
+                    urlConnectionClass,
+                    "setReadTimeout",
+                    MethodType.methodType(Void.TYPE, int.class)
+            );
+
+            urlConnectionSetDoOutputHandle = lookup.findVirtual(
+                    urlConnectionClass,
+                    "setDoOutput",
+                    MethodType.methodType(Void.TYPE, boolean.class)
+            );
+
+            urlConnectionSetUseCachesHandle = lookup.findVirtual(
+                    urlConnectionClass,
+                    "setUseCaches",
+                    MethodType.methodType(Void.TYPE, boolean.class)
+            );
+
+            urlConnectionSetRequestPropertyHandle = lookup.findVirtual(
+                    urlConnectionClass,
+                    "setRequestProperty",
+                    MethodType.methodType(Void.TYPE, String.class, String.class)
+            );
+
+            urlConnectionGetOutputStreamHandle = lookup.findVirtual(
+                    urlConnectionClass,
+                    "getOutputStream",
+                    MethodType.methodType(outputStreamClass)
+            );
+
+            urlConnectionGetInputStreamHandle = lookup.findVirtual(
+                    urlConnectionClass,
+                    "getInputStream",
+                    MethodType.methodType(inputStreamClass)
+            );
+
+            httpURLConnectionSetRequestMethodHandle = lookup.findVirtual(
+                    httpURLConnectionClass,
+                    "setRequestMethod",
+                    MethodType.methodType(Void.TYPE, String.class)
+            );
+
+            httpURLConnectionGetResponseCodeHandle = lookup.findVirtual(
+                    httpURLConnectionClass,
+                    "getResponseCode",
+                    MethodType.methodType(int.class)
+            );
+
+            httpURLConnectionGetErrorStreamHandle = lookup.findVirtual(
+                    httpURLConnectionClass,
+                    "getErrorStream",
+                    MethodType.methodType(inputStreamClass)
+            );
+
+            httpURLConnectionDisconnectHandle = lookup.findVirtual(
+                    httpURLConnectionClass,
+                    "disconnect",
+                    MethodType.methodType(Void.TYPE)
+            );
+
+            outputStreamWriteHandle = lookup.findVirtual(
+                    outputStreamClass,
+                    "write",
+                    MethodType.methodType(Void.TYPE, byte[].class)
+            );
+
+            outputStreamFlushHandle = lookup.findVirtual(
+                    outputStreamClass,
+                    "flush",
+                    MethodType.methodType(Void.TYPE)
+            );
+
+            outputStreamCloseHandle = lookup.findVirtual(
+                    outputStreamClass,
+                    "close",
+                    MethodType.methodType(Void.TYPE)
+            );
+
+            inputStreamCloseHandle = lookup.findVirtual(
+                    inputStreamClass,
+                    "close",
+                    MethodType.methodType(Void.TYPE)
+            );
+
+            inputStreamReaderCtorHandle = lookup.findConstructor(
+                    inputStreamReaderClass,
+                    MethodType.methodType(Void.TYPE, inputStreamClass)
+            );
+
+            bufferedReaderReadLineHandle = lookup.findVirtual(
+                    bufferedReaderClass,
+                    "readLine",
+                    MethodType.methodType(String.class)
+            );
+
             fileGetParentFileHandle = lookup.findVirtual(
                     fileclass, "getParentFile",
                     MethodType.methodType(fileclass)
@@ -124,7 +272,7 @@ public class ReflectionUtilis {
     }
     public static boolean moveFileOneLevelUp(String absolutePath) {
         try {
-            // src: /mods/yourMod/graphics/cursors/stuff/foo.png
+
             Object src = getFile(absolutePath);
 
             // parent: /mods/yourMod/graphics/cursors/stuff
@@ -443,6 +591,185 @@ public class ReflectionUtilis {
             return ctor.invoke(reader);
         } catch (Throwable e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    public static String httpPostJson(
+            String urlString,
+            String json,
+            int connectTimeoutMs,
+            int readTimeoutMs
+    ) {
+        Object connection = null;
+        Object outputStream = null;
+        Object inputStream = null;
+        Object inputStreamReader = null;
+        Object bufferedReader = null;
+
+        try {
+            Object url = urlCtorHandle.invoke(urlString);
+
+            connection = urlOpenConnectionHandle.invoke(url);
+
+            if (!httpURLConnectionClass.isInstance(connection)) {
+                throw new IllegalStateException(
+                        "Connection is not HttpURLConnection: "
+                                + connection.getClass().getName()
+                );
+            }
+
+            urlConnectionSetConnectTimeoutHandle.invoke(
+                    connection,
+                    connectTimeoutMs
+            );
+
+            urlConnectionSetReadTimeoutHandle.invoke(
+                    connection,
+                    readTimeoutMs
+            );
+
+            urlConnectionSetDoOutputHandle.invoke(
+                    connection,
+                    true
+            );
+
+            urlConnectionSetUseCachesHandle.invoke(
+                    connection,
+                    false
+            );
+
+            urlConnectionSetRequestPropertyHandle.invoke(
+                    connection,
+                    "Content-Type",
+                    "application/json; charset=UTF-8"
+            );
+
+            urlConnectionSetRequestPropertyHandle.invoke(
+                    connection,
+                    "Accept",
+                    "application/json"
+            );
+
+            httpURLConnectionSetRequestMethodHandle.invoke(
+                    connection,
+                    "POST"
+            );
+
+            outputStream = urlConnectionGetOutputStreamHandle.invoke(
+                    connection
+            );
+
+            byte[] payload = json == null
+                    ? new byte[0]
+                    : json.getBytes("UTF-8");
+
+            outputStreamWriteHandle.invoke(
+                    outputStream,
+                    payload
+            );
+
+            outputStreamFlushHandle.invoke(
+                    outputStream
+            );
+
+            outputStreamCloseHandle.invoke(
+                    outputStream
+            );
+
+            outputStream = null;
+
+            int responseCode =
+                    (int) httpURLConnectionGetResponseCodeHandle.invoke(
+                            connection
+                    );
+
+            if (responseCode >= 200 && responseCode < 300) {
+                inputStream =
+                        urlConnectionGetInputStreamHandle.invoke(
+                                connection
+                        );
+            } else {
+                inputStream =
+                        httpURLConnectionGetErrorStreamHandle.invoke(
+                                connection
+                        );
+            }
+
+            StringBuilder response =
+                    new StringBuilder();
+
+            if (inputStream != null) {
+                inputStreamReader =
+                        inputStreamReaderCtorHandle.invoke(
+                                inputStream
+                        );
+
+                bufferedReader =
+                        getBufferedReader(
+                                inputStreamReader
+                        );
+
+                while (true) {
+                    String line =
+                            (String) bufferedReaderReadLineHandle.invoke(
+                                    bufferedReader
+                            );
+
+                    if (line == null) break;
+
+                    response.append(line);
+                }
+            }
+
+            if (responseCode < 200 || responseCode >= 300) {
+                throw new RuntimeException(
+                        "HTTP "
+                                + responseCode
+                                + ": "
+                                + response
+                );
+            }
+
+            return response.toString();
+
+        } catch (Throwable e) {
+            if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
+            }
+
+            throw new RuntimeException(e);
+
+        } finally {
+            closeQuiet(bufferedReader);
+            closeQuiet(inputStreamReader);
+
+            if (inputStream != null) {
+                try {
+                    inputStreamCloseHandle.invoke(
+                            inputStream
+                    );
+                } catch (Throwable ignored) {
+                }
+            }
+
+            if (outputStream != null) {
+                try {
+                    outputStreamCloseHandle.invoke(
+                            outputStream
+                    );
+                } catch (Throwable ignored) {
+                }
+            }
+
+            if (connection != null
+                    && httpURLConnectionClass.isInstance(connection)) {
+                try {
+                    httpURLConnectionDisconnectHandle.invoke(
+                            connection
+                    );
+                } catch (Throwable ignored) {
+                }
+            }
         }
     }
 

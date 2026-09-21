@@ -10,7 +10,6 @@ import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDIndustryData;
 import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -159,12 +158,7 @@ public class AoTDSupplyDemandData {
     public int getAvailableOnThisMarket(float cargo, MarketAPI market, String commodityId) {
         int available = 0;
         float remainingCargo = cargo;
-        for (Industry industry : market.getIndustries().stream().filter(x -> !AoTDIndustryData.getInstance(x.getMarket()).isPending(x.getId())).sorted(new Comparator<Industry>() {
-            @Override
-            public int compare(Industry o1, Industry o2) {
-                return Integer.compare(o1.getSpec().getOrder(), o2.getSpec().getOrder());
-            }
-        }).toList()) {
+        for (Industry industry : AoTDIndustryData.getInstance(market).getActiveIndustriesInOrder(market)) {
 
             if (remainingCargo < 1) break;
             float raw = getEconSpec().getCalculationScript().getRawUnitsFromDemand(industry.getDemand(commodityId).getQuantity(), market, commodityId, industry);

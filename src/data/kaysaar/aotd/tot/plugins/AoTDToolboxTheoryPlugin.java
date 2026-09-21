@@ -11,6 +11,7 @@ import com.fs.starfarer.api.impl.SharedUnlockData;
 import com.fs.starfarer.api.impl.campaign.fleets.EconomyFleetRouteManager;
 import com.fs.starfarer.api.impl.campaign.graid.StandardGroundRaidObjectivesCreator;
 import com.fs.starfarer.api.impl.campaign.ids.Commodities;
+import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.api.impl.campaign.ids.Industries;
 import com.fs.starfarer.api.impl.campaign.ids.Tags;
 import com.fs.starfarer.api.impl.campaign.intel.bar.events.BarEventManager;
@@ -156,6 +157,9 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
                 throw  new RuntimeException("AoTD Theory of Toolbox: This version of mod for 0.98a game can only be run at exactly 0.98a-RC8 version ");
             }
             MarketAPI test = Global.getFactory().createMarket("test","test",3);
+            for (CommoditySpecAPI allCommoditySpec : Global.getSettings().getAllCommoditySpecs()) {
+                test.getCommodityData(allCommoditySpec.getId()).getAvailableStat().modifyFlat("test",1090000);
+            }
             test.addIndustry(Industries.HEAVYBATTERIES);
             test.addIndustry(Industries.REFINING);
 
@@ -292,6 +296,11 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         AoTDCommodityEconSpecManager.loadSpecs();
         if(newGame){
             CommandTabMemoryManager.getInstance().setLastCheckedTab("domain");
+
+        }
+        MarketAPI market = Global.getSector().getEconomy().getMarket("sindria");
+        if(market!=null&&market.getFaction().getId().equals(Factions.DIKTAT)&&!market.hasCondition("aotd_sindira_fuel_booster")){
+            market.addCondition("aotd_sindira_fuel_booster");
         }
         Global.getSector().getListenerManager().addListener(new AoTDGrandWonderBtnListener(),true);
         Global.getSector().getListenerManager().addListener(new AoTDGrandWonderDecivListener(),true);

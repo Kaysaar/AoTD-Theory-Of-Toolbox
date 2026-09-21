@@ -17,6 +17,31 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
     private ArrayList<Future<?>> internalTradeFutures = new ArrayList<>();
 
     private boolean done = false;
+    private transient boolean synchronousWait;
+
+    /** UI caller: join workers instead of repeatedly polling isDone in a tight loop. */
+    public void runSynchronously() {
+        synchronousWait = true;
+        try {
+            while (!isDone()) doNextBatch();
+        } finally {
+            synchronousWait = false;
+        }
+    }
+
+    private void joinInternalTradeWorkers() {
+        for (Future<?> future : internalTradeFutures) {
+            if (future == null) continue;
+            try {
+                future.get();
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("AoTD UI economy update interrupted", ex);
+            } catch (java.util.concurrent.ExecutionException ex) {
+                throw new IllegalStateException("AoTD internal trade worker failed", ex.getCause());
+            }
+        }
+    }
     private boolean workersSubmitted = false;
     private boolean workersFinished = false;
 
@@ -26,7 +51,7 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
     }
 
     public void doForPlayerOnly(){
-        AoTDTradeManager.getInstance().getPlayerManager().computeInternalTrade();
+        AoTDTradeManager.getInstance().getPlayerManager().computeInternalTrade(false);
         refreshPlayerContractPredictionsOnMainThread();
         notifyEconomyListeners();
 
@@ -44,9 +69,11 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
     }
 
     private void doSequential() {
+        final java.util.Map<String, com.fs.starfarer.api.campaign.econ.MarketAPI> marketIndex =
+                AoTDFactionTradeData.snapshotMarketsById();
         for (AoTDFactionTradeData value : getFactionTradeDataSnapshot()) {
             if (value == null) continue;
-            value.computeInternalTrade(true);
+            value.computeInternalTrade(true, marketIndex);
         }
 
         notifyEconomyListeners();
@@ -62,6 +89,7 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
         }
 
         if (!workersFinished) {
+            if (synchronousWait) joinInternalTradeWorkers();
             if (!areInternalTradeWorkersDone()) {
                 return;
             }
@@ -75,13 +103,16 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
 
     private void submitInternalTradeWorkers() {
         internalTradeFutures.clear();
+        // Build once on the submitting thread, then share the immutable index.
+        final java.util.Map<String, com.fs.starfarer.api.campaign.econ.MarketAPI> marketIndex =
+                AoTDFactionTradeData.snapshotMarketsById();
 
         for (AoTDFactionTradeData value : getFactionTradeDataSnapshot()) {
             if (value == null) continue;
 
             final Future<?> future = AoTDWorkerManager.submit("AoTD internal trade", () -> {
                 AoTDWorkerManager.checkpoint();
-                value.computeInternalTrade(false);
+                value.computeInternalTrade(false, marketIndex);
                 AoTDWorkerManager.checkpoint();
             });
 
@@ -117,10 +148,15 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
     }
 
     private void notifyEconomyListeners() {
-        final List<EconomyAPI.EconomyUpdateListener> listeners = economy.getUpdateListeners();
-
-        listeners.removeIf(l -> l == null || l.isEconomyListenerExpired());
-        listeners.forEach(EconomyUpdateListener::economyUpdated);
+        final List<EconomyAPI.EconomyUpdateListener> listeners =
+                new ArrayList<>(economy.getUpdateListeners());
+        for (EconomyUpdateListener listener : listeners) {
+            if (listener == null || listener.isEconomyListenerExpired()) {
+                economy.removeUpdateListener(listener);
+            } else {
+                listener.economyUpdated();
+            }
+        }
     }
 
     @Override
