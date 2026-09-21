@@ -374,52 +374,51 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         }
     }
 
+    private List<CommoditySpecAPI> buildPriceWorkerSpecs() {
+        // Match updateStockpileAndPriceOnce: first eligible spec per demand class,
+        // in the existing sorted commodity order. Resolve specs on the main thread.
+        Set<String> demandClasses = new LinkedHashSet<>();
+        List<CommoditySpecAPI> specs = new ArrayList<>();
+        for (String commodityId : aotdCommodities) {
+            CommoditySpecAPI spec = Global.getSettings().getCommoditySpec(commodityId);
+            if (spec == null || spec.hasTag("nonecon")) continue;
+            String demandClass = spec.getDemandClass();
+            if (demandClass != null && demandClasses.add(demandClass)) specs.add(spec);
+        }
+        // Immutable list, not a deep snapshot of the game's specification objects.
+        return java.util.Collections.unmodifiableList(specs);
+    }
+
     private void submitMarketPriceWorkers() {
         ensureRuntimeCollections();
-
         mtFutures.clear();
+        if (aotdParams == null || !aotdParams.withStockpileUpdate) return;
 
-        if (aotdParams == null || !aotdParams.withStockpileUpdate) {
-            return;
-        }
-
+        final List<CommoditySpecAPI> priceSpecs = buildPriceWorkerSpecs();
+        if (priceSpecs.isEmpty()) return;
         for (MarketAPI market : marketsForCurrentMode) {
-            if (!(market instanceof Market)) {
-                continue;
-            }
-
-            Market vanillaMarket = (Market) market;
-
+            if (!(market instanceof Market)) continue;
+            final Market vanillaMarket = (Market) market;
             Future<?> future = AoTDWorkerManager.submit(
                     "AoTD price recalculation: " + market.getId(),
-                    () -> runMarketPriceWorker(vanillaMarket)
+                    () -> runMarketPriceWorker(vanillaMarket, priceSpecs)
             );
-
             mtFutures.add(future);
         }
     }
 
-    private void runMarketPriceWorker(Market market) {
-
-        for (String commodityId : aotdCommodities) {
+    private void runMarketPriceWorker(Market market, List<CommoditySpecAPI> priceSpecs) {
+        for (CommoditySpecAPI commoditySpec : priceSpecs) {
             AoTDWorkerManager.checkpoint();
-
-            CommoditySpecAPI commoditySpec = Global.getSettings().getCommoditySpec(commodityId);
-            if (commoditySpec == null || commoditySpec.hasTag("nonecon")) {
-                continue;
-            }
-
             try {
                 updateStockpileAndPriceOnce(market, commoditySpec);
             } catch (Throwable ex) {
                 Global.getLogger(AoTdMainWorkTask2.class).warn(
-                        "AoTD price worker failed for commodity " + commodityId +
-                                " on market " + market.getId() + ". Skipping.",
-                        ex
+                        "AoTD price worker failed for commodity " + commoditySpec.getId() +
+                                " on market " + market.getId() + ". Skipping.", ex
                 );
             }
         }
-
         AoTDWorkerManager.checkpoint();
     }
 

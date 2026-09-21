@@ -87,10 +87,8 @@ public class AoTDReachEconomy extends ReachEconomy {
             }
         }
 
-        final FinishEconomyUpdateTask finishUpdateTask = new AoTDFinishEconomyUpdateTask((Economy) Global.getSector().getEconomy());
-        while (!finishUpdateTask.isDone()) {
-            finishUpdateTask.doNextBatch();
-        }
+        final AoTDFinishEconomyUpdateTask finishUpdateTask = new AoTDFinishEconomyUpdateTask((Economy) Global.getSector().getEconomy());
+        finishUpdateTask.runSynchronously();
     }
 
     @Override

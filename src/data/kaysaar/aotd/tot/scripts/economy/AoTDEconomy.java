@@ -13,48 +13,55 @@ import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDMarketDemandData;
 import data.kaysaar.aotd.tot.scripts.trade.models.AoTDFactionTradeData;
 import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
+import org.apache.log4j.Logger;
 
 import java.util.*;
 
 public class AoTDEconomy extends Economy {
     public static boolean runningPrePlayerEconomy = false;
     public static boolean mustPruneCommodities = true;
-    public static AoTDEconomy getInstance(){
-        if(Global.getSector().getEconomy() instanceof AoTDEconomy){
-            return (AoTDEconomy)Global.getSector().getEconomy();
+    public static final Logger log = Global.getLogger(AoTDEconomy.class);
+
+    public static AoTDEconomy getInstance() {
+        if (Global.getSector().getEconomy() instanceof AoTDEconomy) {
+            return (AoTDEconomy) Global.getSector().getEconomy();
         }
         return null;
     }
-    public void doEconomyStepOnNewGameLoad(){
+
+    public void doEconomyStepOnNewGameLoad() {
         AoTDEconomyReachStepper stepper = (AoTDEconomyReachStepper) getStepper();
         stepper.doEconomyTick();
         for (MarketAPI market : getMarkets()) {
             AoTDIndustryData data = AoTDIndustryData.getInstance(market);
             data.applyEndOfMonthChange(market);
             for (CommodityOnMarketAPI allCommodity : market.getAllCommodities()) {
-                if(allCommodity instanceof AoTDCommodityOnMarket commodity){
+                if (allCommodity instanceof AoTDCommodityOnMarket commodity) {
                     commodity.getExcDefData().applyDeficitDueToSuddenChangeOfDemand(commodity);
                 }
             }
         }
 
     }
-    public MarketAPI getMarketThreadSave(String id){
+
+    public MarketAPI getMarketThreadSave(String id) {
         for (MarketAPI market : getMarkets()) {
-            if(market.getId().equals(id)){
+            if (market.getId().equals(id)) {
                 return market;
             }
         }
         return null;
     }
-    public AoTDReachEconomy getReachEconomy(){
+
+    public AoTDReachEconomy getReachEconomy() {
         return (AoTDReachEconomy) getEconomy();
     }
+
     public AoTDEconomy(boolean b, Economy currentEconomyToReplace) {
         super(b);
-        ArrayList<MarketAPI>current = new ArrayList<>(currentEconomyToReplace.getMarkets());
+        ArrayList<MarketAPI> current = new ArrayList<>(currentEconomyToReplace.getMarkets());
         this.setEcon(new AoTDReachEconomy());
-        ReflectionUtilis.setPrivateVariableFromSuperclass("stepper",this,new AoTDEconomyReachStepper(this.getEconomy()));
+        ReflectionUtilis.setPrivateVariableFromSuperclass("stepper", this, new AoTDEconomyReachStepper(this.getEconomy()));
         this.getMarkets().addAll(current);
         current.clear();
 
@@ -70,16 +77,25 @@ public class AoTDEconomy extends Economy {
 
     @Override
     public void nextStep(MainWorkTask.EconWorkParams econWorkParams) {
-        for (MarketAPI market : getMarkets()) ((Market)market).updatePrevStability();
+        long startTime = System.nanoTime();
 
-        MainWorkTask.EconWorkParams var4 = new MainWorkTask.EconWorkParams();
-        var4.withIncomeAndUpkeep = false;
-        var4.withStockpileUpdate = true;
-        var4.withImmigration = true;
+
+        MainWorkTask.EconWorkParams params = new MainWorkTask.EconWorkParams();
+        params.withIncomeAndUpkeep = false;
+        params.withStockpileUpdate = true;
+        params.withImmigration = true;
+
         if (econWorkParams != null) {
-            var4 = econWorkParams;
+            params = econWorkParams;
         }
-        this.getEconomy().nextStep(var4);
+
+        this.getEconomy().nextStep(params);
+        double elapsedMs = (System.nanoTime() - startTime) / 1_000_000.0;
+
+        log.info(String.format(
+                "AoTDEconomy.nextStep() took %.3f ms",
+                elapsedMs
+        ));
     }
 
     @Override
@@ -102,28 +118,29 @@ public class AoTDEconomy extends Economy {
         Market market = (Market) marketAPI;
         market.clearCommodities();
         initCommodities(market);
-        if(!market.hasCondition("aotd_toolbox_food_corrector")){
+        if (!market.hasCondition("aotd_toolbox_food_corrector")) {
             market.addCondition("aotd_toolbox_food_corrector");
             market.getCondition("aotd_toolbox_food_corrector").getPlugin().apply(null);
         }
 
     }
 
-    public void runMarketAdjustmentAfterEconomyCreation(){
+    public void runMarketAdjustmentAfterEconomyCreation() {
         for (MarketAPI market : getMarkets()) {
             market.clearCommodities();
             initCommodities((Market) market);
-            if(!market.hasCondition("aotd_toolbox_food_corrector")){
+            if (!market.hasCondition("aotd_toolbox_food_corrector")) {
                 market.addCondition("aotd_toolbox_food_corrector");
             }
         }
     }
+
     @Override
     public void tripleStep() {
         super.nextStep();
     }
 
-    public static void pruneCommodities(){
+    public static void pruneCommodities() {
         for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
             pruneCommoditiesThatMightAppear((Market) market);
         }
@@ -197,7 +214,7 @@ public class AoTDEconomy extends Economy {
     @SuppressWarnings("unchecked")
     private static void rebuildCommodityLookupMaps(Market market, List<CommodityOnMarket> commodities) {
         Map<String, CommodityOnMarket> commodityMap = (Map<String, CommodityOnMarket>) ReflectionUtilis
-            .getPrivateVariableFromSuperClass("commodityMap", market);
+                .getPrivateVariableFromSuperClass("commodityMap", market);
 
         if (commodityMap == null) {
             commodityMap = new HashMap<>();
@@ -205,7 +222,7 @@ public class AoTDEconomy extends Economy {
         }
 
         var commoditiesByDemandClass = (Map<String, List<CommodityOnMarket>>) ReflectionUtilis.
-            getPrivateVariableFromSuperClass("commoditiesByDemandClass", market);
+                getPrivateVariableFromSuperClass("commoditiesByDemandClass", market);
 
         if (commoditiesByDemandClass == null) {
             commoditiesByDemandClass = new HashMap<>();
@@ -241,7 +258,7 @@ public class AoTDEconomy extends Economy {
     @SuppressWarnings("unchecked")
     private static List<CommodityOnMarket> getCommodities(final MarketAPI market) {
         List<CommodityOnMarket> commodities = (List<CommodityOnMarket>) ReflectionUtilis
-            .getPrivateVariableFromSuperClass("commodities", market);
+                .getPrivateVariableFromSuperClass("commodities", market);
 
         if (commodities == null) {
             commodities = new ArrayList<>();

@@ -117,15 +117,30 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
     }
 
 
+    // Vanilla constructors register data through this public setter. Keep a mirror
+    // to avoid reflective field lookup on every UI/route read.
+    private transient volatile CommodityMarketData cachedMarketData;
+
+    @Override
+    public void setCommodityMarketData(CommodityMarketData data) {
+        super.setCommodityMarketData(data);
+        cachedMarketData = data;
+    }
+
     @Override
     public CommodityMarketData getCommodityMarketData() {
-        Object com = ReflectionUtilis.getPrivateVariableFromSuperClass("commodityMarketData", this);
-        if (com == null) {
-            return new AoTDCommodityMarketData(this.getId(), this.getMarket().getEconGroup());
-        } else if (!(com instanceof AoTDCommodityMarketData)) {
-            this.setCommodityMarketData(new AoTDCommodityMarketData(this.getId(), this.getMarket().getEconGroup()));
+        CommodityMarketData data = cachedMarketData;
+        if (data instanceof AoTDCommodityMarketData) return data;
+        // Compatibility fallback for load or code that populated the vanilla field.
+        Object stored = ReflectionUtilis.getPrivateVariableFromSuperClass("commodityMarketData", this);
+        if (stored instanceof AoTDCommodityMarketData) {
+            cachedMarketData = (CommodityMarketData) stored;
+            return cachedMarketData;
         }
-        return super.getCommodityMarketData();
+        AoTDCommodityMarketData created = new AoTDCommodityMarketData(
+                this.getId(), this.getMarket().getEconGroup());
+        this.setCommodityMarketData(created);
+        return created;
     }
 
     @SuppressWarnings("all")
@@ -200,8 +215,9 @@ public class AoTDCommodityOnMarket extends CommodityOnMarket {
 
     @Override
     public float getUtilityOnMarket() {
+        if (!this.getSpec().isExotic()) return this.getSpec().getUtility();
         MarketAPI var3 = AoTDEconomy.getInstance().getMarketThreadSave(this.getSpec().getOrigin());
-        if (this.getSpec().isExotic() && var3 != null) {
+        if (var3 != null) {
             float var1 = Economy.EXOTIC_UTILITY_MULT;
             float var2 = Economy.RANGE_FOR_MAX_EXOTIC_DEMAND;
             float var4 = Misc.getDistanceLY((var3.getLocation()), this.getMarket().getLocation());

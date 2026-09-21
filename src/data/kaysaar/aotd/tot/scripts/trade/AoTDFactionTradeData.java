@@ -235,8 +235,93 @@ public class AoTDFactionTradeData {
         computeInternalTrade(true);
     }
 
+    private transient volatile java.util.List<AllocationRow> cachedInternalAllocation;
+
+    private static boolean eligibleForInternalTrade(AoTDMarketData md, MarketAPI market) {
+        return !md.netProductionValues.isEmpty() && market != null && market.hasSpaceport()
+                && !(market.getAccessibilityMod().computeEffective(0f) <= 0f);
+    }
+
+    private static boolean sameOrderedMap(Map<String, Integer> a, Map<String, Integer> b) {
+        if (a.size() != b.size()) return false;
+        java.util.Iterator<Map.Entry<String, Integer>> ai = a.entrySet().iterator();
+        java.util.Iterator<Map.Entry<String, Integer>> bi = b.entrySet().iterator();
+        while (ai.hasNext()) if (!ai.next().equals(bi.next())) return false;
+        return true;
+    }
+
+    private static final class AllocationRow {
+        final String marketId;
+        final int weightBits;
+        final boolean eligible;
+        final LinkedHashMap<String, Integer> net, sent, received, remaining;
+        AllocationRow(AoTDMarketData md, MarketAPI market) {
+            marketId = md.marketId;
+            weightBits = Float.floatToIntBits(md.weight);
+            eligible = eligibleForInternalTrade(md, market);
+            net = new LinkedHashMap<>(md.netProductionValues);
+            sent = new LinkedHashMap<>(md.internalSent);
+            received = new LinkedHashMap<>(md.internalReceived);
+            remaining = new LinkedHashMap<>(md.remainingNet);
+        }
+        boolean matches(AoTDMarketData md, MarketAPI market) {
+            return java.util.Objects.equals(marketId, md.marketId)
+                    && weightBits == Float.floatToIntBits(md.weight)
+                    && eligible == eligibleForInternalTrade(md, market)
+                    && sameOrderedMap(net, md.netProductionValues);
+        }
+        void restore(AoTDMarketData md) {
+            // Restore the POST-INTERNAL baseline, not a previous settlement's
+            // contract/external-trade-consumed balances. Leave monthly records alone.
+            md.internalSent.clear(); md.internalSent.putAll(sent);
+            md.internalReceived.clear(); md.internalReceived.putAll(received);
+            md.remainingNet.clear(); md.remainingNet.putAll(remaining);
+        }
+    }
+
+    private boolean restoreCachedInternalAllocation(Map<String, MarketAPI> marketsById) {
+        java.util.List<AllocationRow> rows = cachedInternalAllocation;
+        if (rows == null || rows.size() != tradeData.size()) return false;
+        int i = 0;
+        for (AoTDMarketData md : tradeData.values()) {
+            if (!rows.get(i++).matches(md, marketsById.get(md.marketId))) return false;
+        }
+        i = 0;
+        for (AoTDMarketData md : tradeData.values()) rows.get(i++).restore(md);
+        return true;
+    }
+
+    private void rememberInternalAllocation(Map<String, MarketAPI> marketsById) {
+        ArrayList<AllocationRow> rows = new ArrayList<>(tradeData.size());
+        for (AoTDMarketData md : tradeData.values()) {
+            rows.add(new AllocationRow(md, marketsById.get(md.marketId)));
+        }
+        cachedInternalAllocation = java.util.Collections.unmodifiableList(rows);
+    }
+
+    public static Map<String, MarketAPI> snapshotMarketsById() {
+        Map<String, MarketAPI> result = new java.util.HashMap<>();
+        for (MarketAPI market : AoTDEconomy.getInstance().getMarkets()) {
+            result.putIfAbsent(market.getId(), market);
+        }
+        return java.util.Collections.unmodifiableMap(result);
+    }
+
     public void computeInternalTrade(boolean refreshContractPredictions) {
         if (tradeData.isEmpty()) return;
+        computeInternalTrade(refreshContractPredictions, snapshotMarketsById());
+    }
+
+    public void computeInternalTrade(boolean refreshContractPredictions,
+                                     Map<String, MarketAPI> marketsById) {
+        if (tradeData.isEmpty()) {
+            cachedInternalAllocation = null;
+            return;
+        }
+        if (restoreCachedInternalAllocation(marketsById)) {
+            if (refreshContractPredictions) refreshContractPredictionsIfPlayerFaction();
+            return;
+        }
 
         ArrayList<AoTDMarketData> eligibleMarkets = new ArrayList<>(tradeData.size());
 
@@ -246,7 +331,7 @@ public class AoTDFactionTradeData {
 
             if (md.netProductionValues.isEmpty()) continue;
 
-            MarketAPI market = AoTDEconomy.getInstance().getMarketThreadSave(md.marketId);
+            MarketAPI market = marketsById.get(md.marketId);
             if (market == null) continue;
             if (!market.hasSpaceport()) continue;
             if (market.getAccessibilityMod().computeEffective(0f) <= 0f) continue;
@@ -255,6 +340,7 @@ public class AoTDFactionTradeData {
         }
 
         if (eligibleMarkets.size() <= 1) {
+            rememberInternalAllocation(marketsById);
             if (refreshContractPredictions) {
                     refreshContractPredictionsIfPlayerFaction();
                 }
@@ -322,6 +408,7 @@ public class AoTDFactionTradeData {
             }
         }
 
+        rememberInternalAllocation(marketsById);
         if (refreshContractPredictions) {
             refreshContractPredictionsIfPlayerFaction();
         }

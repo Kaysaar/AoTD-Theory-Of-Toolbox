@@ -107,6 +107,70 @@ public class EffectivePriceCalculator extends PriceCalculator {
     private float stateExtremeSellMult = 1.05f;
     private float stateExtremeBuyMult = 0.95f;
 
+    // Bounded per-calculator caches. Immutable entries are safely published without
+    // holding any monitor while invoking game APIs. Recreated after load.
+    private transient volatile QuoteCache lastAddQuote;
+    private transient volatile QuoteCache lastRemoveQuote;
+
+    private static final class QuoteInputs {
+        final float denom, displacement, antiTrade, bought, sold, boughtUtility, soldUtility;
+        final float utility, sellWrapper, buyWrapper;
+        final boolean remembered;
+        final LiveAoTDState live;
+        QuoteInputs(float denom, float displacement, float antiTrade, float bought, float sold,
+                    float boughtUtility, float soldUtility, float utility,
+                    float sellWrapper, float buyWrapper, boolean remembered, LiveAoTDState live) {
+            this.denom = denom; this.displacement = displacement; this.antiTrade = antiTrade;
+            this.bought = bought; this.sold = sold; this.boughtUtility = boughtUtility;
+            this.soldUtility = soldUtility; this.utility = utility;
+            this.sellWrapper = sellWrapper; this.buyWrapper = buyWrapper;
+            this.remembered = remembered; this.live = live;
+        }
+        boolean same(QuoteInputs q) {
+            return denom == q.denom && displacement == q.displacement && antiTrade == q.antiTrade
+                    && bought == q.bought && sold == q.sold && boughtUtility == q.boughtUtility
+                    && soldUtility == q.soldUtility && utility == q.utility
+                    && sellWrapper == q.sellWrapper && buyWrapper == q.buyWrapper
+                    && remembered == q.remembered && live.mode == q.live.mode
+                    && live.currentUtility == q.live.currentUtility
+                    && live.pressureDenom == q.live.pressureDenom
+                    && live.fromCommodityQuantities == q.live.fromCommodityQuantities;
+        }
+    }
+
+    private static final class QuoteCache {
+        final double stock, amount;
+        final QuoteInputs inputs;
+        final float[] model;
+        final float total;
+        QuoteCache(double stock, double amount, QuoteInputs inputs, float[] model, float total) {
+            this.stock = stock; this.amount = amount; this.inputs = inputs;
+            this.model = model; this.total = total;
+        }
+    }
+
+    private QuoteInputs captureQuoteInputs(double stock) {
+        float displacement = getSameMarketTradeDisplacementUtility(stock);
+        return new QuoteInputs(getResponseDenom(stock), displacement,
+                getAntiResellTradeUtility(stock, displacement),
+                getSameMarketBoughtFromMarketQuantity(), getSameMarketSoldToMarketQuantity(),
+                getPlayerBoughtFromThisMarketUtility(displacement),
+                getPlayerSoldToThisMarketUtility(displacement), getUtilityOnMarketSafe(),
+                getFinalWrapperMult(true), getFinalWrapperMult(false),
+                hasRememberedSameMarketTrade(), getLiveAoTDState());
+    }
+
+    private float[] capturePriceModel() {
+        // Exact values, not a hash: no hash-collision or missing transaction-event risk.
+        return new float[] {basePrice, demand, targetSellMult, targetBuyMult,
+                antiResellReferenceSellMult, antiResellReferenceBuyMult,
+                minSellMult, maxSellMult, minBuyMult, maxBuyMult, referenceTradeQuantity,
+                response, stockpileDenomMult, denomMaxReferenceMult, maxResellReturnMult,
+                neutralStockpileUtility, officialStateMode, officialStateUtility,
+                officialStatePressureDenom, stateStartSellMult, stateStartBuyMult,
+                stateExtremeSellMult, stateExtremeBuyMult};
+    }
+
     public EffectivePriceCalculator(CommodityOnMarketAPI com) {
         this.commodity = com;
         basePrice = com.getCommodity().getBasePrice();
@@ -243,21 +307,32 @@ public class EffectivePriceCalculator extends PriceCalculator {
         double safeAmount = Math.max(0d, amount);
         if (safeAmount <= 0d) return 0f;
 
+        QuoteInputs inputs = captureQuoteInputs(stock);
+        float[] model = capturePriceModel();
+        QuoteCache cached = playerSellingToMarket ? lastAddQuote : lastRemoveQuote;
+        if (cached != null && cached.stock == stock && cached.amount == safeAmount
+                && inputs.same(cached.inputs) && java.util.Arrays.equals(model, cached.model)) {
+            return cached.total;
+        }
+
         int steps = getIntegrationSteps(safeAmount);
         double step = safeAmount / (double) steps;
-
         double total = 0d;
         for (int i = 0; i < steps; i++) {
             double progress = (i + 0.5d) * step;
-            if (!playerSellingToMarket) {
-                progress = -progress;
-            }
-
-            float mult = getAoTDUnitMult(playerSellingToMarket, stock, progress);
+            if (!playerSellingToMarket) progress = -progress;
+            float mult = getAoTDUnitMult(playerSellingToMarket, progress, inputs);
             total += safeBase * step * mult;
         }
-
-        return (float) Math.max(safeAmount, total);
+        float result = (float) Math.max(safeAmount, total);
+        // Avoid retaining non-finite results or a model changed during calculation.
+        if (Float.isFinite(result) && Double.isFinite(stock) && Double.isFinite(safeAmount)
+                && java.util.Arrays.equals(model, capturePriceModel())) {
+            QuoteCache entry = new QuoteCache(stock, safeAmount, inputs, model, result);
+            if (playerSellingToMarket) lastAddQuote = entry;
+            else lastRemoveQuote = entry;
+        }
+        return result;
     }
 
     private int getIntegrationSteps(double amount) {
@@ -272,15 +347,15 @@ public class EffectivePriceCalculator extends PriceCalculator {
         return 32;
     }
 
-    private float getAoTDUnitMult(boolean playerSellingToMarket, double stock, double transactionProgressUtility) {
-        float denom = getResponseDenom(stock);
+    private float getAoTDUnitMult(boolean playerSellingToMarket, double transactionProgressUtility, QuoteInputs inputs) {
+        float denom = inputs.denom;
 
         /*
          * Market passes stockpile utility after the current transaction preview has
          * been applied. The neutral utility is the economy-update baseline. Their
          * difference is therefore the local displacement for this market/commodity.
          */
-        float existingTradeUtility = getSameMarketTradeDisplacementUtility(stock);
+        float existingTradeUtility = inputs.displacement;
 
         /*
          * Always include live local trade displacement. AoTdMainWorkTask2 now
@@ -293,10 +368,10 @@ public class EffectivePriceCalculator extends PriceCalculator {
          */
         float netUtilityAtThisUnit = existingTradeUtility + (float) transactionProgressUtility;
 
-        LiveAoTDState liveStateAtThisUnit = getLiveAoTDState();
+        LiveAoTDState liveStateAtThisUnit = inputs.live;
         float transactionOnlyUtility = netUtilityAtThisUnit - existingTradeUtility;
 
-        float mult = getStateAwareBaseMult(playerSellingToMarket, netUtilityAtThisUnit, denom, existingTradeUtility);
+        float mult = getStateAwareBaseMult(playerSellingToMarket, netUtilityAtThisUnit, denom, existingTradeUtility, inputs.live);
 
         /*
          * Directional anti-reselling only.
@@ -311,8 +386,7 @@ public class EffectivePriceCalculator extends PriceCalculator {
          * - previous local buy  (stock below neutral) only caps selling back;
          * - previous local sell (stock above neutral) only floors buying back.
          */
-        float antiResellTradeUtility = getAntiResellTradeUtility(stock, existingTradeUtility);
-        boolean hasAnyAntiResellHistory = Math.abs(antiResellTradeUtility) > 0.0001f || hasAnyLiveSameMarketTradeHistory();
+        float antiResellTradeUtility = inputs.antiTrade;
 
         /*
          * Hard directional same-market anti-resell, based on the directional
@@ -326,8 +400,8 @@ public class EffectivePriceCalculator extends PriceCalculator {
          * punished here, so buying from excess still climbs normally instead of
          * jumping above base.
          */
-        float sameMarketBoughtQuantity = getSameMarketBoughtFromMarketQuantity();
-        float sameMarketSoldQuantity = getSameMarketSoldToMarketQuantity();
+        float sameMarketBoughtQuantity = inputs.bought;
+        float sameMarketSoldQuantity = inputs.sold;
         float sameMarketNetQuantity = sameMarketSoldQuantity - sameMarketBoughtQuantity;
 
         /*
@@ -345,10 +419,10 @@ public class EffectivePriceCalculator extends PriceCalculator {
         boolean hasPrefixedBuyMemory = sameMarketNetQuantity < -0.0001f;
         boolean hasPrefixedSellMemory = sameMarketNetQuantity > 0.0001f;
 
-        float playerBoughtFromThisMarketUtility = getPlayerBoughtFromThisMarketUtility(existingTradeUtility);
-        float playerSoldToThisMarketUtility = getPlayerSoldToThisMarketUtility(existingTradeUtility);
+        float playerBoughtFromThisMarketUtility = inputs.boughtUtility;
+        float playerSoldToThisMarketUtility = inputs.soldUtility;
 
-        boolean rememberedSameMarketDump = hasRememberedSameMarketTrade();
+        boolean rememberedSameMarketDump = inputs.remembered;
         boolean buyingFromRealExcessThatStillExists = !playerSellingToMarket
                 && liveStateAtThisUnit.mode < 0
                 && liveStateAtThisUnit.currentUtility > 0f
@@ -388,11 +462,11 @@ public class EffectivePriceCalculator extends PriceCalculator {
              * This keeps the desired buy curve growth, but removes the 600k buy /
              * 700k sell-back profit.
              */
-            float sellWrapper = getFinalWrapperMult(true);
-            float buyWrapper = getFinalWrapperMult(false);
-            float currentBuyRaw = getStateAwareBaseMult(false, netUtilityAtThisUnit, denom, existingTradeUtility);
+            float sellWrapper = inputs.sellWrapper;
+            float buyWrapper = inputs.buyWrapper;
+            float currentBuyRaw = getStateAwareBaseMult(false, netUtilityAtThisUnit, denom, existingTradeUtility, inputs.live);
             float currentBuyFinal = currentBuyRaw * buyWrapper;
-            float sellFinalCap = currentBuyFinal * getGradualAntiResellReturnMult(Math.max(playerBoughtFromThisMarketUtility, Math.abs(antiResellTradeUtility)), transactionOnlyUtility);
+            float sellFinalCap = currentBuyFinal * getGradualAntiResellReturnMult(Math.max(playerBoughtFromThisMarketUtility, Math.abs(antiResellTradeUtility)), transactionOnlyUtility, inputs.utility);
             float rawSellCap = sellFinalCap / sellWrapper;
             mult = Math.min(mult, Math.max(0.01f, rawSellCap));
         }
@@ -400,19 +474,19 @@ public class EffectivePriceCalculator extends PriceCalculator {
         if (playerSellingToMarket
                 && playerBoughtFromThisMarketUtility > 0.0001f
                 && (hasPrefixedBuyMemory || existingTradeUtility < -0.0001f)) {
-            float sellWrapper = getFinalWrapperMult(true);
-            float buyWrapper = getFinalWrapperMult(false);
+            float sellWrapper = inputs.sellWrapper;
+            float buyWrapper = inputs.buyWrapper;
 
             float referenceBuyFinal = antiResellReferenceBuyMult * buyWrapper;
-            float sellFinalCap = referenceBuyFinal * getGradualAntiResellReturnMult(playerBoughtFromThisMarketUtility, transactionOnlyUtility);
+            float sellFinalCap = referenceBuyFinal * getGradualAntiResellReturnMult(playerBoughtFromThisMarketUtility, transactionOnlyUtility, inputs.utility);
             float rawSellCap = sellFinalCap / sellWrapper;
             mult = Math.min(mult, Math.max(0.01f, rawSellCap));
         } else if (!playerSellingToMarket
                 && playerSoldToThisMarketUtility > 0.0001f
                 && (hasPrefixedSellMemory || rememberedSameMarketDump)
                 && !(buyingFromRealExcessThatStillExists && !rememberedSameMarketDump)) {
-            float sellWrapper = getFinalWrapperMult(true);
-            float buyWrapper = getFinalWrapperMult(false);
+            float sellWrapper = inputs.sellWrapper;
+            float buyWrapper = inputs.buyWrapper;
 
             /*
              * Remembered dump/player-created excess keeps the blank-state reference
@@ -421,7 +495,7 @@ public class EffectivePriceCalculator extends PriceCalculator {
              */
             float referenceSellFinal = antiResellReferenceSellMult * sellWrapper;
 
-            float buyFinalFloor = referenceSellFinal / getGradualAntiResellReturnMult(playerSoldToThisMarketUtility, transactionOnlyUtility);
+            float buyFinalFloor = referenceSellFinal / getGradualAntiResellReturnMult(playerSoldToThisMarketUtility, transactionOnlyUtility, inputs.utility);
             float rawBuyFloor = buyFinalFloor / buyWrapper;
             mult = Math.max(mult, Math.max(0.01f, rawBuyFloor));
         }
@@ -445,30 +519,30 @@ public class EffectivePriceCalculator extends PriceCalculator {
         if (antiResellTradeUtility < -0.0001f
                 && playerSellingToMarket
                 && (hasPrefixedBuyMemory || existingTradeUtility < -0.0001f)) {
-            float buyRawNow = getStateAwareBaseMult(false, netUtilityAtThisUnit, denom, existingTradeUtility);
-            float sellWrapper = getFinalWrapperMult(true);
-            float buyWrapper = getFinalWrapperMult(false);
+            float buyRawNow = getStateAwareBaseMult(false, netUtilityAtThisUnit, denom, existingTradeUtility, inputs.live);
+            float sellWrapper = inputs.sellWrapper;
+            float buyWrapper = inputs.buyWrapper;
 
             float buyFinalNow = buyRawNow * buyWrapper;
             float blankBuyFinal = antiResellReferenceBuyMult * buyWrapper;
             float referenceBuyFinal = Math.max(buyFinalNow, blankBuyFinal);
 
-            float sellFinalCap = referenceBuyFinal * getGradualAntiResellReturnMult(playerBoughtFromThisMarketUtility, transactionOnlyUtility);
+            float sellFinalCap = referenceBuyFinal * getGradualAntiResellReturnMult(playerBoughtFromThisMarketUtility, transactionOnlyUtility, inputs.utility);
             float rawSellCap = sellFinalCap / sellWrapper;
             mult = Math.min(mult, Math.max(0.01f, rawSellCap));
         } else if (antiResellTradeUtility > 0.0001f
                 && !playerSellingToMarket
                 && (hasPrefixedSellMemory || rememberedSameMarketDump)
                 && !(buyingFromRealExcessThatStillExists && !rememberedSameMarketDump)) {
-            float sellRawNow = getStateAwareBaseMult(true, netUtilityAtThisUnit, denom, existingTradeUtility);
-            float sellWrapper = getFinalWrapperMult(true);
-            float buyWrapper = getFinalWrapperMult(false);
+            float sellRawNow = getStateAwareBaseMult(true, netUtilityAtThisUnit, denom, existingTradeUtility, inputs.live);
+            float sellWrapper = inputs.sellWrapper;
+            float buyWrapper = inputs.buyWrapper;
 
             float sellFinalNow = sellRawNow * sellWrapper;
             float blankSellFinal = antiResellReferenceSellMult * sellWrapper;
             float referenceSellFinal = Math.max(sellFinalNow, blankSellFinal);
 
-            float buyFinalFloor = referenceSellFinal / getGradualAntiResellReturnMult(playerSoldToThisMarketUtility, transactionOnlyUtility);
+            float buyFinalFloor = referenceSellFinal / getGradualAntiResellReturnMult(playerSoldToThisMarketUtility, transactionOnlyUtility, inputs.utility);
             float rawBuyFloor = buyFinalFloor / buyWrapper;
             mult = Math.max(mult, Math.max(0.01f, rawBuyFloor));
         }
@@ -485,17 +559,13 @@ public class EffectivePriceCalculator extends PriceCalculator {
         return Math.max(0.01f, mult);
     }
 
-    private float getStateAwareBaseMult(boolean playerSellingToMarket, float netTradeUtility, float denom) {
-        return getStateAwareBaseMult(playerSellingToMarket, netTradeUtility, denom, 0f);
-    }
-
     private float getStateAwareBaseMult(
             boolean playerSellingToMarket,
             float netTradeUtility,
             float denom,
-            float existingTradeUtility
+            float existingTradeUtility,
+            LiveAoTDState liveState
     ) {
-        LiveAoTDState liveState = getLiveAoTDState();
 
         /*
          * If AoTDCommodityOnMarket can report current remaining excess/deficit,
@@ -1034,8 +1104,7 @@ public class EffectivePriceCalculator extends PriceCalculator {
         return total;
     }
 
-    private float getGradualAntiResellReturnMult(float historyUtility, float transactionUtility) {
-        float utility = getUtilityOnMarketSafe();
+    private float getGradualAntiResellReturnMult(float historyUtility, float transactionUtility, float utility) {
         float denom = Math.max(1f, referenceTradeQuantity * utility);
         float pressure = clamp((Math.abs(historyUtility) + Math.abs(transactionUtility)) / denom, 0f, 1f);
 
