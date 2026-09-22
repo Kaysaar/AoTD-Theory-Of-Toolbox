@@ -178,7 +178,7 @@ public class AoTDConstructionSite extends BaseIndustry {
 
     @Override
     public boolean isUpgrading() {
-        return assignedWonder != null && daysPassedOnConstruction <= wonderAPI.getSpec().getBuildTime();
+        return wonderAPI!=null&& assignedWonder != null && daysPassedOnConstruction <= wonderAPI.getSpec().getBuildTime();
     }
 
     @Override

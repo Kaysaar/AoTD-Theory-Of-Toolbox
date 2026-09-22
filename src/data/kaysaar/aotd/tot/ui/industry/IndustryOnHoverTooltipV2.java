@@ -4,6 +4,7 @@ import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.Industry;
+import com.fs.starfarer.api.impl.campaign.econ.impl.Spaceport;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
@@ -152,9 +153,9 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
             for (CommodityOnMarketAPI curr : ind.getMarket().getAllCommodities()) {
                 curr.getAvailableStat().setBaseValue(0);
             }
-            ind.getMarket().reapplyConditions();
         }
         ind.getMarket().setFreePort(hasFreePort);
+        ind.getMarket().reapplyConditions();
         this.tl = tooltipHeight;
 
     }

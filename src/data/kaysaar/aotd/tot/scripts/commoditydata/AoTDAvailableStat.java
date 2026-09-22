@@ -8,12 +8,20 @@ public class AoTDAvailableStat extends MutableStatWithTempMods {
     private AoTDSupplyDemandData supplyDemandData;
 
     public AoTDSupplyDemandData getSupplyDemandData(CommodityOnMarketAPI commodity) {
+        return getSupplyDemandData(commodity, true);
+    }
+
+    public AoTDSupplyDemandData getSupplyDemandData(CommodityOnMarketAPI commodity, boolean initializeValues) {
         if (supplyDemandData == null) {
             supplyDemandData = new AoTDSupplyDemandData(commodity.getId());
             supplyDemandData.getEconSpec();
-            supplyDemandData.updateSupplyDemandData(commodity.getMarket());
+            if (initializeValues) supplyDemandData.updateSupplyDemandData(commodity.getMarket());
         }
 
+        return supplyDemandData;
+    }
+
+    public AoTDSupplyDemandData getSupplyDemandDataIfInitialized() {
         return supplyDemandData;
     }
 

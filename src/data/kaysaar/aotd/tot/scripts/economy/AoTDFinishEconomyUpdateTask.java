@@ -1,15 +1,19 @@
 package data.kaysaar.aotd.tot.scripts.economy;
 
-import com.fs.starfarer.api.campaign.econ.EconomyAPI;
 import com.fs.starfarer.api.campaign.econ.EconomyAPI.EconomyUpdateListener;
+import com.fs.starfarer.api.campaign.econ.EconomyAPI;
+import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.campaign.econ.Economy;
 import com.fs.starfarer.campaign.econ.reach.FinishEconomyUpdateTask;
+
 import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 import data.kaysaar.aotd.tot.scripts.trade.models.AoTDFactionTradeData;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
@@ -37,7 +41,7 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("AoTD UI economy update interrupted", ex);
-            } catch (java.util.concurrent.ExecutionException ex) {
+            } catch (ExecutionException ex) {
                 throw new IllegalStateException("AoTD internal trade worker failed", ex.getCause());
             }
         }
@@ -69,7 +73,7 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
     }
 
     private void doSequential() {
-        final java.util.Map<String, com.fs.starfarer.api.campaign.econ.MarketAPI> marketIndex =
+        final Map<String, MarketAPI> marketIndex =
                 AoTDFactionTradeData.snapshotMarketsById();
         for (AoTDFactionTradeData value : getFactionTradeDataSnapshot()) {
             if (value == null) continue;
@@ -104,7 +108,7 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
     private void submitInternalTradeWorkers() {
         internalTradeFutures.clear();
         // Build once on the submitting thread, then share the immutable index.
-        final java.util.Map<String, com.fs.starfarer.api.campaign.econ.MarketAPI> marketIndex =
+        final Map<String, MarketAPI> marketIndex =
                 AoTDFactionTradeData.snapshotMarketsById();
 
         for (AoTDFactionTradeData value : getFactionTradeDataSnapshot()) {

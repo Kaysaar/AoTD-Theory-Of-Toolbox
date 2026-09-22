@@ -138,6 +138,7 @@ public class AoTDEconomy extends Economy {
     @Override
     public void tripleStep() {
         super.nextStep();
+
     }
 
     public static void pruneCommodities() {
