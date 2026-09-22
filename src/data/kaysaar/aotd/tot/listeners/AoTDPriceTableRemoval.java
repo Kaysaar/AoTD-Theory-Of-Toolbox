@@ -183,6 +183,9 @@ public class AoTDPriceTableRemoval implements ExtendedUIPanelPlugin {
         if (noBuyRows) {
             toRemove -= 2;
         }
+        if(noSellRows&&noBuyRows){
+            toRemove+=2;
+        }
 
         toRemove = Math.min(toRemove, comps.size());
 

@@ -6,6 +6,8 @@ import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.MarketDemand;
 import com.fs.starfarer.campaign.econ.MarketDemandData;
 
+import data.kaysaar.aotd.tot.scripts.economy.AoTdMainWorkTask2;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -14,6 +16,12 @@ import java.util.Map;
 public class AoTDMarketDemandData extends MarketDemandData {
     private final Map<String, MarketDemand> dem = new HashMap<>();
     private final Market market;
+    private transient Map<String, AoTdMainWorkTask2.InactivePriceState> inactivePrices;
+
+    public Map<String, AoTdMainWorkTask2.InactivePriceState> getInactivePrices() {
+        if (inactivePrices == null) inactivePrices = new HashMap<>();
+        return inactivePrices;
+    }
 
     public AoTDMarketDemandData(Market market) {
         super(market);

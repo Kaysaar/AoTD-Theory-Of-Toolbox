@@ -1,22 +1,27 @@
-
 package data.kaysaar.aotd.tot.scripts.trade.models;
 
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.util.Misc;
+
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
-import data.kaysaar.aotd.tot.scripts.economy.AoTDWorkerManager;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDSectorProductionDemandDataUtils;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDWorkerManager;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContractManager;
 import data.kaysaar.aotd.tot.scripts.trade.history.FactionCycleProductionData;
 import data.kaysaar.aotd.tot.scripts.trade.history.FactionProductionData;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class AoTDFactionTradeData {
 
@@ -229,13 +234,13 @@ public class AoTDFactionTradeData {
      * ALSO: if this is player faction, it invalidates and (optionally) precomputes contract predictions,
      * because remainingNet is what contracts draw from.
      */
-    private static final java.util.Comparator<MarketAmount> MARKET_AMOUNT_WEIGHT_DESC =
+    private static final Comparator<MarketAmount> MARKET_AMOUNT_WEIGHT_DESC =
             (a, b) -> Float.compare(b.weight, a.weight);
     public void computeInternalTrade() {
         computeInternalTrade(true);
     }
 
-    private transient volatile java.util.List<AllocationRow> cachedInternalAllocation;
+    private transient volatile List<AllocationRow> cachedInternalAllocation;
 
     private static boolean eligibleForInternalTrade(AoTDMarketData md, MarketAPI market) {
         return !md.netProductionValues.isEmpty() && market != null && market.hasSpaceport()
@@ -244,8 +249,8 @@ public class AoTDFactionTradeData {
 
     private static boolean sameOrderedMap(Map<String, Integer> a, Map<String, Integer> b) {
         if (a.size() != b.size()) return false;
-        java.util.Iterator<Map.Entry<String, Integer>> ai = a.entrySet().iterator();
-        java.util.Iterator<Map.Entry<String, Integer>> bi = b.entrySet().iterator();
+        Iterator<Map.Entry<String, Integer>> ai = a.entrySet().iterator();
+        Iterator<Map.Entry<String, Integer>> bi = b.entrySet().iterator();
         while (ai.hasNext()) if (!ai.next().equals(bi.next())) return false;
         return true;
     }
@@ -265,7 +270,7 @@ public class AoTDFactionTradeData {
             remaining = new LinkedHashMap<>(md.remainingNet);
         }
         boolean matches(AoTDMarketData md, MarketAPI market) {
-            return java.util.Objects.equals(marketId, md.marketId)
+            return Objects.equals(marketId, md.marketId)
                     && weightBits == Float.floatToIntBits(md.weight)
                     && eligible == eligibleForInternalTrade(md, market)
                     && sameOrderedMap(net, md.netProductionValues);
@@ -280,7 +285,7 @@ public class AoTDFactionTradeData {
     }
 
     private boolean restoreCachedInternalAllocation(Map<String, MarketAPI> marketsById) {
-        java.util.List<AllocationRow> rows = cachedInternalAllocation;
+        List<AllocationRow> rows = cachedInternalAllocation;
         if (rows == null || rows.size() != tradeData.size()) return false;
         int i = 0;
         for (AoTDMarketData md : tradeData.values()) {
@@ -296,15 +301,15 @@ public class AoTDFactionTradeData {
         for (AoTDMarketData md : tradeData.values()) {
             rows.add(new AllocationRow(md, marketsById.get(md.marketId)));
         }
-        cachedInternalAllocation = java.util.Collections.unmodifiableList(rows);
+        cachedInternalAllocation = Collections.unmodifiableList(rows);
     }
 
     public static Map<String, MarketAPI> snapshotMarketsById() {
-        Map<String, MarketAPI> result = new java.util.HashMap<>();
+        Map<String, MarketAPI> result = new HashMap<>();
         for (MarketAPI market : AoTDEconomy.getInstance().getMarkets()) {
             result.putIfAbsent(market.getId(), market);
         }
-        return java.util.Collections.unmodifiableMap(result);
+        return Collections.unmodifiableMap(result);
     }
 
     public void computeInternalTrade(boolean refreshContractPredictions) {
@@ -350,13 +355,28 @@ public class AoTDFactionTradeData {
 
         LinkedHashMap<String, CommodityBucket> buckets = new LinkedHashMap<>();
 
+        // Preserve original first-seen commodity order independently of market priority.
+        // Internal result maps expose this order to downstream consumers.
+        for (AoTDMarketData md : eligibleMarkets) {
+            AoTDWorkerManager.checkpoint();
+            for (Map.Entry<String, Integer> entry : md.netProductionValues.entrySet()) {
+                if (entry.getValue() != 0) {
+                    buckets.computeIfAbsent(entry.getKey(), id -> new CommodityBucket());
+                }
+            }
+        }
+        // All commodities use the same weight ordering. Stable sorting preserves
+        // original market order on ties (including signed zero/NaN Float semantics).
+        // Each bucket is then a sorted subsequence, so per-commodity sorts disappear.
+        eligibleMarkets.sort((a, b) -> Float.compare(b.weight, a.weight));
+
         for (AoTDMarketData md : eligibleMarkets) {
             AoTDWorkerManager.checkpoint();
             for (Map.Entry<String, Integer> entry : md.netProductionValues.entrySet()) {
                 int net = entry.getValue();
                 if (net == 0) continue;
 
-                CommodityBucket bucket = buckets.computeIfAbsent(entry.getKey(), id -> new CommodityBucket());
+                CommodityBucket bucket = buckets.get(entry.getKey());
 
                 if (net > 0) {
                     bucket.exporters.add(new MarketAmount(md, net, md.weight));
@@ -377,9 +397,6 @@ public class AoTDFactionTradeData {
 
             ArrayList<MarketAmount> exporters = bucket.exporters;
             ArrayList<MarketAmount> importers = bucket.importers;
-
-            if (exporters.size() > 1) exporters.sort(MARKET_AMOUNT_WEIGHT_DESC);
-            if (importers.size() > 1) importers.sort(MARKET_AMOUNT_WEIGHT_DESC);
 
             String commodityId = entry.getKey();
 

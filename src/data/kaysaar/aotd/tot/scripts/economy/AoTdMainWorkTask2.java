@@ -2,6 +2,7 @@ package data.kaysaar.aotd.tot.scripts.economy;
 
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.econ.*;
+import com.fs.starfarer.api.campaign.econ.SubmarketAPI;
 import com.fs.starfarer.api.combat.MutableStat;
 import com.fs.starfarer.api.impl.campaign.econ.CommodityIconCounts;
 import com.fs.starfarer.api.impl.campaign.submarkets.BaseSubmarketPlugin;
@@ -9,22 +10,26 @@ import com.fs.starfarer.campaign.econ.CommodityOnMarket;
 import com.fs.starfarer.campaign.econ.Economy;
 import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.PriceCalculator;
-import com.fs.starfarer.campaign.econ.reach.MainWorkTask;
 import com.fs.starfarer.campaign.econ.reach.MainWorkTask2;
+import com.fs.starfarer.campaign.econ.reach.MainWorkTask;
 import com.fs.starfarer.campaign.econ.reach.ReachEconomy;
+
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityMarketData;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDMarketDemandData;
-import data.kaysaar.aotd.tot.scripts.commoditydata.EffectivePriceCalculator;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDSupplyDemandData;
+import data.kaysaar.aotd.tot.scripts.commoditydata.EffectivePriceCalculator;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Random;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
@@ -51,6 +56,21 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     public MarketAPI singleMarketToUpdate;
 
     private boolean runOnce = false;
+    private transient boolean profileTask;
+    private transient long prepNanos, dataNanos, priceNanos, listenerNanos;
+    private transient boolean profileLogged;
+
+    private long phaseStart() { return profileTask ? System.nanoTime() : 0L; }
+    private long phaseElapsed(long start) { return profileTask ? System.nanoTime() - start : 0L; }
+
+    private void logTaskProfile() {
+        if (!profileTask || profileLogged || !isDone()) return;
+        profileLogged = true;
+        Global.getLogger(AoTdMainWorkTask2.class).info(String.format(Locale.ROOT,
+                "AoTD mainTask markets=%d commodities=%d prep=%.3f data=%.3f prices/wait=%.3f listeners=%.3f ms",
+                marketsForCurrentMode.size(), aotdCommodities.size(), prepNanos / 1_000_000d,
+                dataNanos / 1_000_000d, priceNanos / 1_000_000d, listenerNanos / 1_000_000d));
+    }
 
 
     private boolean mtMarketPrepDone = false;
@@ -178,14 +198,11 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
     @Override
     public void doNextBatch() {
+        if (!aotdStarted) profileTask = AoTDReachEconomy.PROFILE_NEXT_STEP;
         ensureRuntimeCollections();
-
-        if (ENABLE_MULTITHREADED_VERSION) {
-            doMultithreadedNextBatch();
-            return;
-        }
-
-        doSequentialNextBatch();
+        if (ENABLE_MULTITHREADED_VERSION) doMultithreadedNextBatch();
+        else doSequentialNextBatch();
+        logTaskProfile();
     }
 
 
@@ -219,12 +236,16 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         if (aotdParams != null && aotdParams.withStockpileUpdate && commoditySpec != null) {
             for (MarketAPI market : marketsForCurrentMode) {
                 if (market instanceof Market) {
+                    long started = phaseStart();
                     updateStockpileAndPriceOnce((Market) market, commoditySpec);
+                    priceNanos += phaseElapsed(started);
                 }
             }
         }
 
+        long listenerStarted = phaseStart();
         notifyCommodityUpdated(commodityId);
+        listenerNanos += phaseElapsed(listenerStarted);
     }
 
     private void runSequentialSingleMarketNow() {
@@ -238,10 +259,14 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             createCommodityMarketData(commodityId);
 
             if (aotdParams != null && aotdParams.withStockpileUpdate && commoditySpec != null && market instanceof Market) {
+                long started = phaseStart();
                 updateStockpileAndPriceOnce((Market) market, commoditySpec);
+                priceNanos += phaseElapsed(started);
             }
 
+            long listenerStarted = phaseStart();
             notifyCommodityUpdated(commodityId);
+            listenerNanos += phaseElapsed(listenerStarted);
         }
 
         runOnce = true;
@@ -275,8 +300,12 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
          * 2) Main-thread commodity market data creation.
          */
         if (!mtDataCreated) {
-            for (String commodityId : aotdCommodities) {
-                createCommodityMarketData(commodityId);
+            // Market totals are batched lazily on first access during this phase.
+            // Scope ends before yielding, so subsequent industry changes cannot reuse it.
+            try (AoTDSupplyDemandData.MarketUpdateScope scope = AoTDSupplyDemandData.beginMarketUpdateBatch()) {
+                for (String commodityId : aotdCommodities) {
+                    createCommodityMarketData(commodityId);
+                }
             }
 
             mtDataCreated = true;
@@ -287,13 +316,17 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
          * 3) Submit workers, block until they finish, then notify listeners.
          */
         if (!mtWorkersSubmitted) {
+            long started = phaseStart();
             submitMarketPriceWorkers();
             mtWorkersSubmitted = true;
 
             waitForMarketPriceWorkers();
             mtWorkersFinished = true;
+            priceNanos += phaseElapsed(started);
 
+            started = phaseStart();
             notifyCommoditiesUpdated(aotdCommodities);
+            listenerNanos += phaseElapsed(started);
 
             mtListenersNotified = true;
             runOnce = singleMarketToUpdate != null;
@@ -302,8 +335,9 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private void startTaskState() {
+        // ensureRuntimeCollections initializes the commodity list if needed.
+        // Do not enumerate and sort all specifications a second time at startup.
         ensureRuntimeCollections();
-        initCommodityList();
 
         if (aotdMarkets == null) {
             aotdMarkets = Global.getSector().getEconomy().getMarketsCopy();
@@ -353,7 +387,13 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         cachedEconGroups.addAll(groups);
     }
 
-    private static void processMarketReapplyStage(MarketAPI market) {
+    private void processMarketReapplyStage(MarketAPI market) {
+        long started = phaseStart();
+        processMarketReapplyStageImpl(market);
+        prepNanos += phaseElapsed(started);
+    }
+
+    private static void processMarketReapplyStageImpl(MarketAPI market) {
         if (market == null) return;
 
         market.reapplyConditions();
@@ -367,11 +407,13 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private void createCommodityMarketData(String commodityId) {
+        long started = phaseStart();
         new AoTDCommodityMarketData(commodityId, null);
 
         for (String econGroup : cachedEconGroups) {
             new AoTDCommodityMarketData(commodityId, econGroup);
         }
+        dataNanos += phaseElapsed(started);
     }
 
     private List<CommoditySpecAPI> buildPriceWorkerSpecs() {
@@ -386,7 +428,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             if (demandClass != null && demandClasses.add(demandClass)) specs.add(spec);
         }
         // Immutable list, not a deep snapshot of the game's specification objects.
-        return java.util.Collections.unmodifiableList(specs);
+        return Collections.unmodifiableList(specs);
     }
 
     private void submitMarketPriceWorkers() {
@@ -408,18 +450,20 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     }
 
     private void runMarketPriceWorker(Market market, List<CommoditySpecAPI> priceSpecs) {
-        for (CommoditySpecAPI commoditySpec : priceSpecs) {
-            AoTDWorkerManager.checkpoint();
-            try {
-                updateStockpileAndPriceOnce(market, commoditySpec);
-            } catch (Throwable ex) {
-                Global.getLogger(AoTdMainWorkTask2.class).warn(
-                        "AoTD price worker failed for commodity " + commoditySpec.getId() +
-                                " on market " + market.getId() + ". Skipping.", ex
-                );
+        try (AoTDSupplyDemandData.MarketUpdateScope scope = AoTDSupplyDemandData.beginMarketUpdateBatch()) {
+            for (CommoditySpecAPI commoditySpec : priceSpecs) {
+                AoTDWorkerManager.checkpoint();
+                try {
+                    updateStockpileAndPriceOnce(market, commoditySpec);
+                } catch (Throwable ex) {
+                    Global.getLogger(AoTdMainWorkTask2.class).warn(
+                            "AoTD price worker failed for commodity " + commoditySpec.getId() +
+                                    " on market " + market.getId() + ". Skipping.", ex
+                    );
+                }
             }
+            AoTDWorkerManager.checkpoint();
         }
-        AoTDWorkerManager.checkpoint();
     }
 
     private void waitForMarketPriceWorkers() {
@@ -555,8 +599,89 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         }
 
         updateAoTDStocks(market, sameClassCommodities);
+        // Recheck current quantities after refreshing supply/demand and shortage effects.
+        // Never skip just one member of an active demand class.
+        AoTDMarketDemandData demandData = (AoTDMarketDemandData) market.getDemandData();
+        String demandClass = commoditySpec.getDemandClass();
+        InactivePriceState candidate = InactivePriceState.capture(market, sameClassCommodities);
+        InactivePriceState previous = demandData.getInactivePrices().get(demandClass);
+        if (candidate != null && candidate.matches(previous)) return;
+        // Remove before callbacks so a failed recalculation cannot leave a valid-looking cache.
+        demandData.getInactivePrices().remove(demandClass);
         applyAoTDNeutralCurveAndCalibratedPriceMods(market, sameClassCommodities);
-        return;
+        if (candidate != null) {
+            InactivePriceState completed = InactivePriceState.capture(market, sameClassCommodities);
+            if (completed != null) demandData.getInactivePrices().put(demandClass, completed);
+        }
+    }
+
+    /** Runtime-only memo for dormant demand classes; never serialized with the market. */
+    public static final class InactivePriceState {
+        private final Object[] identities;
+        private final float[] values;
+        private final String id, name, faction;
+
+        private InactivePriceState(Market market, Object[] identities, float[] values) {
+            this.identities = identities;
+            this.values = values;
+            id = market.getId(); name = market.getName(); faction = market.getFactionId();
+        }
+
+        static InactivePriceState capture(Market market, List<CommodityOnMarket> commodities) {
+            // Check eligibility first; active classes allocate no snapshot.
+            for (CommodityOnMarket base : commodities) {
+                if (!(base instanceof AoTDCommodityOnMarket commodity)) return null;
+                AoTDSupplyDemandData data = commodity.getSupplyDemandData();
+                if (data.getTotalRawUnitsFromSupply() != 0 || data.getTotalRawUnitsFromDemand() != 0
+                        || commodity.getMaxSupply() != 0 || commodity.getMaxDemand() != 0
+                        || commodity.getDef() != 0 || commodity.getExc() != 0
+                        || commodity.getDeficitQuantity() != 0 || commodity.getExcessQuantity() != 0
+                        || !commodity.getTradeMod().getFlatMods().isEmpty()
+                        || !commodity.getTradeModPlus().getFlatMods().isEmpty()
+                        || !commodity.getTradeModMinus().getFlatMods().isEmpty()
+                        || commodity.getTradeMod().getModifiedValue() != 0f
+                        || commodity.getTradeModPlus().getModifiedValue() != 0f
+                        || commodity.getTradeModMinus().getModifiedValue() != 0f) return null;
+            }
+            Object[] identities = new Object[commodities.size() * 6];
+            float[] values = new float[commodities.size() * 10 + 1];
+
+            values[0] = getMarketPriceWrapper(market, true);
+            int i = 0, v = 1;
+            for (CommodityOnMarket commodity : commodities) {
+                CommoditySpecAPI specAPI = Global.getSettings().getCommoditySpec(commodity.getId());
+                identities[i++] = commodity;
+                identities[i++] = commodity.getDemand();
+                identities[i++] = commodity.getDemandPrice();
+                identities[i++] = commodity.getSupplyPrice();
+                identities[i++] = specAPI;
+                identities[i++] = specAPI.getPriceVariability();
+                values[v++] = commodity.getStockpile();
+                values[v++] = commodity.getUtilityOnMarket();
+                values[v++] = commodity.getDemand().getDemand().getModifiedValue();
+                values[v++] = commodity.getGreed().getModifiedValue();
+                values[v++] = commodity.getPlayerDemandPriceMod().computeEffective(1f);
+                values[v++] = commodity.getPlayerSupplyPriceMod().computeEffective(1f);
+                values[v++] = commodity.isIllegal() ? 1f : 0f;
+                values[v++] = specAPI.getPriceVariability() == PriceVariability.V0 ? 1f : 0f;
+                values[v++] = specAPI.getBasePrice();
+                values[v++] = specAPI.getUtility();
+            }
+            for (float value : values) if (!Float.isFinite(value)) return null;
+            return new InactivePriceState(market, identities, values);
+        }
+
+        boolean matches(InactivePriceState other) {
+            if (other == null || !Objects.equals(id, other.id)
+                    || !Objects.equals(name, other.name)
+                    || !Objects.equals(faction, other.faction)
+                    || identities.length != other.identities.length
+                    || !Arrays.equals(values, other.values)) return false;
+            for (int i = 0; i < identities.length; i++) {
+                if (identities[i] != other.identities[i]) return false;
+            }
+            return true;
+        }
     }
 
     private static void updateAoTDStocks(Market market, List<CommodityOnMarket> sameClassCommodities) {
@@ -628,7 +753,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
         float total = 0f;
 
-        for (com.fs.starfarer.api.campaign.econ.SubmarketAPI submarket : market.getSubmarketsCopy()) {
+        for (SubmarketAPI submarket : market.getSubmarketsCopy()) {
             if (submarket == null) {
                 continue;
             }
@@ -748,8 +873,8 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
          */
         ensureAoTDPriceCalculators(commodity);
 
-        AoTDPriceTargets finalTargets = getAoTDPriceTargets(market, commodity, state);
         AoTDPriceTargets blankTargets = getAoTDBlankPriceTargets(market, commodity);
+        AoTDPriceTargets finalTargets = getAoTDPriceTargets(market, commodity, state, blankTargets);
 
         float minSell;
         float maxSell;
@@ -1277,13 +1402,11 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     private static AoTDPriceTargets getAoTDPriceTargets(
             MarketAPI market,
             AoTDCommodityOnMarket commodity,
-            AoTDClassPriceState state
+            AoTDClassPriceState state,
+            AoTDPriceTargets blankTargets
     ) {
-        float buyRoll = aotdStablePriceRoll(market, commodity.getId() + "_buy");
-        float sellRoll = aotdStablePriceRoll(market, commodity.getId() + "_sell");
-
-        float blankBuy = aotdLerp(AOTD_NORMAL_BUY_MIN, AOTD_NORMAL_BUY_MAX, buyRoll);
-        float blankSell = aotdLerp(AOTD_NORMAL_SELL_MIN, AOTD_NORMAL_SELL_MAX, sellRoll);
+        float blankBuy = blankTargets.buyMult;
+        float blankSell = blankTargets.sellMult;
 
         if (state.hasDeficit) {
             float deficitMax = getDeficitCenterMax(commodity);
@@ -1310,7 +1433,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             return new AoTDPriceTargets(sell, buy);
         }
 
-        return new AoTDPriceTargets(blankSell, blankBuy);
+        return blankTargets;
     }
 
     private static float getDeficitCenterMin(AoTDCommodityOnMarket commodity) {
@@ -1459,7 +1582,9 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         seed ^= (seed >>> 17);
         seed ^= (seed << 5);
 
-        return new Random(seed).nextFloat();
+        long randomState = (((long) seed ^ 0x5DEECE66DL) * 0x5DEECE66DL + 0xBL)
+                & ((1L << 48) - 1);
+        return (int) (randomState >>> 24) / ((float) (1 << 24));
     }
 
     private static float aotdLerp(float from, float to, float t) {

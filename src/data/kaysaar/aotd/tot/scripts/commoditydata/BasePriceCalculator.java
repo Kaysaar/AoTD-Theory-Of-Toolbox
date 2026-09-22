@@ -23,13 +23,13 @@ public class BasePriceCalculator {
     static final double ABSOLUTE_EXCESS_BOUND = 4.0;
 
     /** Multiplier when stock is at {@link #DEFICIT_NORMAL_BOUND}. */
-    static final double DEFICIT_NORMAL_MULT = 1.2;
+    static final double DEFICIT_NORMAL_MULT = 1.1;
     /** Multiplier when stock is at {@link #EXCESS_NORMAL_BOUND}. */
     static final double EXCESS_NORMAL_MULT = 0.8;
     /** Multiplier when stock is at {@link #ABSOLUTE_DEFICIT_BOUND}. */
-    static final double ABSOLUTE_DEFICIT_MULT = 2.2;
+    static final double ABSOLUTE_DEFICIT_MULT = 2.1;
     /** Multiplier when stock is at {@link #ABSOLUTE_EXCESS_BOUND}. */
-    static final double ABSOLUTE_EXCESS_MULT = 0.3;
+    static final double ABSOLUTE_EXCESS_MULT = 0.2;
 
     // ------------------------ TUNABLE END ------------------------
 

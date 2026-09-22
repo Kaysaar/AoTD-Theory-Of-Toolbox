@@ -4,11 +4,11 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.CommoditySourceType;
 import com.fs.starfarer.api.combat.MutableStat;
-import com.fs.starfarer.api.impl.campaign.ids.Commodities;
 import com.fs.starfarer.campaign.econ.CommodityOnMarket;
 import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.reach.CommodityMarketData;
 import com.fs.starfarer.campaign.econ.reach.MarketShareData;
+
 import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 
 import java.util.Iterator;
@@ -24,25 +24,24 @@ public class AoTDCommodityMarketData extends CommodityMarketData {
 
             float stockPile = 0;
             if(commodityOnMarket instanceof AoTDCommodityOnMarket commodity){
-                stockPile+=Math.max(commodity.getSupplyDemandData().getTotalRawUnitsFromDemand(),commodity.getSupplyDemandData().getTotalRawUnitsFromSupply());
+                AoTDSupplyDemandData data = commodity.getSupplyDemandData();
+                stockPile += Math.max(data.getTotalRawUnitsFromDemand(), data.getTotalRawUnitsFromSupply());
 
             }
             if(stockPile>0 && commodityOnMarket instanceof  AoTDCommodityOnMarket aoTDCommodityOnMarket){
-                if(market.getId().equals("jangala")&&commodityId.equals(Commodities.SUPPLIES)){
-                    String he= "he";
-                }
                 AoTDAvailableStat var40 = (AoTDAvailableStat) commodityOnMarket.getAvailableStat();
                 var40.unmodifyFlat(KEY_LOCAL);
                 var40.unmodifyFlat(KEY_SHORTAGE);
                 var40.unmodifyFlat(KEY_IMPORTS);
                 var40.unmodifyFlat(KEY_LOWACCESS);
-                float changesMinus = 0;
-                float changesPlus = 0;
                 for (String s : var40.getFlatMods().keySet()) {
                     if(s.equals("aotd_local"))continue;
-                    if(var40.getFlatStatMod(s).getValue()<0){
-                        MutableStat stat = new MutableStat(-var40.getFlatStatMod(s).getValue());
-                        aoTDCommodityOnMarket.setDef(aoTDCommodityOnMarket.getSupplyDemandData().getEconSpec().getCalculationScript().getRawUnitsFromDemand(stat,null,commodityId,null),30,s,var40.getFlatStatMod(s).desc);
+                    MutableStat.StatMod modifier = var40.getFlatStatMod(s);
+                    if (modifier.getValue() < 0) {
+                        MutableStat stat = new MutableStat(-modifier.getValue());
+                        // Read description after conversion, as before: custom scripts may mutate it.
+                        int raw = aoTDCommodityOnMarket.getSupplyDemandData().getEconSpec().getCalculationScript().getRawUnitsFromDemand(stat, null, commodityId, null);
+                        aoTDCommodityOnMarket.setDef(raw, 30, s, var40.getFlatStatMod(s).desc);
                     }
                 }
                 var40.unmodify();

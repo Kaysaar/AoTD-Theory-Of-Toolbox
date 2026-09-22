@@ -10,6 +10,7 @@ import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.api.impl.campaign.shared.SharedData;
 import com.fs.starfarer.api.util.Misc;
 import com.fs.starfarer.api.util.WeightedRandomPicker;
+
 import data.kaysaar.aotd.tot.intel.AoTDContractFinished;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDSectorProductionDemandDataUtils;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.rewards.TradeContractRewardDataAPI;
@@ -23,6 +24,7 @@ import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 import data.kaysaar.aotd.tot.scripts.trade.models.AoTDFactionTradeData;
 import data.kaysaar.aotd.tot.scripts.trade.models.AoTDMarketData;
 import data.kaysaar.aotd.tot.ui.income.AoTDMonthlyTooltipCreator;
+
 import org.lazywizard.lazylib.MathUtils;
 
 import java.util.*;
@@ -174,20 +176,26 @@ public class AoTDTradeContractManager {
             }
         }
 
-        // exporters by commodity, sorted once
+        // All commodity exporter lists share the same priority. Sort once, then filter.
+        ArrayList<AoTDMarketData> orderedMarkets = new ArrayList<>();
+        for (AoTDMarketData md : playerTrade.getTradeData().values()) {
+            if (md != null) orderedMarkets.add(md);
+        }
+        orderedMarkets.sort((a, b) -> Float.compare(b.outsideWeight, a.outsideWeight));
         Map<String, ArrayList<AoTDMarketData>> exportersByCommodity = new HashMap<>();
         for (String commodityId : contractCommodities) {
             ArrayList<AoTDMarketData> exporters = new ArrayList<>();
-            for (AoTDMarketData md : playerTrade.getTradeData().values()) {
-                if (md == null) continue;
+            for (AoTDMarketData md : orderedMarkets) {
                 Map<String, Integer> av = available.get(md.marketId);
                 if (av == null) continue;
                 if (av.getOrDefault(commodityId, 0) > 0) exporters.add(md);
             }
-            exporters.sort((a, b) -> Float.compare(b.outsideWeight, a.outsideWeight));
             exportersByCommodity.put(commodityId, exporters);
         }
 
+        // Availability only decreases in this prediction pass. Never rescan an
+        // exhausted prefix for later contracts requesting the same commodity.
+        Map<String, Integer> exporterCursor = new HashMap<>();
         // deterministic allocation: contracts in insertion order, and lines in insertion order (LinkedHashMap)
         for (AoTDTradeContract c : activeContracts.values()) {
             if (c == null) continue;
@@ -204,21 +212,22 @@ public class AoTDTradeContractManager {
                 if (exporters == null || exporters.isEmpty()) continue;
 
                 int remaining = need;
-                for (AoTDMarketData md : exporters) {
-                    if (remaining <= 0) break;
-
+                int index = exporterCursor.getOrDefault(commodityId, 0);
+                while (index < exporters.size() && remaining > 0) {
+                    AoTDMarketData md = exporters.get(index);
                     Map<String, Integer> av = available.get(md.marketId);
-                    if (av == null) continue;
-
-                    int avail = av.getOrDefault(commodityId, 0);
-                    if (avail <= 0) continue;
-
+                    int avail = av == null ? 0 : av.getOrDefault(commodityId, 0);
+                    if (avail <= 0) {
+                        index++;
+                        continue;
+                    }
                     int moved = Math.min(avail, remaining);
                     av.put(commodityId, avail - moved);
-
                     md.recordPredictedContractExport(c.getId(), commodityId, moved);
                     remaining -= moved;
+                    if (moved == avail) index++;
                 }
+                exporterCursor.put(commodityId, index);
             }
         }
     }

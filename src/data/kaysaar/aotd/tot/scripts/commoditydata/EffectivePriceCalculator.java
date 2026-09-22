@@ -4,13 +4,14 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.campaign.econ.PriceVariability;
-import com.fs.starfarer.api.combat.StatBonus;
 import com.fs.starfarer.api.combat.MutableStat;
+import com.fs.starfarer.api.combat.StatBonus;
 import com.fs.starfarer.campaign.econ.Market;
 import com.fs.starfarer.campaign.econ.PriceCalculator;
 
 import data.kaysaar.aotd.tot.scripts.commoditydata.BasePriceCalculator.TransactionDirection;
 
+import java.util.Arrays;
 import java.util.Map;
 
 /**
@@ -311,7 +312,7 @@ public class EffectivePriceCalculator extends PriceCalculator {
         float[] model = capturePriceModel();
         QuoteCache cached = playerSellingToMarket ? lastAddQuote : lastRemoveQuote;
         if (cached != null && cached.stock == stock && cached.amount == safeAmount
-                && inputs.same(cached.inputs) && java.util.Arrays.equals(model, cached.model)) {
+                && inputs.same(cached.inputs) && Arrays.equals(model, cached.model)) {
             return cached.total;
         }
 
@@ -327,7 +328,7 @@ public class EffectivePriceCalculator extends PriceCalculator {
         float result = (float) Math.max(safeAmount, total);
         // Avoid retaining non-finite results or a model changed during calculation.
         if (Float.isFinite(result) && Double.isFinite(stock) && Double.isFinite(safeAmount)
-                && java.util.Arrays.equals(model, capturePriceModel())) {
+                && Arrays.equals(model, capturePriceModel())) {
             QuoteCache entry = new QuoteCache(stock, safeAmount, inputs, model, result);
             if (playerSellingToMarket) lastAddQuote = entry;
             else lastRemoveQuote = entry;

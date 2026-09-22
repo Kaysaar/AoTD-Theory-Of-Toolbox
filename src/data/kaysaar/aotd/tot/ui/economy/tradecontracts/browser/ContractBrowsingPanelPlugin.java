@@ -57,7 +57,7 @@ public class ContractBrowsingPanelPlugin implements ExtendedUIPanelPlugin {
         float currY = 0f;
         TooltipMakerAPI contentTooltip = panelForOffers.createUIElement(buttonWidth*2+20, panelForOffers.getPosition().getHeight()-20,true);
         contentTooltip.addSpacer(0f).getPosition().inTL(0,0);
-        List<AoTDTradeContract> contracts = new java.util.ArrayList<>(
+        List<AoTDTradeContract> contracts = new ArrayList<>(
                 AoTDTradeContractManager.getInstance().getCurrentlyGeneratedInBrowser().values()
         );
         for (int i = 0; i < contracts.size(); ) {
