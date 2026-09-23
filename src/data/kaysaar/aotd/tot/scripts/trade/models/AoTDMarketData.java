@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/models/AoTDMarketData.java
+
 package data.kaysaar.aotd.tot.scripts.trade.models;
 
 import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;

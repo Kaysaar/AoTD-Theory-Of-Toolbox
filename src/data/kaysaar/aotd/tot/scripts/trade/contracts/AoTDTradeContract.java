@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/contracts/AoTDTradeContract.java
+
 package data.kaysaar.aotd.tot.scripts.trade.contracts;
 
 import ashlib.data.plugins.misc.AshMisc;

@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/ui/commoditypanel/CommodityButtonOnHover.java
+
 package data.kaysaar.aotd.tot.ui.commoditypanel;
 
 import com.fs.starfarer.api.Global;
