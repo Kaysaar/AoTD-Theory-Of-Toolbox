@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/AoTDSectorExternalIndex.java
+
 package data.kaysaar.aotd.tot.scripts.trade;
 
 import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;

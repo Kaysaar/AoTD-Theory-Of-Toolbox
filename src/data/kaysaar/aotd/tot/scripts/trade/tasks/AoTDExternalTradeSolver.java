@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/tasks/AoTDExternalTradeSolver.java
+
 package data.kaysaar.aotd.tot.scripts.trade.tasks;
 
 import com.fs.starfarer.api.util.WeightedRandomPicker;
@@ -15,11 +15,7 @@ import java.util.Set;
 
 public class AoTDExternalTradeSolver {
 
-    /**
-     * Scavenger Guild mechanic:
-     * If sector demand exceeds sector production by more than threshold,
-     * inject enough synthetic supply so that remaining shortage is capped to threshold*production.
-     */
+
     private void applyScavengerGuildIfNeeded(
             AoTDSectorExternalIndex idx,
             String commodityId,
@@ -128,6 +124,59 @@ public class AoTDExternalTradeSolver {
         }
     }
 
+    /** Deliver unused harvest to satisfied importer markets so it becomes real excess.
+     * The month-end stepper already turns positive remainingNet into an excess package.
+     */
+    private void distributeHarvestOverflow(String commodityId,
+                                           ArrayList<AoTDSectorExternalIndex.Offer> exporters,
+                                           ArrayList<AoTDSectorExternalIndex.Offer> importers) {
+        if (!ScavengerGuildUtils.isOverflowAllowed()) return;
+        boolean hasUnusedHarvest = false;
+        for (AoTDSectorExternalIndex.Offer exporter : exporters) {
+            if (exporter != null && exporter.isScavenger && exporter.amount > 0) {
+                hasUnusedHarvest = true;
+                break;
+            }
+        }
+        if (!hasUnusedHarvest) return;
+        ArrayList<AoTDSectorExternalIndex.Offer> recipients = new ArrayList<>();
+        double totalWeight = 0d;
+        for (AoTDSectorExternalIndex.Offer importer : importers) {
+            if (importer == null || !importer.hasMarket() || importer.amount > 0) continue;
+            int net = importer.data.remainingNet.getOrDefault(commodityId, 0);
+            if (net < 0 || net == Integer.MAX_VALUE) continue;
+            recipients.add(importer);
+            totalWeight += overflowWeight(importer);
+        }
+        if (recipients.isEmpty()) return;
+
+        for (AoTDSectorExternalIndex.Offer exporter : exporters) {
+            if (exporter == null || !exporter.isScavenger || exporter.amount <= 0) continue;
+            double weightLeft = totalWeight;
+            for (int i = 0; i < recipients.size() && exporter.amount > 0; i++) {
+                AoTDSectorExternalIndex.Offer recipient = recipients.get(i);
+                double weight = overflowWeight(recipient);
+                int oldNet = recipient.data.remainingNet.getOrDefault(commodityId, 0);
+                long capacity = (long) Integer.MAX_VALUE - oldNet;
+                long share = i == recipients.size() - 1 ? exporter.amount
+                        : (long) Math.floor(exporter.amount * (weight / weightLeft));
+                int moved = (int) Math.min(capacity, Math.min(exporter.amount, Math.max(0L, share)));
+                if (moved > 0) {
+                    recipient.data.remainingNet.put(commodityId, oldNet + moved);
+                    exporter.amount -= moved;
+                    // Transfer existing synthetic units; don't mint extra units or report a sale.
+                    if (exporter.amount == 0) exporter.data.remainingNet.remove(commodityId);
+                    else exporter.data.remainingNet.put(commodityId, exporter.amount);
+                }
+                weightLeft -= weight;
+            }
+        }
+    }
+
+    private static double overflowWeight(AoTDSectorExternalIndex.Offer offer) {
+        return Float.isFinite(offer.weight) && offer.weight > 0f ? offer.weight : 1d;
+    }
+
     /**
      * Runs month-end matching.
      */
@@ -199,7 +248,7 @@ public class AoTDExternalTradeSolver {
             if (imp.amount <= 0) impPicker.remove(imp);
         }
 
-        // IMPORTANT: surplus cap happens AFTER matching, and only touches leftover supply.
+        distributeHarvestOverflow(commodityId, exporters, importers);
 
     }
 }

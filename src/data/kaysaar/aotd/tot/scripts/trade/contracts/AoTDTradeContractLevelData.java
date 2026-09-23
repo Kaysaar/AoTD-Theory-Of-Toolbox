@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/contracts/AoTDTradeContractLevelData.java
+
 package data.kaysaar.aotd.tot.scripts.trade.contracts;
 
 import java.util.LinkedHashMap;

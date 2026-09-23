@@ -91,7 +91,7 @@ public class AoTDToolboxPopAndInfra extends PopulationAndInfrastructure {
 
         demand(Commodities.SUPPLIES, Math.min(size, 3));
 
-        supply(Commodities.CREW, size - 3);
+        supply(Commodities.CREW, size);
         supply(Commodities.DRUGS, size - 4);
         supply(Commodities.ORGANS, size - 5);
 

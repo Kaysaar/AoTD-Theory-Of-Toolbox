@@ -80,7 +80,8 @@ public class AoTDDetailedCommodityPanelContent implements ExtendedUIPanelPlugin 
         tooltipFactionDem=contentPanel.createUIElement(seperatorFirst,40,false);
         tooltipFactionShare=contentPanel.createUIElement(seperatorFirst,40,false);
         int gProd,gDem;
-        gProd = AoTDSectorProductionDemandDataUtils.getTotalProductionFromSector(commodity)+ ScavengerGuildUtils.getCoveredAmountFromSector(commodity);
+        gProd = AoTDSectorProductionDemandDataUtils.getTotalProductionFromSector(commodity);
+        int scavCovered = ScavengerGuildUtils.getCoveredAmountFromSector(commodity);
         gDem = AoTDSectorProductionDemandDataUtils.getTotalDemandFromSector(commodity);
 
         int factionProd,factionDem;
@@ -111,7 +112,12 @@ public class AoTDDetailedCommodityPanelContent implements ExtendedUIPanelPlugin 
         );
 
         tooltipGP.setParaFont(Fonts.INSIGNIA_LARGE);
-        setLabel(tooltipGP.addPara(Misc.getWithDGS(gProd), Color.ORANGE, 3f));
+        if(scavCovered<=0){
+            setLabel(tooltipGP.addPara(Misc.getWithDGS(gProd), Color.ORANGE, 3f));
+        }
+        else{
+            setLabel(tooltipGP.addPara("%s ± %s",3f,Color.ORANGE,Misc.getWithDGS(gProd),Misc.getWithDGS(scavCovered)));
+        }
         tooltipGP.addTooltipToPrevious(
                 new AoTDDetailedComPanelOnHoverImpExp(true, commodity, faction),
                 TooltipMakerAPI.TooltipLocation.BELOW,

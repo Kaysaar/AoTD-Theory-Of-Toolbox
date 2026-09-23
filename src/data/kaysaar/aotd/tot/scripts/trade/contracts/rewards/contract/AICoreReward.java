@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/contracts/rewards/contract/AICoreReward.java
+
 package data.kaysaar.aotd.tot.scripts.trade.contracts.rewards.contract;
 
 import com.fs.starfarer.api.Global;

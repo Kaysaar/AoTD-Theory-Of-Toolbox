@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/ScavengerGuildUtils.java
+
 package data.kaysaar.aotd.tot.scripts.trade;
 
 import com.fs.starfarer.api.Global;
@@ -8,15 +8,6 @@ import data.kaysaar.aotd.tot.strings.AoTDTradeTags;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Scavenger Guild rule:
- * If totalDemand > totalProduction * (1 + threshold),
- * scavengers cover enough to bring effective demand down to production*(1+threshold).
- *
- * Covered amount = max(0, totalDemand - totalProduction*(1+threshold)).
- *
- * Threshold default: 0.10 (10%). Override per commodity via setThreshold().
- */
 public final class ScavengerGuildUtils {
 
     private static final Map<String, Float> THRESHOLD_BY_COMMODITY = new HashMap<>();
@@ -36,6 +27,47 @@ public final class ScavengerGuildUtils {
         return THRESHOLD_BY_COMMODITY.getOrDefault(commodityId, DEFAULT_THRESHOLD);
     }
 
+    public static boolean isHarvestMode() {
+        return settingBoolean("aotd_scavenger_guild_harvest_mode", false);
+    }
+
+    public static boolean isOverflowAllowed() {
+        return isHarvestMode() && settingBoolean("aotd_scavenger_guild_harvest_allow_overflow", false);
+    }
+
+    public static ScavengerHarvestModel.Range getHarvestRange(int demand, int production) {
+        boolean overflow = isOverflowAllowed();
+        double min = settingFloat("aotd_scavenger_guild_harvest_min_fraction", 0f);
+        double max = overflow
+                ? settingFloat("aotd_scavenger_guild_harvest_overflow_max_fraction", 1.25f)
+                : settingFloat("aotd_scavenger_guild_harvest_max_fraction", 1f);
+        return ScavengerHarvestModel.range(demand, production, min, max, overflow);
+    }
+
+    /** Eligibility is distinct from yield: an activated guild can have a failed harvest. */
+    public static boolean isEligible(String commodityId, int totalDemand, int totalProduction) {
+        if (Global.getSettings().getCommoditySpec(commodityId).hasTag(AoTDTradeTags.IGNORE_SCAVENGERS)) return false;
+        if (totalDemand <= 0 || totalProduction <= 0) return false;
+        return totalDemand > totalProduction * (1.0 + getThreshold(commodityId));
+    }
+
+    private static boolean settingBoolean(String id, boolean fallback) {
+        try {
+            return Global.getSettings().getBoolean(id);
+        } catch (RuntimeException ex) {
+            return fallback;
+        }
+    }
+
+    private static float settingFloat(String id, float fallback) {
+        try {
+            float value = Global.getSettings().getFloat(id);
+            return Float.isFinite(value) ? value : fallback;
+        } catch (RuntimeException ex) {
+            return fallback;
+        }
+    }
+
     // ----------------------------
     // Core coverage logic
     // ----------------------------
@@ -47,15 +79,16 @@ public final class ScavengerGuildUtils {
 
     /** Covered amount using already-known totals. */
     public static int getCoveredAmount(String commodityId, int totalDemand, int totalProduction) {
-        if(Global.getSettings().getCommoditySpec(commodityId).hasTag(AoTDTradeTags.IGNORE_SCAVENGERS))return 0;
-        if (totalDemand <= 0 || totalProduction <= 0) return 0;
-
-        float threshold = getThreshold(commodityId);
-        double allowedDemand = totalProduction * (1.0 + threshold);
-
-        if (totalDemand <= allowedDemand) return 0;
-
-        return (int) Math.ceil(totalDemand - allowedDemand);
+        if (!isEligible(commodityId, totalDemand, totalProduction)) return 0;
+        if (!isHarvestMode()) {
+            double allowedDemand = totalProduction * (1.0 + getThreshold(commodityId));
+            return (int) Math.ceil(totalDemand - allowedDemand);
+        }
+        long seed = ScavengerHarvestModel.monthlySeed(Global.getSector().getSeedString(),
+                Global.getSector().getClock().getCycle(), Global.getSector().getClock().getMonth(), commodityId);
+        return ScavengerHarvestModel.sample(getHarvestRange(totalDemand, totalProduction),
+                settingFloat("aotd_scavenger_guild_harvest_failure_chance", 0.02f),
+                settingFloat("aotd_scavenger_guild_harvest_maximum_chance", 0.02f), seed);
     }
 
     /** Covered amount using GLOBAL sector totals (auto fetch). */

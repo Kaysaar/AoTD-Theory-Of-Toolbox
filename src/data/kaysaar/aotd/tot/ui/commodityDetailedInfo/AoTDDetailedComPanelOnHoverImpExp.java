@@ -12,9 +12,11 @@ import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDSectorProductionDemandDataUtils;
 import data.kaysaar.aotd.tot.scripts.trade.ScavengerGuildUtils;
 
-import java.awt.*;
+import java.awt.Color;
+import java.text.NumberFormat;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 public class AoTDDetailedComPanelOnHoverImpExp implements TooltipMakerAPI.TooltipCreator {
     boolean isProduction = false;
@@ -40,9 +42,11 @@ public class AoTDDetailedComPanelOnHoverImpExp implements TooltipMakerAPI.Toolti
         CommoditySpecAPI spec = Global.getSettings().getCommoditySpec(commodityId);
         if(isProduction){
             tooltip.addTitle("Global Production: "+spec.getName());
-            int amount = ScavengerGuildUtils.getCoveredAmountFromSector(commodityId);
             int supply = AoTDSectorProductionDemandDataUtils.getTotalProductionFromSector(commodityId);
-            tooltip.addPara("Currently sector is able to produce in total %s units of %s",3f, Color.ORANGE, Misc.getWithDGS(supply+amount),spec.getName());
+            int demand = AoTDSectorProductionDemandDataUtils.getTotalDemandFromSector(commodityId);
+            int amount = ScavengerGuildUtils.getCoveredAmount(commodityId, demand, supply);
+            tooltip.addPara("Sector production shipments total %s units of %s.",3f,
+                    Color.ORANGE, NumberFormat.getIntegerInstance(Locale.US).format((long) supply), spec.getName());
             tooltip.addSectionHeading("Producers",faction.getBaseUIColor(),faction.getDarkUIColor(), Alignment.MID,5f);
             List<FactionAPI> economyFactions = AoTDToolboxMisc.getFactionsInEconomy().stream().filter(x-> AoTDSectorProductionDemandDataUtils.getTotalProductionFromFaction(commodityId,x.getId())>0).sorted(new Comparator<FactionAPI>() {
                 @Override
@@ -65,7 +69,38 @@ public class AoTDDetailedComPanelOnHoverImpExp implements TooltipMakerAPI.Toolti
 
             }
             tooltip.setBulletedListMode(null);
-            if (amount > 0) {
+            if (ScavengerGuildUtils.isHarvestMode() && ScavengerGuildUtils.isEligible(commodityId, demand, supply)) {
+                tooltip.addSectionHeading("Scavenger Guild expeditions", Alignment.MID, 10f);
+                if (amount > 0) {
+                    tooltip.addPara(
+                            "With local producers unable to meet demand, the Scavenger Guild has dispatched " +
+                                    "expeditions in search of additional cargo. Its brokers expect to bring " +
+                                    "%s units of %s to market this month.",
+                            5f, Color.ORANGE, Misc.getWithDGS(amount), spec.getName());
+                } else {
+                    tooltip.addPara(
+                            "Despite the shortage, the Scavenger Guild has secured no shipments of %s " +
+                                    "for the market this month.",
+                            5f, Color.ORANGE, spec.getName());
+                }
+                tooltip.addPara(
+                        "Returns are uncertain. Most expeditions bring back modest hauls; a few return " +
+                                "empty-handed, while a rare discovery can fill entire freighter holds.",
+                        5f);
+                if (ScavengerGuildUtils.isOverflowAllowed()) {
+                    tooltip.addPara(
+                            "Guild captains sell whatever they can recover. A rich haul can flood " +
+                                    "receiving markets with more cargo than their buyers need.",
+                            5f);
+                    long projectedExcess = Math.max(0L, (long) supply + amount - demand);
+                    if (projectedExcess > 0) {
+                        tooltip.addPara("Brokers anticipate a sector-wide surplus of approximately %s units once the cargo reaches market.",
+                                5f, Color.ORANGE, NumberFormat.getIntegerInstance(Locale.US).format(projectedExcess));
+                    }
+                } else {
+                    tooltip.addPara("Guild brokers limit deliveries to the sector's unmet demand, keeping surplus cargo off the market.", 5f);
+                }
+            } else if (amount > 0) {
                 tooltip.addPara(
                         "Due to demand exceeding global production capacity, the %s have expanded their operations and are supplying an additional %s units of %s to the global market.",
                         10f,

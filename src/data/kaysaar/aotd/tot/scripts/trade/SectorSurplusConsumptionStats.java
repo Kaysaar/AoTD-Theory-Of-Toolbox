@@ -1,4 +1,4 @@
-// file: data/kaysaar/aotd/tot/scripts/trade/SectorSurplusConsumptionStats.java
+
 package data.kaysaar.aotd.tot.scripts.trade;
 
 import com.fs.starfarer.api.Global;
