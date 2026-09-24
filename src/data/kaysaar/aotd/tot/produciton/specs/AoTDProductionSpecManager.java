@@ -29,7 +29,8 @@ public class AoTDProductionSpecManager {
     public static LinkedHashSet<WeaponAPI.WeaponType> blackListedTypes = new LinkedHashSet<>();
     public static boolean loaded = false;
 
-    public static LinkedHashMap<String, AoTDProducitonSpecListener>listeners = new LinkedHashMap<>();
+    public static LinkedHashMap<String, AoTDProducitonSpecListener> listeners = new LinkedHashMap<>();
+
     public static void makeSureBlackListInitialized() {
         blackListedTypes.add(WeaponAPI.WeaponType.LAUNCH_BAY);
         blackListedTypes.add(WeaponAPI.WeaponType.BUILT_IN);
@@ -37,21 +38,24 @@ public class AoTDProductionSpecManager {
         blackListedTypes.add(WeaponAPI.WeaponType.SYSTEM);
         blackListedTypes.add(WeaponAPI.WeaponType.STATION_MODULE);
     }
-    public static void addListener(String id,AoTDProducitonSpecListener listener) {
+
+    public static void addListener(String id, AoTDProducitonSpecListener listener) {
         listeners.put(id, listener);
     }
+
     public static LinkedHashMap<String, AoTDProductionSpec> shipProdSpecs = new LinkedHashMap<>();
     public static LinkedHashMap<String, AoTDProductionSpec> weaponProdSpecs = new LinkedHashMap<>();
 
     public static LinkedHashMap<String, AoTDProductionSpec> fighterProdSpecs = new LinkedHashMap<>();
 
     public static LinkedHashMap<String, AoTDProductionSpec> specialItemProdSpecs = new LinkedHashMap<>();
-    public static ArrayList<AoTDProductionManData>manData = new ArrayList<>();
+    public static ArrayList<AoTDProductionManData> manData = new ArrayList<>();
     public static LinkedHashSet<String> orderedItemsForUI = new LinkedHashSet<>();
+
     static {
         orderedItemsForUI.add(Commodities.SHIPS);
         orderedItemsForUI.add(Commodities.HAND_WEAPONS);
-        if(Global.getSettings().getModManager().isModEnabled("aotd_vok")){
+        if (Global.getSettings().getModManager().isModEnabled("aotd_vok")) {
             orderedItemsForUI.add(AoTDCommodities.ADVANCED_COMPONENTS);
             orderedItemsForUI.add(AoTDCommodities.REFINED_METAL);
             orderedItemsForUI.add(AoTDCommodities.PURIFIED_TRANSPLUTONICS);
@@ -60,10 +64,9 @@ public class AoTDProductionSpecManager {
         }
 
 
-
-
     }
-    public static LinkedHashMap<String,AoTDProductionSpec>getSpecsBasedOnType(AoTDProductionSpec.AoTDProductionSpecType type) {
+
+    public static LinkedHashMap<String, AoTDProductionSpec> getSpecsBasedOnType(AoTDProductionSpec.AoTDProductionSpecType type) {
         return switch (type) {
             case SHIP -> shipProdSpecs;
             case WEAPON -> weaponProdSpecs;
@@ -82,7 +85,7 @@ public class AoTDProductionSpecManager {
         fighterProdSpecs.clear();
         specialItemProdSpecs.clear();
         manData.clear();
-        if(Global.getSettings().getModManager().isModEnabled("aotd_vok")){
+        if (Global.getSettings().getModManager().isModEnabled("aotd_vok")) {
             manData.addAll(AoTDProductionManData.getManufacturerDataFromCSV());
         }
         for (ShipHullSpecAPI allShipHullSpec : Global.getSettings().getAllShipHullSpecs()) {
@@ -116,7 +119,7 @@ public class AoTDProductionSpecManager {
 
             fighterProdSpecs.put(allFighterWingSpec.getId(), new AoTDProductionSpec(allFighterWingSpec.getId(), allFighterWingSpec));
         }
-        ArrayList<String>allowedItems =    new ArrayList<>();
+        ArrayList<String> allowedItems = new ArrayList<>();
         try {
             JSONArray array = Global.getSettings().getJSONArray("aotd_item_prod");
             for (int i = 0; i < array.length(); i++) {
@@ -128,22 +131,23 @@ public class AoTDProductionSpecManager {
 
         }
         for (SpecialItemSpecAPI allSpecialItemSpec : Global.getSettings().getAllSpecialItemSpecs()) {
-            if(!allowedItems.contains(allSpecialItemSpec.getId()))continue;
+            if (!allowedItems.contains(allSpecialItemSpec.getId())) continue;
 
             specialItemProdSpecs.put(allSpecialItemSpec.getId(), new AoTDProductionSpec(allSpecialItemSpec.getId(), allSpecialItemSpec));
         }
         for (CommoditySpecAPI s : Global.getSettings().getAllCommoditySpecs()) {
-            if(!allowedItems.contains(s.getId()))continue;
-            if (s.hasTag("ai_core") && !s.hasTag("no_drop") && !s.getId().equals("ai_cores") && s.hasTag("aotd_ai_core")) {
-                specialItemProdSpecs.put(s.getId(), new AoTDProductionSpec(s.getId(), s));
-            }
+            if (!allowedItems.contains(s.getId())) continue;
+
+            specialItemProdSpecs.put(s.getId(), new AoTDProductionSpec(s.getId(), s));
+
         }
         listeners.values().forEach(AoTDProducitonSpecListener::specsCreated);
         loaded = true;
     }
-    public static AoTDProductionManData getManDataIfPresent(String manufacturer){
+
+    public static AoTDProductionManData getManDataIfPresent(String manufacturer) {
         for (AoTDProductionManData manDatum : manData) {
-            if(manDatum.getManufacturerId().equalsIgnoreCase(manufacturer)){
+            if (manDatum.getManufacturerId().equalsIgnoreCase(manufacturer)) {
                 return manDatum;
             }
         }
@@ -161,6 +165,7 @@ public class AoTDProductionSpecManager {
     public static AoTDProductionSpec getFighterSpec(String id) {
         return fighterProdSpecs.get(id);
     }
+
     public static AoTDProductionSpec getSpec(String id, AoTDProductionSpec.AoTDProductionSpecType type) {
         if (id == null || type == null) return null;
 
@@ -171,6 +176,7 @@ public class AoTDProductionSpecManager {
             case SPECIAL_ITEM, COMMODITY_ITEM -> specialItemProdSpecs.get(id);
         };
     }
+
     public static AoTDProductionSpec getSpecialItemSpec(String id) {
         return specialItemProdSpecs.get(id);
     }
@@ -178,8 +184,9 @@ public class AoTDProductionSpecManager {
     public static AoTDProductionSpec getNormalItemSpec(String id) {
         return specialItemProdSpecs.get(id);
     }
+
     public static List<AoTDProductionSpec> getLearnedSpecsForFaction(AoTDProductionSpec.AoTDProductionSpecType type, FactionAPI faction) {
-        return getSpecsBasedOnType(type).values().stream().filter(x->x.isLearnedByFaction(faction)).toList();
+        return getSpecsBasedOnType(type).values().stream().filter(x -> x.isLearnedByFaction(faction)).toList();
     }
 
 }
