@@ -1,0 +1,34 @@
+diff --git a/com/fs/starfarer/api/impl/campaign/econ/impl/BaseIndustry.java b/com/fs/starfarer/api/impl/campaign/econ/impl/BaseIndustry.java
+--- a/com/fs/starfarer/api/impl/campaign/econ/impl/BaseIndustry.java
++++ b/com/fs/starfarer/api/impl/campaign/econ/impl/BaseIndustry.java
+@@ -811,8 +811,29 @@
+ 			int demand = (int) getDemand(id).getQuantity().getModifiedValue();
+ 			CommodityOnMarketAPI com = market.getCommodityData(id);
+ 			int available = com.getAvailable();
+-			
++
++			if (Global.getSettings().getModManager().isModEnabled("aotd_theory_of_toolbox")) {
++				List<Industry> industries = new ArrayList<Industry>(market.getIndustries());
++				for (int i = 0; i < industries.size(); i++) {
++					for (int j = i + 1; j < industries.size(); j++) {
++						Industry first = industries.get(i);
++						Industry second = industries.get(j);
++						if (first.getSpec().getOrder() > second.getSpec().getOrder()) {
++							industries.set(i, second);
++							industries.set(j, first);
++						}
++					}
++				}
++
++				for (int i = 0; i < industries.size(); i++) {
++					Industry industry = industries.get(i);
++					if (industry.getId().equals(getId())) break;
++					available -= Math.max((int) industry.getDemand(id).getQuantity().getModifiedValue(), 0);
++				}
++			}
++
+ 			int deficit = Math.max(demand - available, 0);
++			if (deficit > demand) deficit = demand;
+ 			if (deficit > result.two) {
+ 				result.one = id;
+ 				result.two = deficit;
