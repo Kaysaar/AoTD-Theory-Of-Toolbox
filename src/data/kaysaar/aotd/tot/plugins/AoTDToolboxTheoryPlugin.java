@@ -175,7 +175,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
             int secondDeficit = second.getMaxDeficit(Commodities.ALPHA_CORE).two;
 
             if(secondDeficit!=39){
-                throw new RuntimeException("WARNING : AoTD Theory of Toolbox: Market Test Failed. You must replace the 'starfarer.api.jar' file within the game's core folder with a copy that is located in the AoTD-Theory of Toolbox mod folder named '0.98a/starfarer.api.jar'.\nYou only need to replace it once, and you won't need to replace it again when you disable the mod.");
+                throw new RuntimeException("WARNING : AoTD Theory of Toolbox: Market Test Failed. You must replace the 'starfarer.api.jar' file within the game's starsector-core folder with a copy that is located in the '0.98a' folder within the `Ashes of  The Domain - Theory of Toolbox` mod folder.\nYou only need to replace it once, and you won't need to replace it again when you disable the mod.");
 
             }
         }
