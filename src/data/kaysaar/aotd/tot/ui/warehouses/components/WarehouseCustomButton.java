@@ -132,7 +132,7 @@ public class WarehouseCustomButton extends CustomButton {
             },viewer2.getComponentPanel(), TooltipMakerAPI.TooltipLocation.BELOW,false);
         }
         if(!plugin.getCargo().getFighters().isEmpty()){
-            ImageViewer viewer3 = new ImageViewer(20,20,Global.getSettings().getSpriteName("ui","fighter_lpc"));
+            ImageViewer viewer3 = new ImageViewer(20,20,Global.getSettings().getSpriteName("misc","cargoFighterChip"));
             container.addComponent(viewer3.getComponentPanel()).rightOfMid(reference,60);
             tooltipIncome.addTooltipTo(new TooltipMakerAPI.TooltipCreator() {
                 @Override
