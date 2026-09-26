@@ -14,4 +14,4 @@
 
 ### Installation
 
-- Replace `starfarer.api.jar` with the one inside `0.98a/starfarer.api.jar`
+- Replace `starfarer.api.jar` located in the `starsector-core` folder of the game with the one inside the `Ashes of  The Domain - Theory of Toolbox\0.98a` folder.
