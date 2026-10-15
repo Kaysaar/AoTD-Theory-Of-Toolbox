@@ -6,14 +6,12 @@ import ashlib.data.plugins.coreui.CommandTabMemoryManager;
 import com.fs.starfarer.api.BaseModPlugin;
 import com.fs.starfarer.api.Global;
 
+import com.fs.starfarer.api.campaign.CustomEntitySpecAPI;
 import com.fs.starfarer.api.campaign.econ.*;
 import com.fs.starfarer.api.impl.SharedUnlockData;
 import com.fs.starfarer.api.impl.campaign.fleets.EconomyFleetRouteManager;
 import com.fs.starfarer.api.impl.campaign.graid.StandardGroundRaidObjectivesCreator;
-import com.fs.starfarer.api.impl.campaign.ids.Commodities;
-import com.fs.starfarer.api.impl.campaign.ids.Factions;
-import com.fs.starfarer.api.impl.campaign.ids.Industries;
-import com.fs.starfarer.api.impl.campaign.ids.Tags;
+import com.fs.starfarer.api.impl.campaign.ids.*;
 import com.fs.starfarer.api.impl.campaign.intel.bar.events.BarEventManager;
 import com.fs.starfarer.api.impl.campaign.intel.bar.events.DeliveryBarEventCreator;
 import com.fs.starfarer.api.impl.campaign.intel.bar.events.SpecBarEventCreator;
@@ -31,7 +29,13 @@ import com.fs.starfarer.api.util.Misc;
 import com.fs.starfarer.campaign.econ.Economy;
 import data.campaign.submarkets.HMI_ExecMarketPlugin;
 import data.campaign.submarkets.HMI_ScrapMarketPlugin;
+import ashlib.data.plugins.events.AshlibBaseEventManager;
+import data.kaysaar.aotd.tot.events.AoTDTradeDemandEvent;
+import data.kaysaar.aotd.tot.events.AoTDContrabandDemandEvent;
+import data.kaysaar.aotd.tot.events.AoTDColonyDemandShockEvent;
+import data.kaysaar.aotd.tot.events.TradeVolatilitySettings;
 import data.kaysaar.aotd.tot.codex.AoTDToTIndustryEntryCodex;
+import data.kaysaar.aotd.tot.events.unique.*;
 import data.kaysaar.aotd.tot.industries.AoTDToolboxPopAndInfra;
 import data.kaysaar.aotd.tot.intel.bar.events.AoTDDeliveryBarEventCreator;
 import data.kaysaar.aotd.tot.listeners.*;
@@ -64,6 +68,7 @@ import data.kaysaar.aotd.tot.scripts.trade.contracts.rewards.creators.impl.rewar
 import data.kaysaar.aotd.tot.scripts.trade.contracts.rewards.creators.impl.rewards.GenericBlueprintCreator;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.rewards.creators.impl.rewards.GenericSpecialItemCreator;
 import data.kaysaar.aotd.tot.scripts.trade.route.AoTDEconomyRouteManager;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureManager;
 import data.kaysaar.aotd.tot.strings.AoTDIndTags;
 import data.kaysaar.aotd.tot.strings.AoTDTradeTags;
 import data.kaysaar.aotd.tot.ui.core.CommoditiesPanelInjector;
@@ -121,6 +126,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
 
         CivilianSupplyProgram creatorAPI4 = new CivilianSupplyProgram();
         AoTDPlayerContractCreatorManager.addCreator(creatorAPI4.getBaseIdForContract(),creatorAPI4);
+        AoTDStableStructureManager.init();
 
     }
 
@@ -151,6 +157,15 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
 
     @Override
     public void onAboutToStartGeneratingCodex() {
+        Global.getSettings().getCustomEntitySpec(Entities.STABLE_LOCATION).getTags().remove(Tags.STABLE_LOCATION);
+        Global.getSettings().getCustomEntitySpec(Entities.STABLE_LOCATION).getTags().add("aotd_stable_location");
+        for (CustomEntitySpecAPI allSpec : Global.getSettings().getAllSpecs( Global.getSettings().getCustomEntitySpec(Entities.STABLE_LOCATION).getClass())) {
+            if(allSpec.getTags().contains(Tags.OBJECTIVE)){
+                allSpec.getTags().remove(Tags.OBJECTIVE);
+                allSpec.getTags().add("aotd_objective");
+                allSpec.getTags().add(Tags.HAS_INTERACTION_DIALOG);
+            }
+        }
         AoTDProductionSpecManager.generateSpecsForAllStuff();
         if(Global.getSettings().getGameVersion().contains("0.98a")){
             if(!Global.getSettings().getGameVersion().equals("0.98a-RC8")){
@@ -294,6 +309,19 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
     @Override
     public void onGameLoad(boolean newGame) {
         AoTDCommodityEconSpecManager.loadSpecs();
+        AshlibBaseEventManager.getInstance().addEvent(new AoTDTradeDemandEvent(AoTDTradeDemandEvent.Scope.FACTION));
+        AshlibBaseEventManager.getInstance().addEvent(new AoTDTradeDemandEvent(AoTDTradeDemandEvent.Scope.MARKET));
+        AshlibBaseEventManager.getInstance().addEvent(new AoTDContrabandDemandEvent(AoTDTradeDemandEvent.Scope.FACTION));
+        AshlibBaseEventManager.getInstance().addEvent(new AoTDContrabandDemandEvent(AoTDTradeDemandEvent.Scope.MARKET));
+        AshlibBaseEventManager.getInstance().addEvent(new BeyondShippingLanesEvent());
+        AshlibBaseEventManager.getInstance().addEvent(new ComfortableLifeEvent());
+        AshlibBaseEventManager.getInstance().addEvent(new HabitWithinReachEvent());
+        AshlibBaseEventManager.getInstance().addEvent(new LowGradeBonanzaEvent());
+        AshlibBaseEventManager.getInstance().addEvent(new SeasonOfConstructionEvent());
+        AshlibBaseEventManager.getInstance().addEvent(new TablesFullEvent());
+        for (String commodityId : TradeVolatilitySettings.colonyShockCommodities) {
+            AshlibBaseEventManager.getInstance().addEvent(new AoTDColonyDemandShockEvent(commodityId));
+        }
         if(newGame){
             CommandTabMemoryManager.getInstance().setLastCheckedTab("domain");
 

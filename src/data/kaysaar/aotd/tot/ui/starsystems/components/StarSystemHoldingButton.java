@@ -1,6 +1,7 @@
 package data.kaysaar.aotd.tot.ui.starsystems.components;
 
 import ashlib.data.plugins.ui.EntityWithNameComponent;
+import ashlib.data.plugins.ui.models.ButtonWithImageComponent;
 import ashlib.data.plugins.ui.models.CustomButton;
 import ashlib.data.plugins.ui.models.resizable.ImageViewer;
 import com.fs.starfarer.api.Global;
@@ -14,6 +15,7 @@ import com.fs.starfarer.api.impl.campaign.ids.Tags;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.ids.AoTDTags;
 
 import java.awt.*;
 import java.util.ArrayList;
@@ -75,7 +77,7 @@ public class StarSystemHoldingButton extends CustomButton {
 
             float startingX = StarSystemHoldingTable.getStartingX("data");
             float iconsize = 25;
-            for (SectorEntityToken token : system.getEntitiesWithTag(Tags.OBJECTIVE)) {
+            for (SectorEntityToken token : system.getEntitiesWithTag(AoTDTags.AOTD_OBJECTIVE)) {
                 ImageViewer viewer = new ImageViewer(iconsize, iconsize, token.getCustomEntitySpec().getIconName());
                 if (token.getFaction() != null && !token.getFaction().getId().equals(Factions.NEUTRAL)) {
                     viewer.setColorOverlay(token.getFaction().getBaseUIColor());
@@ -84,7 +86,7 @@ public class StarSystemHoldingButton extends CustomButton {
                 startingX += iconsize + 5;
             }
 
-            for (SectorEntityToken token : system.getEntitiesWithTag(Tags.STABLE_LOCATION)) {
+            for (SectorEntityToken token : system.getEntitiesWithTag(AoTDTags.AOTD_STABLE_LOCATION)) {
                 ImageViewer viewer = new ImageViewer(iconsize, iconsize, token.getCustomEntitySpec().getIconName());
                 if (token.getFaction() != null && !token.getFaction().getId().equals(Factions.NEUTRAL)) {
                     viewer.setColorOverlay(token.getFaction().getBaseUIColor());

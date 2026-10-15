@@ -10,6 +10,12 @@ import com.fs.starfarer.api.combat.MutableStat;
 import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.api.impl.campaign.submarkets.LocalResourcesSubmarketPlugin;
 import com.fs.starfarer.api.util.Misc;
+import com.fs.starfarer.api.ui.CustomPanelAPI;
+import com.fs.starfarer.api.ui.Fonts;
+import com.fs.starfarer.api.ui.LabelAPI;
+import com.fs.starfarer.api.ui.UIComponentAPI;
+import ashlib.data.plugins.ui.models.resizable.ImageViewer;
+import data.kaysaar.aotd.tot.ui.customprod.components.ProductionCustomButton;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDSectorProductionDemandDataUtils;
@@ -18,7 +24,9 @@ import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContractManager;
 import data.kaysaar.aotd.tot.scripts.trade.models.AoTDMarketData;
 import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 
+import java.awt.Color;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -89,7 +97,7 @@ public class AoTDToolboxMisc {
     public static int getExpectedMonthlyIncomeForMarket(MarketAPI market) {
         if (market == null) return 0;
 
-        double guaranteed = market.getIndustryIncome(); // stays as-is
+        double guaranteed = market.getIndustryIncome();
         double expectedExport = 0.0;
 
         for (CommodityOnMarketAPI c : market.getAllCommodities()) {
@@ -98,8 +106,8 @@ public class AoTDToolboxMisc {
             }
         }
 
-        // If you want a "net" style number, you can subtract upkeep etc. here too,
-        // but you only asked for expected monthly income.
+
+
         return (int) Math.floor(guaranteed + expectedExport);
     }
 
@@ -146,7 +154,7 @@ public class AoTDToolboxMisc {
 
         double totalExportIncome = 0.0;
 
-        // Sum expected export income from all AoTD commodities
+
         for (CommodityOnMarketAPI c : market.getAllCommodities()) {
             if (c instanceof AoTDCommodityOnMarket a) {
                 totalExportIncome += getExpectedMonthlyIncomeFromCommodity(a);
@@ -185,7 +193,7 @@ public class AoTDToolboxMisc {
         float basePrice = com.getSpec().getBasePrice();
 
 
-        // only internal shipments (guaranteed by your internal solver)
+
         int internalUnits = Math.max(0, md.getInternalExported(com.getId()));
         int supply = com.getSupplyDemandData().getTotalRawUnitsFromSupply();
         int demand = com.getSupplyDemandData().getTotalRawUnitsFromDemand();
@@ -223,15 +231,15 @@ public class AoTDToolboxMisc {
 
         float basePrice = com.getSpec().getBasePrice();
 
-        // total potential export (your existing metric)
+
         int export = com.getSupplyDemandData().getExportExcludingDeficit();
         if (export <= 0) return 0;
 
-        // guaranteed internal part
+
         int internalUnits = Math.max(0, md.getInternalExported(com.getId()));
 
-        // ---- Predicted contract income (UI/speculation) ----
-        // Make sure prediction cache is built for current month
+
+
         AoTDTradeContractManager.getInstance().ensurePredictionsUpToDate();
 
         int predictedContractUnits = 0;
@@ -248,12 +256,12 @@ public class AoTDToolboxMisc {
             }
         }
 
-        // remaining export pool that could go to external markets (speculated)
+
         int externalPool = export - internalUnits - predictedContractUnits;
         if (externalPool < 0) externalPool = 0;
         int producitonOutside = AoTDSectorProductionDemandDataUtils.getTotalEffectiveDemandFromSectorOutsideFromFactionIgnoreContracts(com.getSpec().getId(), market.getFactionId());
         externalPool = Math.min(externalPool, producitonOutside);
-        // external only pays if there is demand outside faction
+
         boolean hasOutsideDemand = producitonOutside>0;
 
         double externalIncome = 0.0;
@@ -362,5 +370,186 @@ public class AoTDToolboxMisc {
     public static int getMaxImported(MarketAPI marketFrom, MarketAPI towards, String commodityId) {
         AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) marketFrom.getCommodityData(commodityId);
         return com.getSupplyDemandData().getTotalRawUnitsFromDemand() - com.getSupplyDemandData().getTotalRawUnitsFromSupply();
+    }
+
+    public static CustomPanelAPI createCostSection(float width, float height, Map<String, Integer> resources, float credits) {
+        return createCostSection(width, height, resources, credits, 22f, 6f, 3f, 8f, true, true);
+    }
+
+    public static CustomPanelAPI createCostSection(float width, float height, Map<String, Integer> resources, float credits,
+                                                   float iconSize, float separator, float rowGap, float padding,
+                                                   boolean showCredits, boolean colorSpecialItems) {
+        return createCostSection(width, height, resources, credits,
+                iconSize, separator, rowGap, padding, 4f, 4f,
+                Fonts.DEFAULT_SMALL, Color.ORANGE, Color.CYAN,
+                Color.ORANGE, Misc.getNegativeHighlightColor(), showCredits, colorSpecialItems);
+    }
+
+    public static CustomPanelAPI createCostSection(float width, float height, Map<String, Integer> resources, float credits,
+                                                   float iconSize, float separator, float rowGap, float padding,
+                                                   float creditsGap, float iconTextGap, String font,
+                                                   Color resourceColor, Color specialItemColor,
+                                                   Color affordableColor, Color insufficientColor,
+                                                   boolean showCredits, boolean colorSpecialItems) {
+        float panelHeight = Math.max(1f, height);
+        CustomPanelAPI mainPanel = Global.getSettings().createCustom(width, panelHeight, null);
+        LinkedHashMap<String, Integer> orderedResources = ProductionCustomButton.getOrderedResourceMap(resources);
+        ArrayList<CustomPanelAPI> panels = new ArrayList<>();
+
+        for (Map.Entry<String, Integer> entry : orderedResources.entrySet()) {
+            if (Global.getSettings().getCommoditySpec(entry.getKey()) != null) {
+                panels.add(createResourcePanel(iconSize, entry.getKey(), entry.getValue(),
+                        iconTextGap, font, resourceColor, specialItemColor, colorSpecialItems));
+            }
+        }
+
+        for (Map.Entry<String, Integer> entry : orderedResources.entrySet()) {
+            if (Global.getSettings().getCommoditySpec(entry.getKey()) == null) {
+                panels.add(createResourcePanel(iconSize, entry.getKey(), entry.getValue(),
+                        iconTextGap, font, resourceColor, specialItemColor, colorSpecialItems));
+            }
+        }
+
+        LabelAPI creditsLabel = null;
+        float creditsWidth = 0f;
+        float creditsHeight = 0f;
+
+        if (showCredits) {
+            creditsLabel = Global.getSettings().createLabel(Misc.getDGSCredits(credits), font);
+            float playerCredits = Global.getSector().getPlayerFleet().getCargo().getCredits().get();
+            creditsLabel.setColor(credits <= playerCredits ? affordableColor : insufficientColor);
+            creditsWidth = creditsLabel.computeTextWidth(creditsLabel.getText());
+            creditsHeight = creditsLabel.computeTextHeight(creditsLabel.getText());
+            creditsLabel.getPosition().setSize(creditsWidth, creditsHeight);
+        }
+
+        if (panels.isEmpty()) {
+            if (height <= 0f) {
+                panelHeight = Math.max(1f, creditsHeight);
+                mainPanel.getPosition().setSize(width, panelHeight);
+            }
+            if (creditsLabel != null) {
+                mainPanel.addComponent((UIComponentAPI) creditsLabel).inTL(
+                        (width - creditsWidth) / 2f, (panelHeight - creditsHeight) / 2f);
+            }
+            return mainPanel;
+        }
+
+        ArrayList<ArrayList<CustomPanelAPI>> rows = new ArrayList<>();
+        ArrayList<Float> rowWidths = new ArrayList<>();
+        ArrayList<Float> rowHeights = new ArrayList<>();
+        ArrayList<CustomPanelAPI> currentRow = new ArrayList<>();
+        float currentWidth = 0f;
+        float currentHeight = 0f;
+        float availableWidth = Math.max(0f, width - padding * 2f);
+
+        for (int i = 0; i < panels.size(); i++) {
+            CustomPanelAPI panel = panels.get(i);
+            float resourceWidth = panel.getPosition().getWidth();
+            float resourceHeight = panel.getPosition().getHeight();
+
+            if (!currentRow.isEmpty() && currentWidth + separator + resourceWidth > availableWidth) {
+                rows.add(currentRow);
+                rowWidths.add(currentWidth);
+                rowHeights.add(currentHeight);
+                currentRow = new ArrayList<>();
+                currentWidth = 0f;
+                currentHeight = 0f;
+            }
+
+            if (!currentRow.isEmpty()) currentWidth += separator;
+            currentRow.add(panel);
+            currentWidth += resourceWidth;
+            currentHeight = Math.max(currentHeight, resourceHeight);
+        }
+
+        if (!currentRow.isEmpty()) {
+            rows.add(currentRow);
+            rowWidths.add(currentWidth);
+            rowHeights.add(currentHeight);
+        }
+
+        float totalResourcesHeight = Math.max(0, rows.size() - 1) * rowGap;
+        for (float rowHeight : rowHeights) {
+            totalResourcesHeight += rowHeight;
+        }
+
+        float totalHeight = totalResourcesHeight + (creditsLabel == null ? 0f : creditsGap + creditsHeight);
+        if (height <= 0f) {
+            panelHeight = Math.max(1f, totalHeight);
+            mainPanel.getPosition().setSize(width, panelHeight);
+        }
+        float currentY = Math.max(0f, (panelHeight - totalHeight) / 2f);
+        float startY = currentY;
+
+        for (int i = 0; i < rows.size(); i++) {
+            ArrayList<CustomPanelAPI> row = rows.get(i);
+            float rowHeight = rowHeights.get(i);
+            float currentX = (width - rowWidths.get(i)) / 2f;
+
+            for (CustomPanelAPI panel : row) {
+                mainPanel.addComponent(panel).inTL(
+                        currentX,
+                        currentY + (rowHeight - panel.getPosition().getHeight()) / 2f
+                );
+                currentX += panel.getPosition().getWidth() + separator;
+            }
+
+            currentY += rowHeight + rowGap;
+        }
+
+        if (creditsLabel != null) {
+            mainPanel.addComponent((UIComponentAPI) creditsLabel).inTL(
+                    (width - creditsWidth) / 2f, startY + totalResourcesHeight + creditsGap);
+        }
+
+        return mainPanel;
+    }
+
+    public static CustomPanelAPI createResourcePanel(float iconSize, String resourceId, int amount) {
+        return createResourcePanel(iconSize, resourceId, amount, true);
+    }
+
+    public static CustomPanelAPI createResourcePanel(float iconSize, String resourceId, int amount, boolean colorSpecialItems) {
+        return createResourcePanel(iconSize, resourceId, amount, 4f, Fonts.DEFAULT_SMALL,
+                Color.ORANGE, Color.CYAN, colorSpecialItems);
+    }
+
+    public static CustomPanelAPI createResourcePanel(float iconSize, String resourceId, int amount,
+                                                     float iconTextGap, String font,
+                                                     Color resourceColor, Color specialItemColor,
+                                                     boolean colorSpecialItems) {
+        String iconName;
+        boolean isCommodity = Global.getSettings().getCommoditySpec(resourceId) != null;
+
+        if (isCommodity) {
+            iconName = Global.getSettings().getCommoditySpec(resourceId).getIconName();
+        } else if (Global.getSettings().getSpecialItemSpec(resourceId) != null) {
+            iconName = Global.getSettings().getSpecialItemSpec(resourceId).getIconName();
+        } else {
+            throw new IllegalArgumentException("Unknown resource ID: " + resourceId);
+        }
+
+        ImageViewer viewer = new ImageViewer(iconSize, iconSize, iconName);
+        LabelAPI label = Global.getSettings().createLabel(Misc.getWithDGS(amount), font);
+        label.setColor(!isCommodity && colorSpecialItems ? specialItemColor : resourceColor);
+
+        float labelWidth = label.computeTextWidth(label.getText());
+        float labelHeight = label.computeTextHeight(label.getText());
+        label.getPosition().setSize(labelWidth, labelHeight);
+
+        CustomPanelAPI mainPanel = Global.getSettings().createCustom(
+                iconSize + iconTextGap + labelWidth,
+                Math.max(iconSize, labelHeight),
+                null
+        );
+
+        mainPanel.addComponent(viewer.getComponentPanel()).inTL(
+                0f, (mainPanel.getPosition().getHeight() - iconSize) / 2f);
+        mainPanel.addComponent((UIComponentAPI) label).inTL(
+                iconSize + iconTextGap,
+                (mainPanel.getPosition().getHeight() - labelHeight) / 2f);
+
+        return mainPanel;
     }
 }

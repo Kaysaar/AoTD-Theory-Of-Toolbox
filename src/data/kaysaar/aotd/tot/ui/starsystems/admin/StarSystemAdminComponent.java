@@ -8,6 +8,7 @@ import com.fs.starfarer.api.characters.PersonAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Tags;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
+import data.kaysaar.aotd.tot.ids.AoTDTags;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
 import data.ui.holdings.starsystems.components.ButtonWithImageComponent;
 
@@ -90,7 +91,7 @@ public class StarSystemAdminComponent implements ExtendedUIPanelPlugin {
         securityTitle.getPosition().inTL(securityTitleX, cohesionTitleY); // same Y as Cohesion title
 
         tooltip.setParaFont("graphics/fonts/insignia25LTaa.fnt");
-        String securityLevel = "0 / "+system.getEntitiesWithTag(Tags.STABLE_LOCATION).size(); // Low / Medium / High (set this from your data)
+        String securityLevel = "0 / "+system.getEntitiesWithTag(AoTDTags.AOTD_STABLE_LOCATION).size(); // Low / Medium / High (set this from your data)
         securityValue = tooltip.addPara(securityLevel, person.getFaction().getBrightUIColor(), 2f);
         securityValue.setHighlightOnMouseover(true);
         securityValue.getPosition().setSize(

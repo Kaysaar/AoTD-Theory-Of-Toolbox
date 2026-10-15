@@ -10,7 +10,11 @@ import com.fs.starfarer.api.impl.campaign.ids.Tags;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.ids.AoTDTags;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureManager;
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.util.vector.Vector2f;
 
 import java.awt.*;
 import java.util.List;
@@ -18,6 +22,7 @@ import java.util.List;
 public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
     CustomPanelAPI mainPanel, contentPanel;
     StarSystemAPI system;
+    ButtonAPI manageButton;
 
     public StarSystemStructuresUI(float width, float height, StarSystemAPI system) {
         this.system = system;
@@ -65,8 +70,8 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
         float widgetW = StableStructureWidget.width;
         float widgetH = StableStructureWidget.height; // <-- use your widget height constant
 
-        List<SectorEntityToken> objs = system.getEntitiesWithTag(Tags.OBJECTIVE);
-        List<SectorEntityToken> obj2s = system.getEntitiesWithTag(Tags.STABLE_LOCATION);
+        List<SectorEntityToken> objs = system.getEntitiesWithTag(AoTDTags.AOTD_OBJECTIVE);
+        List<SectorEntityToken> obj2s = system.getEntitiesWithTag(AoTDTags.AOTD_STABLE_LOCATION);
         int total = objs.size();
         int total2 = obj2s.size();
 
@@ -92,6 +97,12 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
             float y = row * (widgetH + rowGap);
 
             SectorEntityToken token = objs.get(i);
+            if(!token.getMemoryWithoutUpdate().contains(AoTDStableStructureManager.memKeyInEntities)&&AoTDStableStructureManager.getSpec(token.getCustomEntitySpec().getId())!=null){
+                AoTDStableStructureImpl impl = AoTDStableStructureManager.getSpec(token.getCustomEntitySpec().getId()).getImplClassInstance();
+                impl.init(token.getCustomEntitySpec().getId());
+                impl.setCurrentlyAssignedToken(token);
+                token.getMemoryWithoutUpdate().set(AoTDStableStructureManager.memKeyInEntities,impl);
+            }
             StableStructureWidget widget = new StableStructureWidget(token);
 
             tooltip.addCustom(widget.getMainPanel(), 0f).getPosition().inTL(x, y);
@@ -101,30 +112,17 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
         float neededHeight = rowsPlaced * widgetH + Math.max(0, rowsPlaced - 1) * rowGap;
         tooltip.setHeightSoFar(neededHeight);
         tooltipBottom.setParaFont(Fonts.INSIGNIA_LARGE);
-        int totalAtAllPos = total2+total;
-        LabelAPI label = tooltipBottom.addPara("System Structures: %s / %s", 0f, Misc.getGrayColor(), Color.ORANGE, "" + total, totalAtAllPos+"");
+        int totalAtAllPos = total2 + total;
+        LabelAPI label = tooltipBottom.addPara("System Structures: %s / %s", 0f, Misc.getGrayColor(), Color.ORANGE, "" + total, totalAtAllPos + "");
         label.getPosition().inTL(contentPanel.getPosition().getWidth() - label.computeTextWidth(label.getText()) - 5, 1);
         float x = contentPanel.getPosition().getWidth() - label.computeTextWidth(label.getText()) - 5;
-        ButtonAPI bt = tooltipBottom.addButton("Manage Star System", null, faction.getBaseUIColor(), faction.getDarkUIColor(), Alignment.MID, CutStyle.TL_BR, Math.min(x-20, 300), 25, 0f);
-        bt.setShortcut(Keyboard.KEY_A, true);
-        bt.setEnabled(false);
-        tooltipBottom.addTooltipToPrevious(new TooltipMakerAPI.TooltipCreator() {
-            @Override
-            public boolean isTooltipExpandable(Object tooltipParam) {
-                return false;
-            }
+        manageButton = tooltipBottom.addButton("Build new Structure", null, faction.getBaseUIColor(), faction.getDarkUIColor(), Alignment.MID, CutStyle.TL_BR, Math.min(x - 20, 300), 25, 0f);
+        manageButton.setShortcut(Keyboard.KEY_A, true);
+        if (!AshMisc.getClaimingFaction(system.getCenter()).isPlayerFaction()) {
+            manageButton.setEnabled(false);
+        }
 
-            @Override
-            public float getTooltipWidth(Object tooltipParam) {
-                return 400;
-            }
-
-            @Override
-            public void createTooltip(TooltipMakerAPI tooltip, boolean expanded, Object tooltipParam) {
-                tooltip.addPara("In wait of Stable Structure Rework coming in Theory of Toolbox 1.1",3f);
-            }
-        }, TooltipMakerAPI.TooltipLocation.RIGHT,false);
-        bt.getPosition().inTL(5, 0);
+        manageButton.getPosition().inTL(5, 0);
 
 
         contentPanel.addUIElement(tooltip).inTL(0, 0f);
@@ -155,7 +153,12 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
 
     @Override
     public void advance(float amount) {
+        if (manageButton != null && manageButton.isChecked()) {
+            manageButton.setChecked(false);
+            StableStructureConstructionDialog dialog  = new StableStructureConstructionDialog(system);
+            AshMisc.initPopUpDialog(dialog,1150,700);
 
+        }
     }
 
     @Override

@@ -1,6 +1,9 @@
 package data.kaysaar.aotd.tot.scripts.economy;
 
 import com.fs.starfarer.api.Global;
+import ashlib.data.plugins.events.AshlibBaseEventManager;
+import data.kaysaar.aotd.tot.events.AoTDColonyDemandShockEvent;
+import data.kaysaar.aotd.tot.events.TradeVolatilitySettings;
 import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.Industry;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
@@ -12,6 +15,7 @@ import com.fs.starfarer.campaign.econ.Economy;
 import com.fs.starfarer.campaign.econ.contract.ContractEconomy;
 import com.fs.starfarer.campaign.econ.contract.iter.MultiFrameTask;
 import com.fs.starfarer.campaign.econ.reach.*;
+import data.kaysaar.aotd.tot.events.AoTDTradeDemandEvent;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.trade.*;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContractManager;
@@ -23,6 +27,7 @@ import data.kaysaar.aotd.tot.scripts.trade.tasks.AoTDFactionInternalTradeTask;
 import data.kaysaar.aotd.tot.ui.income.AoTDMonthlyTooltipCreator;
 
 import java.util.ArrayList;
+import java.util.Map;
 
 public class AoTDEconomyReachStepper extends ReachEconomyStepper {
     private ReachEconomy econ;
@@ -94,6 +99,23 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
 
         if (!AoTDEconomy.runningPrePlayerEconomy) {
 
+            // The previous tick's balances do not include newly starting/ending orders.
+            // Rebuild them before internal trade, contracts and external trade assign cargo.
+            if (AoTDTradeDemandEvent.prepareForMonthlyAllocation()) {
+                AoTDTradeManager manager = AoTDTradeManager.getInstance();
+                for (AoTDFactionTradeData tradeData : manager.getAllFactionTradeData().values()) {
+                    tradeData.reset();
+                }
+                for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
+                    manager.addMarket(market);
+                }
+                Map<String, MarketAPI> marketsById = AoTDFactionTradeData.snapshotMarketsById();
+                for (AoTDFactionTradeData tradeData : manager.getAllFactionTradeData().values()) {
+                    tradeData.computeInternalTrade(false, marketsById);
+                }
+                AoTDTradeContractManager.getInstance().invalidatePredictions();
+            }
+
             // NEW: contracts phase (after internal, before external)
             AoTDTradeContractManager.getInstance().runMonthlyContracts();
 
@@ -134,6 +156,12 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
                 }
 
             }
+            // Only after all markets have their allocation and baseline demand recorded.
+            AshlibBaseEventManager events = AshlibBaseEventManager.getInstance();
+            for (int day = 1; day <= 2; day++) {
+                events.scheduleMinorEventTrigger(AoTDColonyDemandShockEvent.TRIGGER_ID, day,
+                        TradeVolatilitySettings.colonyShockAttemptsPerDay, TradeVolatilitySettings.colonyShockChance);
+            }
         } else {
             for (MarketAPI marketAPI : Global.getSector().getEconomy().getMarketsCopy()) {
                 AoTDIndustryData.getInstance(marketAPI).applyEndOfMonthChange(marketAPI);
@@ -161,6 +189,10 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
                 doEndOfStepStuff(Economy.NUM_ITER_PER_MONTH - 1);
                 doEndOfMonthStuff();
             }
+        }
+
+        if (state == ReachEconomyStepper.State.WAITING && !AoTDEconomy.runningPrePlayerEconomy) {
+            AshlibBaseEventManager.getInstance().advanceMinorEventTriggers();
         }
 
         if (state == ReachEconomyStepper.State.WAITING && elapsed >= untilNext && iterLeft > 0) {

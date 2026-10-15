@@ -1,5 +1,6 @@
 package data.kaysaar.aotd.tot.ui.starsystems.stuctures;
 
+import ashlib.data.plugins.ui.models.ButtonWithImageComponent;
 import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
 import ashlib.data.plugins.ui.plugins.UILinesRenderer;
 import com.fs.starfarer.api.Global;
@@ -9,10 +10,13 @@ import com.fs.starfarer.api.ui.CustomPanelAPI;
 import com.fs.starfarer.api.ui.PositionAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
-import data.kaysaar.aotd.tot.ui.starsystems.components.ButtonWithImageComponent;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
+
 
 import java.awt.*;
 import java.util.List;
+
+import static data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureManager.memKeyInEntities;
 
 public class StableStructureWidget implements ExtendedUIPanelPlugin {
     CustomPanelAPI mainPanel,contentPanel;
@@ -49,12 +53,41 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
         if(token.getFaction()!=null){
             c= token.getFaction().getBaseUIColor();
         }
-        tooltip.addPara(token.getName(),c,0f);
-        tooltip.addCustom(viewer.getComponentPanel(),2f);
-        renderer.setBoxColor(c);
-        renderer.setPanel(viewer.getComponentPanel());
-        contentPanel.addUIElement(tooltip).inTL(0,0);
-        mainPanel.addComponent(contentPanel).inTL(0,0);
+        if(token.getMemoryWithoutUpdate().contains(memKeyInEntities)){
+            AoTDStableStructureImpl impl = (AoTDStableStructureImpl) token.getMemoryWithoutUpdate().get(memKeyInEntities);
+            tooltip.addPara(impl.getName(),c,0f);
+            tooltip.addCustom(viewer.getComponentPanel(),2f);
+            renderer.setBoxColor(c);
+            renderer.setPanel(viewer.getComponentPanel());
+            contentPanel.addUIElement(tooltip).inTL(0,0);
+            tooltip.addTooltipTo(new TooltipMakerAPI.TooltipCreator() {
+                @Override
+                public boolean isTooltipExpandable(Object tooltipParam) {
+                    return false;
+                }
+
+                @Override
+                public float getTooltipWidth(Object tooltipParam) {
+                    return 450f;
+                }
+
+                @Override
+                public void createTooltip(TooltipMakerAPI tooltip, boolean expanded, Object tooltipParam) {
+                    impl.createTooltip(tooltip, AoTDStableStructureImpl.AoTDStableStructureTooltipMode.PANEL);
+                }
+            },contentPanel, TooltipMakerAPI.TooltipLocation.LEFT,false);
+            mainPanel.addComponent(contentPanel).inTL(0,0);
+        }
+        else{
+
+            tooltip.addPara(token.getName(),c,0f);
+            tooltip.addCustom(viewer.getComponentPanel(),2f);
+            renderer.setBoxColor(c);
+            renderer.setPanel(viewer.getComponentPanel());
+            contentPanel.addUIElement(tooltip).inTL(0,0);
+            mainPanel.addComponent(contentPanel).inTL(0,0);
+        }
+
     }
 
     @Override

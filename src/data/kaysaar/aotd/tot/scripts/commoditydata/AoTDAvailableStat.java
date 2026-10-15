@@ -4,18 +4,31 @@ import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.combat.MutableStatWithTempMods;
 
 public class AoTDAvailableStat extends MutableStatWithTempMods {
+
     AoTDExcDefData data = new AoTDExcDefData();
     private AoTDSupplyDemandData supplyDemandData;
+
+    public AoTDAvailableStat(float base) {
+        super(base);
+    }
 
     public AoTDSupplyDemandData getSupplyDemandData(CommodityOnMarketAPI commodity) {
         return getSupplyDemandData(commodity, true);
     }
 
-    public AoTDSupplyDemandData getSupplyDemandData(CommodityOnMarketAPI commodity, boolean initializeValues) {
+    public AoTDSupplyDemandData getSupplyDemandData(
+            CommodityOnMarketAPI commodity,
+            boolean initializeValues
+    ) {
         if (supplyDemandData == null) {
             supplyDemandData = new AoTDSupplyDemandData(commodity.getId());
             supplyDemandData.getEconSpec();
-            if (initializeValues) supplyDemandData.updateSupplyDemandData(commodity.getMarket());
+
+            if (initializeValues) {
+                supplyDemandData.updateSupplyDemandData(
+                        commodity.getMarket()
+                );
+            }
         }
 
         return supplyDemandData;
@@ -29,13 +42,14 @@ public class AoTDAvailableStat extends MutableStatWithTempMods {
         return data;
     }
 
-    public AoTDAvailableStat(float base) {
-        super(base);
-    }
-
     @Override
     public void advance(float days) {
         super.advance(days);
+
         data.advance(days);
+
+        if (supplyDemandData != null) {
+            supplyDemandData.advance(days);
+        }
     }
 }

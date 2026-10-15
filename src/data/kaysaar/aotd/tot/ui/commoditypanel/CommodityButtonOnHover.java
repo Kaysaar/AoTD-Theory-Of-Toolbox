@@ -119,6 +119,18 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
             int unknown = 0;
             tooltip.addPara("Current demand of %s: %s.", 3f, Color.ORANGE, spec.getName(), Misc.getWithDGS(demand));
             tooltip.setBulletedListMode(BaseIntelPlugin.BULLET);
+            for (MutableStat.StatMod value : com.getSupplyDemandData().getAdditionalDemand().getModsBeforeIndustries()) {
+                int raw = com.getSupplyDemandData().getRawAdditionalDemand(value, market);
+
+                if (raw > 0) {
+                    tooltip.addPara(
+                            value.getDesc() + " : %s",
+                            3f,
+                            Misc.getNegativeHighlightColor(),
+                            "-" + Misc.getWithDGS(raw)
+                    );
+                }
+            }
             for (Industry industry : market.getIndustries()) {
                 int raw = com.getSupplyDemandData().getRawDemandFromIndustry(industry);
                 if(industry.isHidden()&&!industry.getSpec().hasTag("aotd_show_in_commodity_even_hidden")){
@@ -131,6 +143,18 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
             }
             if (unknown > 0) {
                 tooltip.addPara("No Data: %s", 3f, Misc.getNegativeHighlightColor(), "-" + Misc.getWithDGS(unknown));
+            }
+            for (MutableStat.StatMod value : com.getSupplyDemandData().getAdditionalDemand().getModsAfterIndustries()) {
+                int raw = com.getSupplyDemandData().getRawAdditionalDemand(value, market);
+
+                if (raw > 0) {
+                    tooltip.addPara(
+                            value.getDesc() + " : %s",
+                            3f,
+                            Misc.getNegativeHighlightColor(),
+                            "-" + Misc.getWithDGS(raw)
+                    );
+                }
             }
             tooltip.setBulletedListMode(null);
 

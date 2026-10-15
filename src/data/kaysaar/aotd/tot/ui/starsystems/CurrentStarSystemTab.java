@@ -19,6 +19,7 @@ public class CurrentStarSystemTab implements ExtendedUIPanelPlugin {
     StarSystemAPI currStarSystem;
     MapMainComponent mapMainComponent;
     StarSystemStructuresUI struct;
+    ButtonAPI claim;
     public CurrentStarSystemTab(float width,float height){
         this.mainPanel = Global.getSettings().createCustom(width,height,this);
     }
@@ -59,10 +60,31 @@ public class CurrentStarSystemTab implements ExtendedUIPanelPlugin {
         mainPanel.addComponent(contentPanel).inTL(0,0);
     }
     public void createStarSystemInfoSection(){
-        float heightLeft = contentPanel.getPosition().getHeight()-mapMainComponent.getMainPanel().getPosition().getHeight()-30;
-        float startingY = contentPanel.getPosition().getHeight()-heightLeft;
+        float heightLeft = contentPanel.getPosition().getHeight()-mapMainComponent.getMainPanel().getPosition().getHeight()-60;
+        float startingY = contentPanel.getPosition().getHeight()-heightLeft-30;
         TooltipMakerAPI tooltipFirst = contentPanel.createUIElement(contentPanel.getPosition().getWidth(),heightLeft,false);
         tooltipFirst.setParaFont(Fonts.ORBITRON_16);
+        claim=tooltipFirst.addButton("Claim Star System Ownership",null,Misc.getBasePlayerColor(),Misc.getDarkPlayerColor(),Alignment.MID,CutStyle.TL_BR,contentPanel.getPosition().getWidth()-5,30,5f);
+        FactionAPI factionAPI = AshMisc.getClaimingFaction(currStarSystem.getCenter());
+        if(factionAPI.isPlayerFaction()){
+            claim.setEnabled(false);
+            tooltipFirst.addTooltipTo(new TooltipMakerAPI.TooltipCreator() {
+                @Override
+                public boolean isTooltipExpandable(Object tooltipParam) {
+                    return false;
+                }
+
+                @Override
+                public float getTooltipWidth(Object tooltipParam) {
+                    return 400;
+                }
+
+                @Override
+                public void createTooltip(TooltipMakerAPI tooltip, boolean expanded, Object tooltipParam) {
+                    tooltip.addPara("You are already owner of this star system!",3f);
+                }
+            },claim, TooltipMakerAPI.TooltipLocation.BELOW,false);
+        }
         tooltipFirst.addPara("System Structures", AshMisc.getClaimingFaction(currStarSystem.getCenter()).getBaseUIColor(),17f).setAlignment(Alignment.MID);
         if(struct==null){
             struct = new StarSystemStructuresUI(contentPanel.getPosition().getWidth(),heightLeft,currStarSystem);
