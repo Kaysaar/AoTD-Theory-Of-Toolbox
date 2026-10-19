@@ -256,13 +256,8 @@ public class AoTDSectorProductionDemandDataUtils {
     }
 
     public static int getTotalEffectiveDemandFromSectorOutsideFromFactionIgnoreContracts(String commodityId, String factionId) {
-        // Same result as summing max(0, getTotalDemandFromFaction - getTotalProductionFromFaction)
-        // over getFactionsInEconomy() except factionId, but in one pass over the markets. Doing it
-        // per faction copied and filtered the whole market list twice per faction, and this runs
-        // for every commodity on every player market whenever the command UI shows income.
         final List<MarketAPI> markets = Global.getSector().getEconomy().getMarketsCopy();
 
-        // As in getFactionsInEconomy(): factions of non-hidden markets.
         final LinkedHashSet<FactionAPI> factions = new LinkedHashSet<>();
         for (MarketAPI market : markets) {
             if (!market.isHidden()) factions.add(market.getFaction());
@@ -271,12 +266,10 @@ public class AoTDSectorProductionDemandDataUtils {
         boolean countsSector = false;
         for (FactionAPI faction : factions) {
             if (faction.getId().equals(factionId)) continue;
-            // getTotal*FromFaction treat neutral as the whole sector.
             if (faction.getId().equals(Factions.NEUTRAL)) countsSector = true;
             else countedFactionIds.add(faction.getId());
         }
 
-        // Faction id -> {production, demand}, over all of that faction's markets (hidden too).
         final Map<String, int[]> totals = new HashMap<>();
         int sectorProduction = 0;
         int sectorDemand = 0;
@@ -318,7 +311,6 @@ public class AoTDSectorProductionDemandDataUtils {
         return effectiveDemand;
     }
 
-    /** The contract part of getTotalDemandFromFaction(commodityId, Factions.PLAYER). */
     private static int getPlayerContractDemand(String commodityId) {
         int prod = 0;
         for (AoTDTradeContract value : AoTDTradeContractManager.getInstance().getActiveContracts().values()) {
@@ -330,7 +322,6 @@ public class AoTDSectorProductionDemandDataUtils {
         return prod;
     }
 
-    /** The contract part of getTotalDemandFromSector(commodityId). */
     private static int getSectorContractDemand(String commodityId) {
         int prod = 0;
         for (AoTDTradeContract value : AoTDTradeContractManager.getInstance().getActiveContracts().values()) {
