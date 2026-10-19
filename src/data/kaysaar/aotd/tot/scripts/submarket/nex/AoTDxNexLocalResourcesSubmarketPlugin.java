@@ -74,7 +74,8 @@ public class AoTDxNexLocalResourcesSubmarketPlugin extends Nex_LocalResourcesSub
     private boolean hasCounterableDeficit() {
         if (!market.isUseStockpilesForShortages()) return false;
         for (CommodityOnMarketAPI com : market.getCommoditiesCopy()) {
-            if (com instanceof AoTDCommodityOnMarket commodity && commodity.getDeficitQuantity() > 0) return true;
+            if (com instanceof AoTDCommodityOnMarket commodity && commodity.getDeficitQuantity() > 0
+                    && (cargo.getCommodityQuantity(com.getId()) > 0 || getStockpileLimit(commodity) > 0)) return true;
         }
         return false;
     }
