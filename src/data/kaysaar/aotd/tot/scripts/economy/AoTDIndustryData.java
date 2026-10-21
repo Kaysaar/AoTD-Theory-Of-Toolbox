@@ -6,6 +6,7 @@ import com.fs.starfarer.api.impl.campaign.econ.impl.PopulationAndInfrastructure;
 import com.fs.starfarer.api.impl.campaign.econ.impl.Spaceport;
 
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
+import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDIndustryAmounts;
 import data.kaysaar.aotd.tot.strings.AoTDIndTags;
 
 import ashlib.data.plugins.misc.AshMisc;
@@ -95,7 +96,7 @@ public class AoTDIndustryData {
         for (Industry industry : market.getIndustries()) {
             if(!statesOnMarket.containsKey(industry.getId())){
                 statesOnMarket.put(industry.getId(), AoTDIndustryState.PENDING);
-                if(industry.getAllDemand().isEmpty()||industry.getSpec().hasTag(AoTDIndTags.ALWAYS_ACTIVE_NON_PENDING)){
+                if(!AoTDIndustryAmounts.hasDemand(industry)||industry.getSpec().hasTag(AoTDIndTags.ALWAYS_ACTIVE_NON_PENDING)){
                     statesOnMarket.put(industry.getId(),AoTDIndustryState.ALREADY_WORKING);
                 }
                 if(AoTDEconomy.runningPrePlayerEconomy){

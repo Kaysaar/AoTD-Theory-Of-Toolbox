@@ -151,7 +151,7 @@ public class AoTDTradeContractManager {
         Set<String> contractCommodities = new HashSet<>();
         for (AoTDTradeContract c : activeContracts.values()) {
             if (c == null) continue;
-            if (c.isExpired() || c.isTerminated()) continue;
+            if (c.isExpired() || c.isTerminated() || c.isContractFrozen()) continue;
             if (c.getContractData().isEmpty()) continue;
 
             for (AoTDTradeContract.TradeContractData line : c.getContractData().values()) {
@@ -199,7 +199,7 @@ public class AoTDTradeContractManager {
         // deterministic allocation: contracts in insertion order, and lines in insertion order (LinkedHashMap)
         for (AoTDTradeContract c : activeContracts.values()) {
             if (c == null) continue;
-            if (c.isExpired() || c.isTerminated()) continue;
+            if (c.isExpired() || c.isTerminated() || c.isContractFrozen()) continue;
 
             for (AoTDTradeContract.TradeContractData line : c.getContractData().values()) {
                 if (line == null) continue;
@@ -276,11 +276,11 @@ public class AoTDTradeContractManager {
         mainNodeContracts.custom = "node_id_contracts_";
         for (AoTDTradeContract c : activeContracts.values()) {
             if (c == null) continue;
-            if(c.isContractFrozen()) continue;
             if (c.isExpired() || c.isTerminated()) {
                 toRemove.add(c.getId());
                 continue;
             }
+            if(c.isContractFrozen()) continue;
             if(c.isIssuedByPlayer()&& AoTDPlayerContractCreatorManager.getCreator(c.getContractTypeId())!=null){
                 PlayerContractCreatorAPI creatorAPI = AoTDPlayerContractCreatorManager.getCreator(c.getContractTypeId());
                 creatorAPI.applyChangesToContractIfNecessary(c);

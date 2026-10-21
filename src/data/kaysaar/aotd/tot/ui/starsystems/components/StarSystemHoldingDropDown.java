@@ -52,7 +52,9 @@ public class StarSystemHoldingDropDown extends DropDownButton {
                 }
             }
             if (this.droppableMode&&isDropped) {
-                this.mainButton.mainButton.highlight();
+                if(this.tableOfReference instanceof StarSystemHoldingTable table && table.currSystem.getId().equals(this.getStarSystem().getId())){
+                    this.mainButton.mainButton.highlight();
+                }
             }
             else{
                 this.mainButton.mainButton.unhighlight();

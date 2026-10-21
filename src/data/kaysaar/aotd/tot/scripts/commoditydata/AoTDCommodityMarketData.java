@@ -25,6 +25,8 @@ public class AoTDCommodityMarketData extends CommodityMarketData {
             float stockPile = 0;
             if(commodityOnMarket instanceof AoTDCommodityOnMarket commodity){
                 AoTDSupplyDemandData data = commodity.getSupplyDemandData();
+                data.clearIndustryAllocation();
+                data.getAdditionalDemand().resetFilledAmounts();
                 stockPile += Math.max(data.getTotalRawUnitsFromDemand(), data.getTotalRawUnitsFromSupply());
 
             }

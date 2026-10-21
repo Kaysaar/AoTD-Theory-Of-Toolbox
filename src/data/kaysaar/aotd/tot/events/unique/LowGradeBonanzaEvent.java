@@ -54,6 +54,7 @@ public class LowGradeBonanzaEvent extends BaseTradeEvent {
         possibleTargetOfEvent = new Intel(ORE_PERCENTAGES[random.nextInt(ORE_PERCENTAGES.length)]);
     }
 
+
     @Override
     public boolean canFireAfterConfiguration() {
         return possibleTargetOfEvent instanceof Intel && canEvenFireEvent();
@@ -96,7 +97,7 @@ public class LowGradeBonanzaEvent extends BaseTradeEvent {
 
         @Override
         public String getIcon() {
-            return Global.getSettings().getSpriteName("illustrations", "crew_leaving");
+            return Global.getSettings().getSpriteName("illustrations", "aotd_trade_event");
         }
 
         @Override

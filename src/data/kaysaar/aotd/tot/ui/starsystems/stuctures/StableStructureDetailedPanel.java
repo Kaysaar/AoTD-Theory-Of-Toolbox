@@ -15,7 +15,7 @@ import com.fs.starfarer.api.ui.PositionAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
-import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureManager;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
 
 import java.util.List;
@@ -86,7 +86,7 @@ public class StableStructureDetailedPanel implements ExtendedUIPanelPlugin {
             contentPanel.addComponent(panelTitleImage).inTL(0f, 0f);
 
             float mainContentHeight = height - imageAndTitleSection - 5f;
-            boolean hasPath = AoTDStableStructureManager.hasUpgrades(spec.getId())
+            boolean hasPath = AoTDStableStructureSpecManager.hasUpgrades(spec.getId())
                     || !spec.getDowngrades().isEmpty();
 
             if (hasPath) {

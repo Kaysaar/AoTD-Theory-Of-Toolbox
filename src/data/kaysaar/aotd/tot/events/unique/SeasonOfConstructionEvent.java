@@ -1,6 +1,7 @@
 package data.kaysaar.aotd.tot.events.unique;
 
 import ashlib.data.plugins.events.AshlibBaseEventIntel;
+import ashlib.data.plugins.events.AshlibBaseEventManager;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.ui.Alignment;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
@@ -103,7 +104,7 @@ public class SeasonOfConstructionEvent extends BaseTradeEvent {
 
         @Override
         public String getIcon() {
-            return Global.getSettings().getSpriteName("illustrations", "crew_leaving");
+            return Global.getSettings().getSpriteName("illustrations", "aotd_trade_event");
         }
 
         @Override

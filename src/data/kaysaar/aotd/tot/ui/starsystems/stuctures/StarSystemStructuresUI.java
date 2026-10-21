@@ -6,15 +6,14 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
-import com.fs.starfarer.api.impl.campaign.ids.Tags;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.ids.AoTDTags;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
-import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureManager;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
+import data.kaysaar.aotd.tot.ui.starsystems.stuctures.widget.StableStructureWidget;
 import org.lwjgl.input.Keyboard;
-import org.lwjgl.util.vector.Vector2f;
 
 import java.awt.*;
 import java.util.List;
@@ -97,11 +96,11 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
             float y = row * (widgetH + rowGap);
 
             SectorEntityToken token = objs.get(i);
-            if(!token.getMemoryWithoutUpdate().contains(AoTDStableStructureManager.memKeyInEntities)&&AoTDStableStructureManager.getSpec(token.getCustomEntitySpec().getId())!=null){
-                AoTDStableStructureImpl impl = AoTDStableStructureManager.getSpec(token.getCustomEntitySpec().getId()).getImplClassInstance();
+            if(!token.getMemoryWithoutUpdate().contains(AoTDStableStructureSpecManager.memKeyInEntities)&& AoTDStableStructureSpecManager.getSpec(token.getCustomEntitySpec().getId())!=null){
+                AoTDStableStructureImpl impl = AoTDStableStructureSpecManager.getSpec(token.getCustomEntitySpec().getId()).getImplClassInstance();
                 impl.init(token.getCustomEntitySpec().getId());
                 impl.setCurrentlyAssignedToken(token);
-                token.getMemoryWithoutUpdate().set(AoTDStableStructureManager.memKeyInEntities,impl);
+                token.getMemoryWithoutUpdate().set(AoTDStableStructureSpecManager.memKeyInEntities,impl);
             }
             StableStructureWidget widget = new StableStructureWidget(token);
 

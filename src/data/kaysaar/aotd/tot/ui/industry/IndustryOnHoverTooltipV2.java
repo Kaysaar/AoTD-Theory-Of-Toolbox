@@ -1,17 +1,22 @@
+
 package data.kaysaar.aotd.tot.ui.industry;
 
 import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.Industry;
-import com.fs.starfarer.api.impl.campaign.econ.impl.Spaceport;
 import com.fs.starfarer.api.input.InputEventAPI;
-import com.fs.starfarer.api.ui.*;
+import com.fs.starfarer.api.ui.CustomPanelAPI;
+import com.fs.starfarer.api.ui.LabelAPI;
+import com.fs.starfarer.api.ui.PositionAPI;
+import com.fs.starfarer.api.ui.TooltipMakerAPI;
+import com.fs.starfarer.api.ui.UIComponentAPI;
+import com.fs.starfarer.api.ui.UIPanelAPI;
+import data.kaysaar.aotd.tot.industries.AoTDBaseIndustry;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDIndustryData;
 import data.kaysaar.aotd.tot.ui.commoditypanel.AoTDCommodityShortPanelCombined;
 
-import java.util.Iterator;
 import java.util.List;
 
 public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
@@ -19,7 +24,7 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
     Industry ind;
     boolean expanded;
     boolean ignoreDeficits = false;
-    Industry.IndustryTooltipMode mode  = Industry.IndustryTooltipMode.NORMAL;
+    Industry.IndustryTooltipMode mode = Industry.IndustryTooltipMode.NORMAL;
     TooltipMakerAPI tl;
 
     public TooltipMakerAPI getTl() {
@@ -27,28 +32,26 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
     }
 
     public IndustryOnHoverTooltipV2(float width, Industry ind, boolean expanded) {
-        mainPanel = Global.getSettings().createCustom(width, 1
-                , this);
-        this.ind = ind;
-        this.expanded = expanded;
-        createUI();
+        this(width, ind, expanded, Industry.IndustryTooltipMode.NORMAL, false);
     }
+
     public IndustryOnHoverTooltipV2(float width, Industry ind, boolean expanded, Industry.IndustryTooltipMode mode) {
-        mainPanel = Global.getSettings().createCustom(width, 1
-                , this);
+        this(width, ind, expanded, mode,
+                mode == Industry.IndustryTooltipMode.ADD_INDUSTRY
+                        || mode == Industry.IndustryTooltipMode.UPGRADE
+                        || mode == Industry.IndustryTooltipMode.DOWNGRADE);
+    }
+
+    public IndustryOnHoverTooltipV2(float width, Industry ind, boolean expanded, boolean ignoreDeficits) {
+        this(width, ind, expanded, Industry.IndustryTooltipMode.NORMAL, ignoreDeficits);
+    }
+
+    private IndustryOnHoverTooltipV2(float width, Industry ind, boolean expanded,
+                                     Industry.IndustryTooltipMode mode, boolean ignoreDeficits) {
+        mainPanel = Global.getSettings().createCustom(width, 1f, this);
         this.ind = ind;
         this.expanded = expanded;
         this.mode = mode;
-        if(mode== Industry.IndustryTooltipMode.ADD_INDUSTRY || mode== Industry.IndustryTooltipMode.UPGRADE){
-            ignoreDeficits = true;
-        }
-        createUI();
-    }
-    public IndustryOnHoverTooltipV2(float width, Industry ind, boolean expanded, boolean ignoreDeficits) {
-        mainPanel = Global.getSettings().createCustom(width, 1
-                , this);
-        this.ind = ind;
-        this.expanded = expanded;
         this.ignoreDeficits = ignoreDeficits;
         createUI();
     }
@@ -60,138 +63,171 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
 
     @Override
     public void createUI() {
-        TooltipMakerAPI tooltipHeight = mainPanel.createUIElement(mainPanel.getPosition().getWidth(), 10000, false);
-        TooltipMakerAPI firstHalf = mainPanel.createUIElement(mainPanel.getPosition().getWidth(), 100000, true);
-        ind.getMarket().reapplyConditions();
-        boolean hasFreePort = ind.getMarket().isFreePort();
-        for (Industry industry : ind.getMarket().getIndustries()) {
-            if(!AoTDIndustryData.getInstance(industry.getMarket()).isPending(industry.getId())){
-                industry.reapply();
-            }
+        if (tl != null) {
+            mainPanel.removeComponent(tl);
         }
 
-        boolean needToAddIndustry = !ind.getMarket().hasIndustry(ind.getId());
-        //addDialogMode = true;
-        if (needToAddIndustry) {
-            for (CommodityOnMarketAPI curr : ind.getMarket().getAllCommodities()) {
-                curr.getAvailableStat().setBaseValue(10000);
-            }
-            ind.apply();
+        float width = mainPanel.getPosition().getWidth();
+        boolean isAoTD = ind instanceof AoTDBaseIndustry;
+
+        TooltipMakerAPI result = mainPanel.createUIElement(width, 10000f, false);
+        TooltipMakerAPI original = mainPanel.createUIElement(width, 100000f, true);
+
+        boolean needToAddIndustry = false;
+        boolean hasFreePort = false;
+
+        if (!isAoTD) {
             ind.getMarket().reapplyConditions();
-            ind.apply();
-        }
+            hasFreePort = ind.getMarket().isFreePort();
 
-        ind.createTooltip(mode, firstHalf, expanded);
-        UIPanelAPI holder = (UIPanelAPI) ReflectionUtilis.getChildrenCopy(firstHalf).get(0);
-        List<UIComponentAPI> comps = ReflectionUtilis.getChildrenCopy((UIPanelAPI) holder);
-        int recordedPositionProducitonOnList, recordedPostitionDemandOnList;
-        recordedPostitionDemandOnList = -3;
-        recordedPositionProducitonOnList = -3;
-        for (int i = 0; i < comps.size(); i++) {
-            UIComponentAPI comp = comps.get(i);
-            if (comp instanceof LabelAPI label) {
-                String text = label.getText();
-                if ("Production".equals(text)) {
-                    // remove the label
-                    recordedPositionProducitonOnList = i + 1;
-//                    comps.remove(i);
-//                    comps.remove(i);
-//                    comps.remove(i);
-//                    i--; // keep loop stable after removals
-                }
-                if ("Demand & effects".equals(text)) {
-                    recordedPostitionDemandOnList = i + 1;
-//                    comps.remove(i);
-//                    comps.remove(i);
-//                    comps.remove(i);
-//                    i--; // keep loop stable after removals
+            for (Industry industry : ind.getMarket().getIndustries()) {
+                if (!AoTDIndustryData.getInstance(industry.getMarket()).isPending(industry.getId())) {
+                    industry.reapply();
                 }
             }
-        }
-        float lastRecordedY = 0;
-        float additionalHeightToCover = 0;
-        float additionalHeightToCoverDemand = 0;
-        for (int j = 0; j < comps.size(); ) {
-            UIComponentAPI comp = comps.get(j);
-            float y = comp.getPosition().getY();
-            if (j == recordedPositionProducitonOnList) {
-                AoTDCommodityShortPanelCombined production = new AoTDCommodityShortPanelCombined(mainPanel.getPosition().getWidth(), 3, ind, false, false);
-                tooltipHeight.addCustom(production.getMainPanel(), 5f);
-                float positionInUIHeader = -comps.get(j - 1).getPosition().getY();
-                float positionInUIBottom = -comps.get(j + 1).getPosition().getY();
-                float available = positionInUIBottom - positionInUIHeader;
-                float left = available - production.getMainPanel().getPosition().getHeight() - 5f;
-                additionalHeightToCover = -left;
-                j += 2;
-            } else if (j == recordedPostitionDemandOnList) {
-                AoTDCommodityShortPanelCombined production = new AoTDCommodityShortPanelCombined(mainPanel.getPosition().getWidth(), 3, ind, true, ignoreDeficits);
-                tooltipHeight.addCustom(production.getMainPanel(), 5f);
-                float positionInUIHeader = -comps.get(j - 1).getPosition().getY();
-                float positionInUIBottom = -comps.get(j + 1).getPosition().getY();
-                float available = positionInUIBottom - positionInUIHeader;
-                float left = available - production.getMainPanel().getPosition().getHeight() - 5f;
-                additionalHeightToCover = 0;
-                additionalHeightToCoverDemand = -left;
-                j += 2;
 
+            needToAddIndustry = !ind.getMarket().hasIndustry(ind.getId());
+
+            if (needToAddIndustry) {
+                for (CommodityOnMarketAPI curr : ind.getMarket().getAllCommodities()) {
+                    curr.getAvailableStat().setBaseValue(10000);
+                }
+
+                ind.apply();
+                ind.getMarket().reapplyConditions();
+                ind.apply();
+            }
+        }
+
+        try {
+            if (isAoTD && ignoreDeficits) {
+                ((AoTDBaseIndustry) ind).createTooltip(mode, original, expanded, true);
             } else {
-                float curY = Math.abs(y) + additionalHeightToCover + additionalHeightToCoverDemand;
-                tooltipHeight.addCustom(comp, 0f).getPosition().inTL(0, curY - (comp.getPosition().getHeight()));
-                if (curY >= lastRecordedY) {
-                    lastRecordedY = curY;
+                ind.createTooltip(mode, original, expanded);
+            }
+
+            UIPanelAPI holder = (UIPanelAPI) ReflectionUtilis.getChildrenCopy(original).get(0);
+            List<UIComponentAPI> comps = ReflectionUtilis.getChildrenCopy(holder);
+
+            int productionIndex = -1;
+            int demandIndex = -1;
+
+            if (!isAoTD) {
+                for (int i = 0; i < comps.size(); i++) {
+                    UIComponentAPI comp = comps.get(i);
+
+                    if (comp instanceof LabelAPI label) {
+                        String text = label.getText();
+
+                        if ("Production".equals(text)) {
+                            productionIndex = i + 1;
+                        }
+
+                        if ("Demand & effects".equals(text)) {
+                            demandIndex = i + 1;
+                        }
+                    }
                 }
-                ;
-                j++;
             }
 
-        }
+            float offsetY = 0f;
+            float totalHeight = 0f;
 
-        mainPanel.getPosition().setSize(mainPanel.getPosition().getWidth(), lastRecordedY);
-        mainPanel.addUIElement(tooltipHeight).inTL(0, 0);
-        if (needToAddIndustry) {
-            ind.unapply();
-            for (CommodityOnMarketAPI curr : ind.getMarket().getAllCommodities()) {
-                curr.getAvailableStat().setBaseValue(0);
+            for (int i = 0; i < comps.size(); ) {
+                if (!isAoTD && i == productionIndex && i > 0 && i + 1 < comps.size()) {
+                    AoTDCommodityShortPanelCombined production =
+                            new AoTDCommodityShortPanelCombined(width, 3, ind, false, false);
+
+                    float oldHeaderBottom = Math.abs(comps.get(i - 1).getPosition().getY());
+                    float oldSectionBottom = Math.abs(comps.get(i + 1).getPosition().getY());
+
+                    float newTop = oldHeaderBottom + offsetY + 5f;
+                    float newBottom = newTop + production.getMainPanel().getPosition().getHeight();
+
+                    result.addCustom(production.getMainPanel(), 0f).getPosition().inTL(0f, newTop);
+
+                    totalHeight = Math.max(totalHeight, newBottom);
+                    offsetY += newBottom - (oldSectionBottom + offsetY);
+
+                    i += 2;
+                    continue;
+                }
+
+                if (!isAoTD && i == demandIndex && i > 0 && i + 1 < comps.size()) {
+                    AoTDCommodityShortPanelCombined demand =
+                            new AoTDCommodityShortPanelCombined(width, 3, ind, true, ignoreDeficits);
+
+                    float oldHeaderBottom = Math.abs(comps.get(i - 1).getPosition().getY());
+                    float oldSectionBottom = Math.abs(comps.get(i + 1).getPosition().getY());
+
+                    float newTop = oldHeaderBottom + offsetY + 5f;
+                    float newBottom = newTop + demand.getMainPanel().getPosition().getHeight();
+
+                    result.addCustom(demand.getMainPanel(), 0f).getPosition().inTL(0f, newTop);
+
+                    totalHeight = Math.max(totalHeight, newBottom);
+                    offsetY += newBottom - (oldSectionBottom + offsetY);
+
+                    i += 2;
+                    continue;
+                }
+
+                UIComponentAPI comp = comps.get(i);
+
+                float bottom = Math.abs(comp.getPosition().getY()) + offsetY;
+                float top = bottom - comp.getPosition().getHeight();
+
+                result.addCustom(comp, 0f).getPosition().inTL(0f, top);
+
+                totalHeight = Math.max(totalHeight, bottom);
+                i++;
+            }
+
+            mainPanel.getPosition().setSize(width, Math.max(1f, totalHeight));
+            mainPanel.addUIElement(result).inTL(0f, 0f);
+            tl = result;
+
+        } finally {
+            if (!isAoTD) {
+                if (needToAddIndustry) {
+                    ind.unapply();
+
+                    for (CommodityOnMarketAPI curr : ind.getMarket().getAllCommodities()) {
+                        curr.getAvailableStat().setBaseValue(0);
+                    }
+                }
+
+                ind.getMarket().setFreePort(hasFreePort);
+                ind.getMarket().reapplyConditions();
             }
         }
-        ind.getMarket().setFreePort(hasFreePort);
-        ind.getMarket().reapplyConditions();
-        this.tl = tooltipHeight;
-
     }
 
     @Override
     public void clearUI() {
-
     }
 
     @Override
     public void positionChanged(PositionAPI position) {
-
     }
 
     @Override
     public void renderBelow(float alphaMult) {
-
     }
 
     @Override
     public void render(float alphaMult) {
-
     }
 
     @Override
     public void advance(float amount) {
-
     }
 
     @Override
     public void processInput(List<InputEventAPI> events) {
-
     }
 
     @Override
     public void buttonPressed(Object buttonId) {
-
     }
 }

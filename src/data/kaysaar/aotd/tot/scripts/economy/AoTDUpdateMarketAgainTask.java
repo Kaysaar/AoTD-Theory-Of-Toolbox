@@ -100,7 +100,7 @@ public class AoTDUpdateMarketAgainTask extends UpdateMarketsAgainTask {
         industry.unapply();
     }
 
-    private static void restoreIndustry(Industry industry) {
+    public static void restoreIndustry(Industry industry) {
         industry.getSupplyBonusFromOther().unmodifyFlat(AoTDIndustryData.source);
         industry.getDemandReductionFromOther().unmodifyFlat(AoTDIndustryData.source);
 

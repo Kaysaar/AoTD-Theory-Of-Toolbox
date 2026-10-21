@@ -10,6 +10,7 @@ import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.campaign.CampaignState;
 import com.fs.state.AppDriver;
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
+import data.kaysaar.aotd.tot.industries.AoTDBaseIndustry;
 import data.kaysaar.aotd.tot.scripts.coreui.listeners.CargoPanelContextUI;
 import data.kaysaar.aotd.tot.scripts.coreui.listeners.IndustryPanelContextUI;
 import data.kaysaar.aotd.tot.scripts.coreui.listeners.MarketUIListener;
@@ -66,8 +67,7 @@ public class CommoditiesPanelInjector implements MarketUIListener {
 
                                     @Override
                                     public void createTooltip(TooltipMakerAPI tooltip, boolean expanded, Object tooltipParam) {
-                                        IndustryOnHoverTooltipV2 v2 = new IndustryOnHoverTooltipV2(getTooltipWidth(tooltipParam),downgrade,expanded,true);
-                                        v2.createUI();
+                                        IndustryOnHoverTooltipV2 v2 = new IndustryOnHoverTooltipV2(getTooltipWidth(tooltipParam),downgrade,expanded,Industry.IndustryTooltipMode.DOWNGRADE);
                                         tooltip.addCustom(v2.getMainPanel(),0f);
                                     }
                                 },uiComponentAPI, location,false);
@@ -139,7 +139,7 @@ public class CommoditiesPanelInjector implements MarketUIListener {
                                     SharedUnlockData.get().reportPlayerAwareOfIndustry(ind.getSpec().getId(), true);
                                 }
                                 tooltip.setCodexEntryId(CodexDataV2.getIndustryEntryId(ind.getSpec().getId()));
-                                if(AoTDIndustryData.getInstance(ind.getMarket()).isPending(ind.getId())){
+                                if(!(ind instanceof AoTDBaseIndustry) && AoTDIndustryData.getInstance(ind.getMarket()).isPending(ind.getId())){
                                     ind.unapply();
                                 }
 
@@ -229,7 +229,7 @@ public class CommoditiesPanelInjector implements MarketUIListener {
                                 SharedUnlockData.get().reportPlayerAwareOfIndustry(ind.getSpec().getId(), true);
                             }
                             tooltip.setCodexEntryId(CodexDataV2.getIndustryEntryId(ind.getSpec().getId()));
-                            if(AoTDIndustryData.getInstance(ind.getMarket()).isPending(ind.getId())){
+                            if(!(ind instanceof AoTDBaseIndustry) && AoTDIndustryData.getInstance(ind.getMarket()).isPending(ind.getId())){
                                 ind.unapply();
                             }
 
@@ -281,7 +281,7 @@ public class CommoditiesPanelInjector implements MarketUIListener {
                                 SharedUnlockData.get().reportPlayerAwareOfIndustry(ind.getSpec().getId(), true);
                             }
                             tooltip.setCodexEntryId(CodexDataV2.getIndustryEntryId(ind.getSpec().getId()));
-                            if(AoTDIndustryData.getInstance(ind.getMarket()).isPending(ind.getId())){
+                            if(!(ind instanceof AoTDBaseIndustry) && AoTDIndustryData.getInstance(ind.getMarket()).isPending(ind.getId())){
                                 ind.unapply();
                             }
 

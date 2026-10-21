@@ -1,12 +1,13 @@
 package data.kaysaar.aotd.tot.plugins;
 
 
-import ashlib.data.plugins.coreui.CommandTabListener;
 import ashlib.data.plugins.coreui.CommandTabMemoryManager;
 import com.fs.starfarer.api.BaseModPlugin;
 import com.fs.starfarer.api.Global;
 
+import com.fs.starfarer.api.campaign.CustomCampaignEntityAPI;
 import com.fs.starfarer.api.campaign.CustomEntitySpecAPI;
+import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.campaign.econ.*;
 import com.fs.starfarer.api.impl.SharedUnlockData;
 import com.fs.starfarer.api.impl.campaign.fleets.EconomyFleetRouteManager;
@@ -36,6 +37,7 @@ import data.kaysaar.aotd.tot.events.AoTDColonyDemandShockEvent;
 import data.kaysaar.aotd.tot.events.TradeVolatilitySettings;
 import data.kaysaar.aotd.tot.codex.AoTDToTIndustryEntryCodex;
 import data.kaysaar.aotd.tot.events.unique.*;
+import data.kaysaar.aotd.tot.ids.AoTDTags;
 import data.kaysaar.aotd.tot.industries.AoTDToolboxPopAndInfra;
 import data.kaysaar.aotd.tot.intel.bar.events.AoTDDeliveryBarEventCreator;
 import data.kaysaar.aotd.tot.listeners.*;
@@ -68,11 +70,12 @@ import data.kaysaar.aotd.tot.scripts.trade.contracts.rewards.creators.impl.rewar
 import data.kaysaar.aotd.tot.scripts.trade.contracts.rewards.creators.impl.rewards.GenericBlueprintCreator;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.rewards.creators.impl.rewards.GenericSpecialItemCreator;
 import data.kaysaar.aotd.tot.scripts.trade.route.AoTDEconomyRouteManager;
-import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureManager;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureAdvanceScript;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.strings.AoTDIndTags;
 import data.kaysaar.aotd.tot.strings.AoTDTradeTags;
 import data.kaysaar.aotd.tot.ui.core.CommoditiesPanelInjector;
-import data.kaysaar.aotd.tot.ui.core.EconomyTabListener;
 import data.kaysaar.aotd.tot.ui.core.GrandProjectLabelInjector;
 import data.kaysaar.aotd.tot.ui.core.DomainTabListener;
 import exerelin.campaign.submarkets.Nex_BlackMarketPlugin;
@@ -88,15 +91,16 @@ import static com.fs.starfarer.api.impl.codex.CodexDataV2.*;
 
 public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketContextListenerInjector {
     public static final Logger log = Global.getLogger(AoTDToolboxTheoryPlugin.class);
-    public static LinkedHashMap<String,String>marketsToReplace = new LinkedHashMap<>();
-    public static void loadMarketsToReplace(){
-        if(Global.getSettings().getModManager().isModEnabled("nexerelin")){
+    public static LinkedHashMap<String, String> marketsToReplace = new LinkedHashMap<>();
+
+    public static void loadMarketsToReplace() {
+        if (Global.getSettings().getModManager().isModEnabled("nexerelin")) {
             marketsToReplace.put(Nex_OpenMarketPlugin.class.getName(), AoTDxNexOpenMarketPlugin.class.getName());
             marketsToReplace.put(Nex_BlackMarketPlugin.class.getName(), AoTDxNexBlackMarketPlugin.class.getName());
             marketsToReplace.put(Nex_MilitarySubmarketPlugin.class.getName(), AoTDxNexMilitarySubmarketPlugin.class.getName());
             marketsToReplace.put(Nex_LocalResourcesSubmarketPlugin.class.getName(), AoTDxNexLocalResourcesSubmarketPlugin.class.getName());
         }
-        if(Global.getSettings().getModManager().isModEnabled("HMI")){
+        if (Global.getSettings().getModManager().isModEnabled("HMI")) {
             marketsToReplace.put(HMI_ScrapMarketPlugin.class.getName(), AoTDHMI_ScrapMarketPlugin.class.getName());
             marketsToReplace.put(HMI_ExecMarketPlugin.class.getName(), AoTDHMI_ExecMarketPlugin.class.getName());
         }
@@ -107,6 +111,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
 
 
     }
+
     public static boolean isGeneratingSector = false;
 
 
@@ -116,17 +121,17 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         AoTDContractRewardCreatorManager.addCreator(GenericSpecialItemCreator.class.getName(), new GenericSpecialItemCreator());
         AoTDContractRewardCreatorManager.addCreator(GenericAICoreCreator.class.getName(), new GenericAICoreCreator());
         PlayerIssuedSupplyContract creatorAPI = new PlayerIssuedSupplyContract();
-        AoTDPlayerContractCreatorManager.addCreator(creatorAPI.getBaseIdForContract(),creatorAPI);
+        AoTDPlayerContractCreatorManager.addCreator(creatorAPI.getBaseIdForContract(), creatorAPI);
 
         FuelLogisticProgram creatorAPI2 = new FuelLogisticProgram();
-        AoTDPlayerContractCreatorManager.addCreator(creatorAPI2.getBaseIdForContract(),creatorAPI2);
+        AoTDPlayerContractCreatorManager.addCreator(creatorAPI2.getBaseIdForContract(), creatorAPI2);
 
         StrategicArmamentSupply creatorAPI3 = new StrategicArmamentSupply();
-        AoTDPlayerContractCreatorManager.addCreator(creatorAPI3.getBaseIdForContract(),creatorAPI3);
+        AoTDPlayerContractCreatorManager.addCreator(creatorAPI3.getBaseIdForContract(), creatorAPI3);
 
         CivilianSupplyProgram creatorAPI4 = new CivilianSupplyProgram();
-        AoTDPlayerContractCreatorManager.addCreator(creatorAPI4.getBaseIdForContract(),creatorAPI4);
-        AoTDStableStructureManager.init();
+        AoTDPlayerContractCreatorManager.addCreator(creatorAPI4.getBaseIdForContract(), creatorAPI4);
+        AoTDStableStructureSpecManager.init();
 
     }
 
@@ -159,37 +164,37 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
     public void onAboutToStartGeneratingCodex() {
         Global.getSettings().getCustomEntitySpec(Entities.STABLE_LOCATION).getTags().remove(Tags.STABLE_LOCATION);
         Global.getSettings().getCustomEntitySpec(Entities.STABLE_LOCATION).getTags().add("aotd_stable_location");
-        for (CustomEntitySpecAPI allSpec : Global.getSettings().getAllSpecs( Global.getSettings().getCustomEntitySpec(Entities.STABLE_LOCATION).getClass())) {
-            if(allSpec.getTags().contains(Tags.OBJECTIVE)){
+        for (CustomEntitySpecAPI allSpec : Global.getSettings().getAllSpecs(Global.getSettings().getCustomEntitySpec(Entities.STABLE_LOCATION).getClass())) {
+            if (allSpec.getTags().contains(Tags.OBJECTIVE)) {
                 allSpec.getTags().remove(Tags.OBJECTIVE);
                 allSpec.getTags().add("aotd_objective");
                 allSpec.getTags().add(Tags.HAS_INTERACTION_DIALOG);
             }
         }
         AoTDProductionSpecManager.generateSpecsForAllStuff();
-        if(Global.getSettings().getGameVersion().contains("0.98a")){
-            if(!Global.getSettings().getGameVersion().equals("0.98a-RC8")){
-                throw  new RuntimeException("AoTD Theory of Toolbox: This version of mod for 0.98a game can only be run at exactly 0.98a-RC8 version ");
+        if (Global.getSettings().getGameVersion().contains("0.98a")) {
+            if (!Global.getSettings().getGameVersion().equals("0.98a-RC8")) {
+                throw new RuntimeException("AoTD Theory of Toolbox: This version of mod for 0.98a game can only be run at exactly 0.98a-RC8 version ");
             }
-            MarketAPI test = Global.getFactory().createMarket("test","test",3);
+            MarketAPI test = Global.getFactory().createMarket("test", "test", 3);
             for (CommoditySpecAPI allCommoditySpec : Global.getSettings().getAllCommoditySpecs()) {
-                test.getCommodityData(allCommoditySpec.getId()).getAvailableStat().modifyFlat("test",1090000);
+                test.getCommodityData(allCommoditySpec.getId()).getAvailableStat().modifyFlat("test", 1090000);
             }
             test.addIndustry(Industries.HEAVYBATTERIES);
             test.addIndustry(Industries.REFINING);
 
-            Industry first =test.getIndustry( getIndustryStringBasedOnOrder(0,Industries.HEAVYBATTERIES,Industries.REFINING));
-            Industry second =test.getIndustry( getIndustryStringBasedOnOrder(1,Industries.HEAVYBATTERIES,Industries.REFINING));
+            Industry first = test.getIndustry(getIndustryStringBasedOnOrder(0, Industries.HEAVYBATTERIES, Industries.REFINING));
+            Industry second = test.getIndustry(getIndustryStringBasedOnOrder(1, Industries.HEAVYBATTERIES, Industries.REFINING));
 
 
-            first.getDemand(Commodities.ALPHA_CORE).getQuantity().modifyFlat("test",20);
-            second.getDemand(Commodities.ALPHA_CORE).getQuantity().modifyFlat("test",40);
-            test.getCommodityData(Commodities.ALPHA_CORE).getAvailableStat().modifyFlat("test",21);
+            first.getDemand(Commodities.ALPHA_CORE).getQuantity().modifyFlat("test", 20);
+            second.getDemand(Commodities.ALPHA_CORE).getQuantity().modifyFlat("test", 40);
+            test.getCommodityData(Commodities.ALPHA_CORE).getAvailableStat().modifyFlat("test", 21);
 
             int firstDeficit = first.getMaxDeficit(Commodities.ALPHA_CORE).two;
             int secondDeficit = second.getMaxDeficit(Commodities.ALPHA_CORE).two;
 
-            if(secondDeficit!=39){
+            if (secondDeficit != 39) {
                 throw new RuntimeException("WARNING : AoTD Theory of Toolbox: Market Test Failed. You must replace the 'starfarer.api.jar' file within the game's starsector-core folder with a copy that is located in the '0.98a' folder within the `Ashes of  The Domain - Theory of Toolbox` mod folder.\nYou only need to replace it once, and you won't need to replace it again when you disable the mod.");
 
             }
@@ -202,15 +207,15 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         Global.getSettings().getIndustrySpec(Industries.POPULATION).addTag(AoTDIndTags.ALWAYS_ACTIVE_NON_PENDING);
         Global.getSettings().getIndustrySpec(Industries.POPULATION).setPluginClass(AoTDToolboxPopAndInfra.class.getName());
         for (AoTDCommodityEconSpec value : AoTDCommodityEconSpecManager.specs.values()) {
-            if(value.econUnitMult!=1f){
-                ReflectionUtilis.invokeMethodWithAutoProjection("setEconUnit",Global.getSettings().getCommoditySpec(value.commodityId),Global.getSettings().getCommoditySpec(value.commodityId).getEconUnit()*value.econUnitMult);
+            if (value.econUnitMult != 1f) {
+                ReflectionUtilis.invokeMethodWithAutoProjection("setEconUnit", Global.getSettings().getCommoditySpec(value.commodityId), Global.getSettings().getCommoditySpec(value.commodityId).getEconUnit() * value.econUnitMult);
             }
         }
 
         for (SubmarketSpecAPI allSubmarketSpec : Global.getSettings().getAllSubmarketSpecs()) {
-            String clas = (String) ReflectionUtilis.invokeMethodWithAutoProjection("getScriptClass",allSubmarketSpec);
-            if(marketsToReplace.containsKey(clas)){
-                ReflectionUtilis.replaceFirstStringFieldWithValue(allSubmarketSpec,clas,marketsToReplace.get(clas),false);
+            String clas = (String) ReflectionUtilis.invokeMethodWithAutoProjection("getScriptClass", allSubmarketSpec);
+            if (marketsToReplace.containsKey(clas)) {
+                ReflectionUtilis.replaceFirstStringFieldWithValue(allSubmarketSpec, clas, marketsToReplace.get(clas), false);
             }
         }
         Global.getSettings().getCommoditySpec(Commodities.SHIPS).getTags().add(AoTDTradeTags.AOTD_DOES_NOT_HAVE_EXCESS);
@@ -223,10 +228,9 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
     }
 
 
-
     @Override
     public void onCodexDataGenerated() {
-        CodexEntryV2 plugin = (CodexEntryV2) CodexDataV2.ROOT.getChildren().stream().filter(x->x.getId().equals(CodexDataV2.CAT_INDUSTRIES)).findAny().orElse(null);
+        CodexEntryV2 plugin = (CodexEntryV2) CodexDataV2.ROOT.getChildren().stream().filter(x -> x.getId().equals(CodexDataV2.CAT_INDUSTRIES)).findAny().orElse(null);
 //        if(plugin!=null){
 //            plugin.getChildren().clear();
 //            populateIndustries(plugin);
@@ -234,6 +238,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
 
 
     }
+
     public static void populateIndustries(CodexEntryPlugin parent) {
         List<IndustrySpecAPI> specs = Global.getSettings().getAllIndustrySpecs();
         for (final IndustrySpecAPI spec : specs) {
@@ -245,11 +250,11 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
                 @Override
                 public void createTitleForList(TooltipMakerAPI info, float width, ListMode mode) {
                     info.addPara(spec.getName(), Misc.getBasePlayerColor(), 0f);
-                        //info.addPara("Industry", Misc.getGrayColor(), 0f);
-                        boolean structure = spec.hasTag(Industries.TAG_STRUCTURE);
-                        String type = "Industry";
-                        if (structure) type = "Structure";
-                        info.addPara(type, Misc.getGrayColor(), 0f);
+                    //info.addPara("Industry", Misc.getGrayColor(), 0f);
+                    boolean structure = spec.hasTag(Industries.TAG_STRUCTURE);
+                    String type = "Industry";
+                    if (structure) type = "Structure";
+                    info.addPara(type, Misc.getGrayColor(), 0f);
 
                 }
 
@@ -257,6 +262,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
                 public boolean isVignetteIcon() {
                     return true;
                 }
+
                 @Override
                 public boolean matchesTags(Set<String> tags) {
                     boolean industry = spec.hasTag(Industries.TAG_INDUSTRY);
@@ -268,10 +274,12 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
                     if (tags.contains(STATIONS) && station) return true;
                     return false;
                 }
+
                 @Override
                 public Set<String> getUnlockRelatedTags() {
                     return spec.getTags();
                 }
+
                 @Override
                 public boolean isUnlockedIfRequiresUnlock() {
                     return SharedUnlockData.get().isPlayerAwareOfIndustry(spec.getId());
@@ -280,6 +288,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
             parent.addChild(curr);
         }
     }
+
     @Override
     public void onNewGameAfterEconomyLoad() {
         Economy econ = (Economy) Global.getSector().getEconomy();
@@ -291,7 +300,9 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         Global.getSector().addScript(new AoTDEconomyRouteManager());
 
     }
+
     public static boolean afterSaveState = true;
+
     @Override
     public void beforeGameSave() {
         afterSaveState = false;
@@ -305,10 +316,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         AoTDWorkerManager.endSave();
     }
 
-
-    @Override
-    public void onGameLoad(boolean newGame) {
-        AoTDCommodityEconSpecManager.loadSpecs();
+    public void createEvents() {
         AshlibBaseEventManager.getInstance().addEvent(new AoTDTradeDemandEvent(AoTDTradeDemandEvent.Scope.FACTION));
         AshlibBaseEventManager.getInstance().addEvent(new AoTDTradeDemandEvent(AoTDTradeDemandEvent.Scope.MARKET));
         AshlibBaseEventManager.getInstance().addEvent(new AoTDContrabandDemandEvent(AoTDTradeDemandEvent.Scope.FACTION));
@@ -317,38 +325,70 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         AshlibBaseEventManager.getInstance().addEvent(new ComfortableLifeEvent());
         AshlibBaseEventManager.getInstance().addEvent(new HabitWithinReachEvent());
         AshlibBaseEventManager.getInstance().addEvent(new LowGradeBonanzaEvent());
+        AshlibBaseEventManager.getInstance().addEvent(new HiddenStashOfResourcesEvent());
         AshlibBaseEventManager.getInstance().addEvent(new SeasonOfConstructionEvent());
         AshlibBaseEventManager.getInstance().addEvent(new TablesFullEvent());
+    }
+
+    public static List<StarSystemAPI> getSystemsWithColonies() {
+        List<MarketAPI> markets = Global.getSector().getEconomy().getMarketsCopy();
+        List<StarSystemAPI> systems = new ArrayList<StarSystemAPI>();
+        for (MarketAPI market : markets) {
+            StarSystemAPI system = market.getStarSystem();
+            if (system != null && !systems.contains(system)) {
+                systems.add(system);
+            }
+        }
+        return systems;
+    }
+
+    @Override
+    public void onGameLoad(boolean newGame) {
+        AoTDStableStructureAdvanceScript.install();
+        if (newGame) {
+            for (StarSystemAPI systemsWithPlayerColony : getSystemsWithColonies()) {
+                for (CustomCampaignEntityAPI customCampaignEntityAPI : systemsWithPlayerColony.getCustomEntitiesWithTag(AoTDTags.AOTD_OBJECTIVE)) {
+                    if (!customCampaignEntityAPI.getMemoryWithoutUpdate().contains(AoTDStableStructureSpecManager.memKeyInEntities)) {
+                        AoTDStableStructureImpl impl = AoTDStableStructureSpecManager.getSpec(customCampaignEntityAPI.getCustomEntitySpec().getId()).getImplClassInstance();
+                        impl.init(customCampaignEntityAPI.getCustomEntitySpec().getId());
+                        impl.setCurrentlyAssignedToken(customCampaignEntityAPI);
+                        customCampaignEntityAPI.getMemoryWithoutUpdate().set(AoTDStableStructureSpecManager.memKeyInEntities, impl);
+                    }
+                }
+            }
+        }
+        AoTDCommodityEconSpecManager.loadSpecs();
+        createEvents();
         for (String commodityId : TradeVolatilitySettings.colonyShockCommodities) {
             AshlibBaseEventManager.getInstance().addEvent(new AoTDColonyDemandShockEvent(commodityId));
         }
-        if(newGame){
+        if (newGame) {
             CommandTabMemoryManager.getInstance().setLastCheckedTab("domain");
 
         }
         MarketAPI market = Global.getSector().getEconomy().getMarket("sindria");
-        if(market!=null&&market.getFaction().getId().equals(Factions.DIKTAT)&&!market.hasCondition("aotd_sindira_fuel_booster")){
+        if (market != null && market.getFaction().getId().equals(Factions.DIKTAT) && !market.hasCondition("aotd_sindira_fuel_booster")) {
             market.addCondition("aotd_sindira_fuel_booster");
         }
-        Global.getSector().getListenerManager().addListener(new AoTDGrandWonderBtnListener(),true);
-        Global.getSector().getListenerManager().addListener(new AoTDGrandWonderDecivListener(),true);
+        Global.getSector().getListenerManager().addListener(new AoTDGrandWonderBtnListener(), true);
+        Global.getSector().getListenerManager().addListener(new AoTDGrandWonderDecivListener(), true);
         Global.getSector().getListenerManager().addListener(new AoTDCommodityTooltipInjector(), true);
-        if(newGame){
+        if (newGame) {
             for (MarketAPI marketAPI : Global.getSector().getEconomy().getMarketsCopy()) {
                 marketAPI.reapplyConditions();
                 for (Industry industry : marketAPI.getIndustries()) {
-                    if(!AoTDIndustryData.getInstance(industry.getMarket()).isPending(industry.getId())){
+                    if (!AoTDIndustryData.getInstance(industry.getMarket()).isPending(industry.getId())) {
                         industry.reapply();
                     }
                 }
             }
         }
-        Global.getSector().getListenerManager().addListener(new BMOWonderBlockerListener(),true);
+        Global.getSector().getListenerManager().addListener(new BMOWonderBlockerListener(), true);
         Global.getSector().addTransientScript(new IndustryTooltipPlacer());
         ColonyUIListener.refresh();
-        Global.getSector().getListenerManager().addListener(new DomainTabListener(),true);
-        if(CommandTabMemoryManager.getInstance().getLastCheckedTab()!=null ){
-            if(CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("economy")||CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("colonies")){
+        Global.getSector().getListenerManager().addListener(new DomainTabListener(), true);
+        if (CommandTabMemoryManager.getInstance().getLastCheckedTab() != null) {
+            if (CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("economy") || CommandTabMemoryManager.getInstance().getLastCheckedTab().equalsIgnoreCase("colonies")) {
                 CommandTabMemoryManager.getInstance().setLastCheckedTab("domain");
             }
         }
@@ -358,34 +398,34 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
             @Override
             public void doAction() {
                 BarEventManager bar = BarEventManager.getInstance();
-                if(bar.hasEventCreator(DeliveryBarEventCreator.class)){
-                    bar.getCreators().removeIf(x->x instanceof DeliveryBarEventCreator);
+                if (bar.hasEventCreator(DeliveryBarEventCreator.class)) {
+                    bar.getCreators().removeIf(x -> x instanceof DeliveryBarEventCreator);
                     bar.addEventCreator(new AoTDDeliveryBarEventCreator());
                 }
-                bar.getCreators().removeIf(x->{
-                    if(x instanceof SpecBarEventCreator creator){
+                bar.getCreators().removeIf(x -> {
+                    if (x instanceof SpecBarEventCreator creator) {
                         return creator.getSpec().getId().equals("cpm");
                     }
                     return false;
                 });
             }
         });
-        if(Global.getSettings().isDevMode()){
+        if (Global.getSettings().isDevMode()) {
             AoTDTradeContractManager.getInstance().getCurrLevelData().addExp(9000000);
 
         }
-        Global.getSector().getListenerManager().addListener(new AoTDTradeContractRefresh(),true);
-        if(newGame){
+        Global.getSector().getListenerManager().addListener(new AoTDTradeContractRefresh(), true);
+        if (newGame) {
             AoTDEconomy.getInstance().doEconomyStepOnNewGameLoad();
             AoTDEconomy.runningPrePlayerEconomy = false;
             AoTDTradeContractManager.getInstance().generateNewContractsForBrowser();
 
         }
         AoTDCoreUIListener listener = new AoTDCoreUIListener();
-        Global.getSector().addTransientScript( listener);
-        Global.getSector().getListenerManager().addListener(listener,true);
+        Global.getSector().addTransientScript(listener);
+        Global.getSector().getListenerManager().addListener(listener, true);
         Global.getSector().getListenerManager().removeListenerOfClass(StandardGroundRaidObjectivesCreator.class);
-        Global.getSector().getListenerManager().addListener(new AoTDStandardGroundRaidObjectivesCreator(),true);
+        Global.getSector().getListenerManager().addListener(new AoTDStandardGroundRaidObjectivesCreator(), true);
     }
 
     @Override

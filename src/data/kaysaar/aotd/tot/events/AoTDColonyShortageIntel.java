@@ -86,7 +86,7 @@ public class AoTDColonyShortageIntel extends AoTDTradeDemandIntel {
 
     @Override
     protected void createDescription(TooltipMakerAPI tooltip, float width) {
-        String illustration = Global.getSettings().getSpriteName("illustrations", "crew_leaving");
+        String illustration = Global.getSettings().getSpriteName("illustrations", "aotd_trade_event");
         if (width >= 600f) {
             TooltipMakerAPI overview = tooltip.beginImageWithText(illustration, 135f, width, true);
             overview.addPara(AoTDTradeDemandEvent.getNarrative(getEventData()), 0f);

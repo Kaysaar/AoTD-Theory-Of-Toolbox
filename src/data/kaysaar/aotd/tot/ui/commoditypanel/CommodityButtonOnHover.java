@@ -13,6 +13,7 @@ import com.fs.starfarer.api.ui.Alignment;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDIndustryData;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContract;
@@ -97,6 +98,14 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
                 tooltip.addPara("No Data: %s", 3f, Misc.getPositiveHighlightColor(), "+" + Misc.getWithDGS(unknown));
 
             }
+            for (MutableStat.StatMod value : com.getSupplyDemandData().getAdditionalProduction().getFlatMods().values()) {
+                int raw = com.getSupplyDemandData().getRawAdditionalProduction(value, market);
+                if (raw > 0) {
+                    String name = value.getDesc();
+                    if (name == null || name.isEmpty()) name = value.getSource();
+                    tooltip.addPara(name+": %s", 3f, Misc.getPositiveHighlightColor(), "+" + Misc.getWithDGS(raw));
+                }
+            }
             tooltip.setBulletedListMode(null);
 
             if (com.getExcessQuantity() > 0) {
@@ -117,7 +126,7 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
 
         if (demand > 0) {
             int unknown = 0;
-            tooltip.addPara("Current demand of %s: %s.", 3f, Color.ORANGE, spec.getName(), Misc.getWithDGS(demand));
+            tooltip.addPara("Local demand of %s: %s.", 3f, Color.ORANGE, spec.getName(), Misc.getWithDGS(demand));
             tooltip.setBulletedListMode(BaseIntelPlugin.BULLET);
             for (MutableStat.StatMod value : com.getSupplyDemandData().getAdditionalDemand().getModsBeforeIndustries()) {
                 int raw = com.getSupplyDemandData().getRawAdditionalDemand(value, market);
@@ -138,7 +147,9 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
                     continue;
                 }
                 if (raw > 0) {
-                    tooltip.addPara(industry.getCurrentName() + " : %s", 3f, Misc.getNegativeHighlightColor(), "-" + Misc.getWithDGS(raw));
+                    String name = industry.getCurrentName();
+                    if(AoTDIndustryData.getInstance(market).isPending(industry.getId()))name += " (awaiting resource allocation)";
+                    tooltip.addPara(name + " : %s", 3f, Misc.getNegativeHighlightColor(), "-" + Misc.getWithDGS(raw));
                 }
             }
             if (unknown > 0) {

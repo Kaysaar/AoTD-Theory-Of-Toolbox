@@ -3,10 +3,8 @@ package data.kaysaar.aotd.tot.raids;
 import com.fs.starfarer.api.campaign.CargoAPI;
 import com.fs.starfarer.api.campaign.TextPanelAPI;
 import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
-import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.campaign.econ.Industry;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
-import com.fs.starfarer.api.impl.campaign.econ.CommodityIconCounts;
 import com.fs.starfarer.api.impl.campaign.econ.ShippingDisruption;
 import com.fs.starfarer.api.impl.campaign.graid.CommodityGroundRaidObjectivePluginImpl;
 import com.fs.starfarer.api.impl.campaign.ids.Commodities;
@@ -15,9 +13,10 @@ import com.fs.starfarer.api.ui.IconGroupAPI;
 import com.fs.starfarer.api.ui.IconRenderMode;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
+import data.kaysaar.aotd.tot.industries.AoTDBaseIndustry;
+import data.kaysaar.aotd.tot.scripts.economy.AoTDIndustryData;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 
-import java.awt.*;
 import java.util.Random;
 
 public class AoTDCommodityGroundRaidObjectivePluginImpl extends CommodityGroundRaidObjectivePluginImpl {
@@ -59,9 +58,16 @@ public class AoTDCommodityGroundRaidObjectivePluginImpl extends CommodityGroundR
             MarketCMD.RaidDangerLevel base = com.getCommodity().getBaseDanger();
             for (Industry ind : market.getIndustries()) {
                 int supply = commodityOnMarket.getSupplyDemandData().getRawSupplyFromIndustry(ind);
-                int deficit = ind.getMaxDeficit(commodityOnMarket.getSpec().getId()).two;
-                int units = AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(deficit, true, commodityOnMarket.getSpec().getId());
-                int demandMet = commodityOnMarket.getSupplyDemandData().getRawDemandFromIndustry(ind) - units;
+                int demandMet;
+                if(AoTDIndustryData.getInstance(market).isPending(ind.getId()))demandMet = 0;
+                else if(ind instanceof AoTDBaseIndustry){
+                    demandMet = commodityOnMarket.getSupplyDemandData().getRawFilledDemandFromIndustry(ind);
+                }
+                else{
+                    int deficit = ind.getMaxDeficit(commodityOnMarket.getSpec().getId()).two;
+                    int units = AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(deficit,true,commodityOnMarket.getSpec().getId());
+                    demandMet = commodityOnMarket.getSupplyDemandData().getRawDemandFromIndustry(ind) - units;
+                }
                 int currScore = Math.max(supply, demandMet) * 1000;
                 MarketCMD.RaidDangerLevel danger = ind.adjustCommodityDangerLevel(com.getId(), base);
                 currScore += 1000 - danger.ordinal();

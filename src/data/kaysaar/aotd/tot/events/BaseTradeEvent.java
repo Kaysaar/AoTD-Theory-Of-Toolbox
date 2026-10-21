@@ -11,7 +11,7 @@ public class BaseTradeEvent extends AshlibBaseEvent {
 
     @Override
     public String getImageName() {
-        return Global.getSettings().getSpriteName("illustrations", "crew_leaving");
+        return Global.getSettings().getSpriteName("illustrations", "aotd_trade_event");
     }
 
     @Override

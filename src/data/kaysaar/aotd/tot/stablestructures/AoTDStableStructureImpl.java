@@ -1,7 +1,11 @@
 package data.kaysaar.aotd.tot.stablestructures;
 
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.InteractionDialogImageVisual;
 import com.fs.starfarer.api.campaign.*;
+import com.fs.starfarer.api.campaign.econ.MarketAPI;
+import com.fs.starfarer.api.campaign.rules.MemoryAPI;
+import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
 import com.fs.starfarer.api.loading.Description;
 import com.fs.starfarer.api.ui.Alignment;
 import com.fs.starfarer.api.ui.CustomPanelAPI;
@@ -9,9 +13,11 @@ import com.fs.starfarer.api.ui.LabelAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
+import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContractManager;
 
 import java.awt.Color;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.Map;
 
 public class AoTDStableStructureImpl {
@@ -19,9 +25,40 @@ public class AoTDStableStructureImpl {
     public String currentAICoreID;
     public String currentItemID;
     public SectorEntityToken currentlyAssignedToken;
+    public String upgradeId;
+    public String ultimateUpgradeId;
+    public boolean isBuilding;
+    public boolean isDisrupted;
+    protected float buildProgress;
+    protected float buildTime = 1f;
+    protected float creditsPaid;
+    protected boolean constructionCancelled;
+    protected String constructionTargetId;
+    protected String uniqueIdForContract;
+    protected MarketAPI constructionStorage;
+    protected LinkedHashMap<String, Integer> constructionResources = new LinkedHashMap<>();
+    protected LinkedHashMap<String, Integer> delivered = new LinkedHashMap<>();
+    protected float maintenanceDays;
+    protected Long lastAdvanceTimestamp;
+
+    protected Object readResolve() {
+        if (constructionResources == null) constructionResources = new LinkedHashMap<>();
+        if (delivered == null) delivered = new LinkedHashMap<>();
+        return this;
+    }
 
     public void setCurrentlyAssignedToken(SectorEntityToken currentlyAssignedToken) {
+        if (currentlyAssignedToken == null) throw new IllegalArgumentException("A structure needs an entity");
+        Object existing = currentlyAssignedToken.getMemoryWithoutUpdate().get(AoTDStableStructureSpecManager.memKeyInEntities);
+        if (existing != null && existing != this) {
+            throw new IllegalStateException("The entity already has a stable structure implementation");
+        }
+        if (this.currentlyAssignedToken != null && this.currentlyAssignedToken != currentlyAssignedToken) {
+            throw new IllegalStateException("A stable structure cannot be moved to another entity");
+        }
         this.currentlyAssignedToken = currentlyAssignedToken;
+        currentlyAssignedToken.getMemoryWithoutUpdate().set(AoTDStableStructureSpecManager.memKeyInEntities, this);
+        if (lastAdvanceTimestamp == null) resetAdvanceTimestamp();
     }
 
     public enum AoTDStableStructureTooltipMode {
@@ -39,10 +76,431 @@ public class AoTDStableStructureImpl {
     }
 
     public void advance(float amount) {
+        if (!isCurrentImplementation() || amount <= 0f || Global.getSector().isPaused()) return;
+        boolean disrupted = isDisrupted();
+        if (isDisrupted != disrupted) {
+            isDisrupted = disrupted;
+            if (disrupted) notifyDisrupted();
+            else disruptionFinished();
+            AoTDTradeContractManager.getInstance().invalidatePredictions();
+        }
+        if (!isPlayerOwned() || disrupted || (!isBuilding && ultimateUpgradeId == null)) return;
+        float days = Global.getSector().getClock().convertToDays(amount);
+        boolean alreadyBuilding = isBuilding;
+        float allowed = getAllowedProgressOnConstruction();
+        maintenanceDays -= days;
+        if (maintenanceDays <= 0f) {
+            maintenanceDays = 1f;
+            if (isBuilding) deliverSpecialItemsFromStorage();
+            else if (ultimateUpgradeId != null) startNextUpgrade();
+        }
+        if (!alreadyBuilding || !isBuilding) return;
+        buildProgress = Math.min(buildProgress + days, Math.max(buildProgress, buildTime * allowed));
+        if (buildProgress >= buildTime && allowed >= 1f) finishBuildingOrUpgrading();
+    }
+
+    public boolean isCurrentImplementation() {
+        return currentlyAssignedToken != null && !currentlyAssignedToken.isExpired()
+                && currentlyAssignedToken.getMemoryWithoutUpdate().get(AoTDStableStructureSpecManager.memKeyInEntities) == this;
+    }
+
+    public boolean isPlayerOwned() {
+        return currentlyAssignedToken != null && currentlyAssignedToken.getFaction().isPlayerFaction();
+    }
+
+    protected void requireCurrentImplementation() {
+        if (!isCurrentImplementation()) throw new IllegalStateException("Use the implementation stored on the entity");
+    }
+
+    public boolean isBuilding() {
+        return isBuilding;
+    }
+
+    public boolean isUpgrading() {
+        return isBuilding && constructionTargetId != null && !id.equals(constructionTargetId);
+    }
+
+    public boolean isFunctional() {
+        return isCurrentImplementation() && !constructionCancelled && !isDisrupted()
+                && (!isBuilding || isUpgrading());
+    }
+
+    public float getBuildTime() {
+        return Math.max(0f, getSpec().getDaysToBuild());
+    }
+
+    public float getBuildOrUpgradeProgress() {
+        if (!isBuilding) return 0f;
+        return buildTime <= 0f ? getAllowedProgressOnConstruction() : Math.min(1f, buildProgress / buildTime);
+    }
+
+    public String getBuildOrUpgradeDaysText() {
+        int days = Math.max(1, (int) Math.ceil(isDisrupted() ? getDisruptedDays() : buildTime - buildProgress));
+        return days + (days == 1 ? " day" : " days");
+    }
+
+    public String getBuildOrUpgradeProgressText() {
+        if (isDisrupted()) return "Disrupted: " + getBuildOrUpgradeDaysText() + " left";
+        if (!isBuilding) return ultimateUpgradeId == null ? "" : "Upgrade queued: awaiting credits or availability";
+        String text = (isUpgrading() ? "Upgrading: " : "Building: ") + getBuildOrUpgradeDaysText() + " left";
+        if (getAllowedProgressOnConstruction() < 1f && buildProgress >= buildTime * getAllowedProgressOnConstruction()) {
+            text += " (awaiting resources)";
+        }
+        return text;
+    }
+
+    public boolean startBuilding() {
+        return startBuilding(ultimateUpgradeId);
+    }
+
+    public boolean startBuilding(String ultimateTargetId) {
+        requireCurrentImplementation();
+        if (isBuilding) return false;
+        String target = ultimateTargetId == null ? id : ultimateTargetId;
+        AoTDStableStructureSpecManager.getUpgradePath(id, target);
+        if (!startStage(this)) return false;
+        ultimateUpgradeId = target.equals(id) ? null : target;
+        updateNextUpgradeId();
+        return true;
+    }
+
+    public boolean startUpgrading() {
+        String target = ultimateUpgradeId != null ? ultimateUpgradeId : upgradeId;
+        if (target == null) {
+            LinkedList<AoTDStableStructureSpec> children = AoTDStableStructureSpecManager.getUpgradeChildren(id);
+            if (children.size() != 1) throw new IllegalStateException("Specify an upgrade target for " + id);
+            target = children.getFirst().getId();
+        }
+        return startUpgrading(target);
+    }
+
+    public boolean startUpgrading(String ultimateTargetId) {
+        requireCurrentImplementation();
+        if (ultimateTargetId == null) throw new IllegalArgumentException("An upgrade needs a target");
+        String from = isUpgrading() ? constructionTargetId : id;
+        AoTDStableStructureSpecManager.getUpgradePath(from, ultimateTargetId);
+        if (lastAdvanceTimestamp == null) resetAdvanceTimestamp();
+        ultimateUpgradeId = ultimateTargetId.equals(id) ? null : ultimateTargetId;
+        updateNextUpgradeId();
+        maintenanceDays = 0f;
+        return !isBuilding && startNextUpgrade();
+    }
+
+    public void clearQueuedUpgrades() {
+        requireCurrentImplementation();
+        ultimateUpgradeId = isUpgrading() ? constructionTargetId : null;
+        updateNextUpgradeId();
+    }
+
+    protected void updateNextUpgradeId() {
+        if (isUpgrading()) {
+            upgradeId = constructionTargetId;
+        } else if (ultimateUpgradeId != null && !ultimateUpgradeId.equals(id)) {
+            upgradeId = AoTDStableStructureSpecManager.getUpgradePath(id, ultimateUpgradeId).getFirst();
+        } else {
+            ultimateUpgradeId = null;
+            upgradeId = null;
+        }
+    }
+
+    protected boolean startNextUpgrade() {
+        if (isBuilding || constructionCancelled || ultimateUpgradeId == null || isDisrupted() || !isPlayerOwned()) return false;
+        updateNextUpgradeId();
+        if (upgradeId == null) return false;
+        AoTDStableStructureImpl next = AoTDStableStructureSpecManager.getSpec(upgradeId).getImplClassInstance();
+        next.currentAICoreID = currentAICoreID;
+        next.currentItemID = currentItemID;
+        return startStage(next);
+    }
+
+    protected boolean startStage(AoTDStableStructureImpl target) {
+        if (!isPlayerOwned() || isDisrupted()
+                || !target.isAvailableToBuild(currentlyAssignedToken.getStarSystem(), currentlyAssignedToken.getFaction())) return false;
+        float cost = Math.max(0f, target.getBuildCostCredits());
+        if (Global.getSector().getPlayerFleet().getCargo().getCredits().get() < cost) return false;
+        LinkedHashMap<String, Integer> resources = new LinkedHashMap<>();
+        if (target.getBuildCostResources() != null) {
+            for (Map.Entry<String, Integer> entry : target.getBuildCostResources().entrySet()) {
+                if (entry.getValue() == null || entry.getValue() <= 0) continue;
+                if (Global.getSettings().getCommoditySpec(entry.getKey()) == null
+                        && Global.getSettings().getSpecialItemSpec(entry.getKey()) == null) {
+                    throw new IllegalArgumentException("Unknown construction resource: " + entry.getKey());
+                }
+                resources.put(entry.getKey(), entry.getValue());
+            }
+        }
+        Global.getSector().getPlayerFleet().getCargo().getCredits().subtract(cost);
+        if (lastAdvanceTimestamp == null) resetAdvanceTimestamp();
+        creditsPaid = cost;
+        constructionResources = resources;
+        delivered.clear();
+        constructionTargetId = target.id;
+        buildTime = target.getBuildTime();
+        buildProgress = 0f;
+        constructionCancelled = false;
+        isBuilding = true;
+        uniqueIdForContract = "stable_structure_construction_" + Misc.genUID();
+        resetAdvanceTimestamp();
+        if (!getMonthlyResNeeded().isEmpty()) {
+            AoTDTradeContractManager.getInstance().addContract(new AoTDStableStructureConstructionContract(this));
+        }
+        deliverSpecialItemsFromStorage();
+        return true;
+    }
+
+    public void finishBuildingOrUpgrading() {
+        requireCurrentImplementation();
+        if (!isBuilding) return;
+        boolean upgrading = isUpgrading();
+        AoTDStableStructureImpl next = upgrading
+                ? AoTDStableStructureSpecManager.getSpec(constructionTargetId).getImplClassInstance() : null;
+        removeConstructionContract();
+        isBuilding = false;
+        creditsPaid = 0f;
+        buildProgress = 0f;
+        buildTime = 1f;
+        constructionTargetId = null;
+        delivered.clear();
+        constructionResources.clear();
+        if (upgrading) {
+            unapply();
+            next.currentAICoreID = currentAICoreID;
+            next.currentItemID = currentItemID;
+            next.constructionStorage = constructionStorage;
+            next.ultimateUpgradeId = ultimateUpgradeId;
+            next.isDisrupted = isDisrupted();
+            currentlyAssignedToken.getMemoryWithoutUpdate().set(AoTDStableStructureSpecManager.memKeyInEntities, next);
+            next.setCurrentlyAssignedToken(currentlyAssignedToken);
+            next.updateEntityPresentation(this);
+            next.upgradeFinished(this);
+            ultimateUpgradeId = null;
+            upgradeId = null;
+            next.updateNextUpgradeId();
+            next.startNextUpgrade();
+        } else {
+            buildingFinished();
+            updateNextUpgradeId();
+            startNextUpgrade();
+        }
+    }
+
+    protected void updateEntityPresentation(AoTDStableStructureImpl previous) {
+        CustomEntitySpecAPI spec = getSpecEntity();
+        if (currentlyAssignedToken.getName() == null
+                || currentlyAssignedToken.getName().equals(previous.getSpecEntity().getDefaultName())) {
+            currentlyAssignedToken.setName(spec.getDefaultName());
+        }
+        currentlyAssignedToken.setCustomDescriptionId(spec.getCustomDescriptionId());
+        if (spec.getInteractionImage() != null) {
+            currentlyAssignedToken.setCustomInteractionDialogImageVisual(
+                    new InteractionDialogImageVisual(spec.getInteractionImage(), 480f, 300f));
+        }
+    }
+
+    public void cancelUpgrade() {
+        requireCurrentImplementation();
+        if (isUpgrading()) cancelCurrentStage(false);
+        else clearQueuedUpgrades();
+    }
+
+    public void cancelBuilding() {
+        requireCurrentImplementation();
+        if (isBuilding && !isUpgrading()) cancelCurrentStage(true);
+    }
+
+    protected void cancelCurrentStage(boolean cancelledBase) {
+        float refund = creditsPaid * (1f - getBuildOrUpgradeProgress());
+        removeConstructionContract();
+        isBuilding = false;
+        constructionCancelled = cancelledBase;
+        ultimateUpgradeId = null;
+        upgradeId = null;
+        constructionTargetId = null;
+        buildProgress = 0f;
+        buildTime = 1f;
+        creditsPaid = 0f;
+        constructionResources.clear();
+        delivered.clear();
+        if (refund > 0f) Global.getSector().getPlayerFleet().getCargo().getCredits().add(refund);
+    }
+
+    public String getUniqueIdForContract() {
+        return uniqueIdForContract;
+    }
+
+    public String getConstructionTargetId() {
+        return constructionTargetId;
+    }
+
+    public AoTDStableStructureConstructionContract getContract() {
+        if (uniqueIdForContract == null) return null;
+        Object contract = AoTDTradeContractManager.getInstance().getActiveContracts().get(uniqueIdForContract);
+        return contract instanceof AoTDStableStructureConstructionContract
+                ? (AoTDStableStructureConstructionContract) contract : null;
+    }
+
+    public void deliverSpecialItemsFromStorage() {
+        if (!isBuilding || !isCurrentImplementation() || !isPlayerOwned() || isDisrupted()) return;
+        boolean needsItems = false;
+        for (String resource : constructionResources.keySet()) {
+            if (getRemainingResourceAmount(resource) > 0
+                    && Global.getSettings().getCommoditySpec(resource) == null) {
+                needsItems = true;
+                break;
+            }
+        }
+        if (!needsItems) return;
+        MarketAPI storage = getConstructionStorage();
+        if (storage == null || !storage.getFaction().isPlayerFaction()
+                || !storage.hasSubmarket(Submarkets.SUBMARKET_STORAGE)) return;
+        CargoAPI cargo = storage.getSubmarket(Submarkets.SUBMARKET_STORAGE).getCargo();
+        for (CargoStackAPI stack : cargo.getStacksCopy()) {
+            if (!stack.isSpecialStack()) continue;
+            String resource = stack.getSpecialDataIfSpecial().getId();
+            if (Global.getSettings().getCommoditySpec(resource) != null) continue;
+            int amount = Math.min((int) stack.getSize(), getRemainingResourceAmount(resource));
+            if (amount > 0 && cargo.removeItems(stack.getType(), stack.getData(), amount)) {
+                addResourcesToConstruction(resource, amount);
+            }
+        }
+    }
+
+    protected void removeConstructionContract() {
+        if (uniqueIdForContract != null) AoTDTradeContractManager.getInstance().removeContract(uniqueIdForContract);
+        uniqueIdForContract = null;
+    }
+
+    public void addResourcesToConstruction(String resourceId, int amount) {
+        if (!isBuilding || !isCurrentImplementation() || amount <= 0) return;
+        int needed = getRemainingResourceAmount(resourceId);
+        if (needed > 0) delivered.put(resourceId, delivered.getOrDefault(resourceId, 0) + Math.min(needed, amount));
+    }
+
+    public int getRemainingResourceAmount(String resourceId) {
+        return Math.max(0, constructionResources.getOrDefault(resourceId, 0) - delivered.getOrDefault(resourceId, 0));
+    }
+
+    public LinkedHashMap<String, Integer> getConstructionResources() {
+        return new LinkedHashMap<>(constructionResources);
+    }
+
+    public LinkedHashMap<String, Integer> getDeliveredResources() {
+        return new LinkedHashMap<>(delivered);
+    }
+
+    public float getAllowedProgressOnConstruction() {
+        float allowed = 1f;
+        for (Map.Entry<String, Integer> entry : constructionResources.entrySet()) {
+            if (entry.getValue() <= 0) continue;
+            allowed = Math.min(allowed, delivered.getOrDefault(entry.getKey(), 0) / (float) entry.getValue());
+        }
+        return Math.max(0f, Math.min(1f, allowed));
+    }
+
+    public LinkedHashMap<String, Integer> getMonthlyResNeeded() {
+        LinkedHashMap<String, Integer> result = new LinkedHashMap<>();
+        int months = Math.max(1, (int) Math.ceil(Math.max(0f, buildTime - buildProgress) / 30f));
+        for (String resource : constructionResources.keySet()) {
+            if (Global.getSettings().getCommoditySpec(resource) == null) continue;
+            int remaining = getRemainingResourceAmount(resource);
+            if (remaining > 0) result.put(resource, (int) Math.ceil(remaining / (double) months));
+        }
+        return result;
+    }
+
+    public MarketAPI getConstructionStorage() {
+        if (constructionStorage != null) return constructionStorage;
+        FactionProductionAPI production = Global.getSector().getPlayerFaction().getProduction();
+        return production == null ? null : production.getGatheringPoint();
+    }
+
+    public void setConstructionStorage(MarketAPI market) {
+        constructionStorage = market;
+    }
+
+    public String getDisruptedKey() {
+        return "$aotd_stable_structure_disrupted";
+    }
+
+    public boolean canBeDisrupted() {
+        return true;
+    }
+
+    public boolean isDisrupted() {
+        return currentlyAssignedToken != null && currentlyAssignedToken.getMemoryWithoutUpdate().getBoolean(getDisruptedKey());
+    }
+
+    public float getDisruptedDays() {
+        return isDisrupted() ? Math.max(0f, currentlyAssignedToken.getMemoryWithoutUpdate().getExpire(getDisruptedKey())) : 0f;
+    }
+
+    public void setDisrupted(float days) {
+        setDisrupted(days, false);
+    }
+
+    public void setDisrupted(float days, boolean useMax) {
+        requireCurrentImplementation();
+        if (!canBeDisrupted() && days > 0f) return;
+        if (!Float.isFinite(days)) throw new IllegalArgumentException("Invalid disruption duration");
+        if (lastAdvanceTimestamp == null) resetAdvanceTimestamp();
+        if (useMax) days = Math.max(days, getDisruptedDays());
+        MemoryAPI memory = currentlyAssignedToken.getMemoryWithoutUpdate();
+        boolean wasDisrupted = isDisrupted();
+        if (days <= 0f) memory.unset(getDisruptedKey());
+        else memory.set(getDisruptedKey(), true, days);
+        isDisrupted = isDisrupted();
+        if (wasDisrupted != isDisrupted) {
+            if (isDisrupted) notifyDisrupted();
+            else disruptionFinished();
+        }
+        AoTDTradeContractManager.getInstance().invalidatePredictions();
+    }
+
+    public void notifyRemoved() {
+        removeConstructionContract();
+        isBuilding = false;
+        constructionCancelled = true;
+        ultimateUpgradeId = null;
+        upgradeId = null;
+        unapply();
+        if (currentlyAssignedToken != null
+                && currentlyAssignedToken.getMemoryWithoutUpdate().get(AoTDStableStructureSpecManager.memKeyInEntities) == this) {
+            currentlyAssignedToken.getMemoryWithoutUpdate().unset(AoTDStableStructureSpecManager.memKeyInEntities);
+        }
+    }
+
+    public void apply() {
+    }
+
+    public void unapply() {
+    }
+
+    protected void resetAdvanceTimestamp() {
+        lastAdvanceTimestamp = Global.getSector().getClock().getTimestamp();
+    }
+
+    public int getEffectOrder() {
+        return 0;
+    }
+
+    public String getModId() {
+        return "aotd_stable_structure_" + (currentlyAssignedToken == null ? id : currentlyAssignedToken.getId());
+    }
+
+    protected void buildingFinished() {
+    }
+
+    protected void upgradeFinished(AoTDStableStructureImpl previous) {
+    }
+
+    protected void notifyDisrupted() {
+    }
+
+    protected void disruptionFinished() {
     }
 
     public AoTDStableStructureSpec getSpec() {
-        return AoTDStableStructureManager.getSpec(id);
+        return AoTDStableStructureSpecManager.getSpec(id);
     }
 
     public CustomEntitySpecAPI getSpecEntity() {
@@ -79,6 +537,24 @@ public class AoTDStableStructureImpl {
 
     public void applyEffectsOnChangeOfItem(String currentItem) {
     }
+
+    public void setAICoreId(String coreId) {
+        currentAICoreID = coreId;
+        applyEffectsOnChangeOfAICore(coreId);
+    }
+
+    public String getAICoreId() {
+        return currentAICoreID;
+    }
+
+    public void setItemId(String itemId) {
+        currentItemID = itemId;
+        applyEffectsOnChangeOfItem(itemId);
+    }
+
+    public String getItemId() {
+        return currentItemID;
+    }
     public void createTooltipForEffectSection(TooltipMakerAPI tooltip, AoTDStableStructureTooltipMode mode) {
 
     }
@@ -104,6 +580,36 @@ public class AoTDStableStructureImpl {
         Color dark = faction.getDarkUIColor();
         Color highlight = Misc.getHighlightColor();
         Color bad = Misc.getNegativeHighlightColor();
+
+        if (mode == AoTDStableStructureTooltipMode.PANEL) {
+            if (isBuilding || isDisrupted() || ultimateUpgradeId != null) {
+                tooltip.addSectionHeading("Status", color, dark, Alignment.MID, 10f);
+                tooltip.addPara(getBuildOrUpgradeProgressText(), isDisrupted() ? bad : highlight, 5f);
+            }
+            if (isBuilding) {
+                tooltip.addPara("Under construction: %s", 5f, highlight,
+                        Global.getSettings().getCustomEntitySpec(constructionTargetId).getDefaultName());
+                if (!isPlayerOwned()) tooltip.addPara("Construction is paused while the structure is not player-owned.", bad, 5f);
+                if (!constructionResources.isEmpty()) {
+                    tooltip.addSectionHeading("Construction resources delivered", color, dark, Alignment.MID, 10f);
+                    for (Map.Entry<String, Integer> entry : constructionResources.entrySet()) {
+                        String resource = entry.getKey();
+                        String name = Global.getSettings().getCommoditySpec(resource) != null
+                                ? Global.getSettings().getCommoditySpec(resource).getName()
+                                : Global.getSettings().getSpecialItemSpec(resource).getName();
+                        int received = delivered.getOrDefault(resource, 0);
+                        tooltip.addPara(name + ": %s / %s", 3f,
+                                received < entry.getValue() ? bad : highlight,
+                                String.valueOf(received), String.valueOf(entry.getValue()));
+                    }
+                }
+            }
+            if (ultimateUpgradeId != null && !ultimateUpgradeId.equals(constructionTargetId)) {
+                tooltip.addPara("Queued upgrade target: %s", 5f, highlight,
+                        Global.getSettings().getCustomEntitySpec(ultimateUpgradeId).getDefaultName());
+            }
+            if (constructionCancelled) tooltip.addPara("Construction cancelled. This structure is not functional.", bad, 5f);
+        }
 
         int credits = (int) Global.getSector().getPlayerFleet().getCargo().getCredits().get();
         String creditsStr = Misc.getDGSCredits(credits);
@@ -167,7 +673,7 @@ public class AoTDStableStructureImpl {
             if (!immediateItems.isEmpty()) {
                 tooltip.addSectionHeading("Other construction costs", color, dark, Alignment.MID, 10f);
                 tooltip.addPara(
-                        "Unlike regular construction materials, these items are drawn directly from storage, through trade contract.",
+                        "Unlike regular construction materials, these items are drawn directly from construction storage, through trade contract.",
                         Misc.getGrayColor(), 5f
                 );
                 CustomPanelAPI immediatePanel = AoTDToolboxMisc.createCostSection(

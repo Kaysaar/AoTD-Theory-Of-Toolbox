@@ -1,4 +1,3 @@
-
 package data.kaysaar.aotd.tot.stablestructures;
 
 import ashlib.data.plugins.misc.AshMisc;
@@ -12,8 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 
-public class AoTDStableStructureManager {
-
+public class AoTDStableStructureSpecManager {
     public static String filePath = "data/campaign/aotd_stable_structures.csv";
 
     public static LinkedHashMap<String, AoTDStableStructureSpec> specsList = new LinkedHashMap<>();
@@ -218,6 +216,34 @@ public class AoTDStableStructureManager {
         LinkedList<AoTDStableStructureSpec> upgrades = structureUpgrades.get(structureId);
 
         return upgrades != null && !upgrades.isEmpty();
+    }
+
+    public static LinkedList<String> getUpgradePath(String structureId, String targetId) {
+        ensureCacheBuilt();
+        if (!specsList.containsKey(structureId) || !specsList.containsKey(targetId)) {
+            throw new IllegalArgumentException("Unknown stable structure: " + structureId + " -> " + targetId);
+        }
+        LinkedList<String> path = new LinkedList<>();
+        if (structureId.equals(targetId)) return path;
+        LinkedHashMap<String, String> previous = new LinkedHashMap<>();
+        LinkedList<String> pending = new LinkedList<>();
+        previous.put(structureId, null);
+        pending.add(structureId);
+        while (!pending.isEmpty()) {
+            String current = pending.removeFirst();
+            for (String child : directUpgrades.get(current)) {
+                if (previous.containsKey(child)) continue;
+                previous.put(child, current);
+                if (child.equals(targetId)) {
+                    for (String step = targetId; !step.equals(structureId); step = previous.get(step)) {
+                        path.addFirst(step);
+                    }
+                    return path;
+                }
+                pending.add(child);
+            }
+        }
+        throw new IllegalArgumentException("No stable structure upgrade path: " + structureId + " -> " + targetId);
     }
 
     public static boolean isUpgradeOf(String structureId, String upgradeId) {
