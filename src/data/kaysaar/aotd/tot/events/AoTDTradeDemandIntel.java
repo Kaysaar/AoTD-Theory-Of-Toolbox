@@ -154,7 +154,7 @@ public class AoTDTradeDemandIntel extends AshlibBaseEventIntel {
     }
 
     private void createOverview(TooltipMakerAPI tooltip, float width) {
-        String illustration = Global.getSettings().getSpriteName("illustrations", "crew_leaving");
+        String illustration = Global.getSettings().getSpriteName("illustrations", "aotd_trade_event");
         if (width >= 600f) {
             TooltipMakerAPI overview = tooltip.beginImageWithText(illustration, 135f, width, true);
             createOverviewText(overview);

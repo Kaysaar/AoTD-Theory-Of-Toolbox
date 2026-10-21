@@ -11,6 +11,7 @@ import java.util.Map;
 public class AoTDAdditionalProdData extends MutableStatWithTempMods {
 
     public LinkedHashMap<String, Boolean> beforeIndustries = new LinkedHashMap<>();
+    protected LinkedHashMap<String, Boolean> exactSources = new LinkedHashMap<>();
     public transient LinkedHashMap<String, Float> filledRawAmounts = new LinkedHashMap<>();
 
     public AoTDAdditionalProdData() {
@@ -32,6 +33,11 @@ public class AoTDAdditionalProdData extends MutableStatWithTempMods {
             filledRawAmounts = new LinkedHashMap<>();
         }
 
+        if (exactSources == null) {
+            exactSources = new LinkedHashMap<>();
+        }
+        exactSources.keySet().retainAll(getFlatMods().keySet());
+
         for (String source : getFlatMods().keySet()) {
             beforeIndustries.putIfAbsent(source, false);
         }
@@ -43,27 +49,64 @@ public class AoTDAdditionalProdData extends MutableStatWithTempMods {
     public void modifyFlat(String source, float value, String desc) {
         beforeIndustries.putIfAbsent(source, false);
         super.modifyFlat(source, value, desc);
+        exactSources.remove(source);
     }
 
     public void modifyFlat(String source, float value, String desc, boolean beforeIndustries) {
         this.beforeIndustries.put(source, beforeIndustries);
         super.modifyFlat(source, value, desc);
+        exactSources.remove(source);
     }
 
     @Override
     public void addTemporaryModFlat(float durInDays, String source, String desc, float value) {
         beforeIndustries.putIfAbsent(source, false);
         super.addTemporaryModFlat(durInDays, source, desc, value);
+        exactSources.remove(source);
     }
 
     public void addTemporaryModFlat(float durInDays, String source, String desc, float value, boolean beforeIndustries) {
         this.beforeIndustries.put(source, beforeIndustries);
         super.addTemporaryModFlat(durInDays, source, desc, value);
+        exactSources.remove(source);
     }
 
     public void addTemporaryModFlat(float durInDays, String source, float value, boolean beforeIndustries) {
         this.beforeIndustries.put(source, beforeIndustries);
         super.addTemporaryModFlat(durInDays, source, value);
+        exactSources.remove(source);
+    }
+
+    public void modifyFlatExact(String source, int amount, String desc) {
+        modifyFlatExact(source, amount, desc, isBeforeIndustries(source));
+    }
+
+    public void modifyFlatExact(String source, int amount, String desc, boolean beforeIndustries) {
+        modifyFlat(source, amount, desc, beforeIndustries);
+        exactSources.put(source, true);
+    }
+
+    public void addTemporaryModFlatExact(float durInDays, String source, String desc, int amount) {
+        addTemporaryModFlatExact(durInDays, source, desc, amount, isBeforeIndustries(source));
+    }
+
+    public void addTemporaryModFlatExact(float durInDays, String source, String desc, int amount, boolean beforeIndustries) {
+        addTemporaryModFlat(durInDays, source, desc, amount, beforeIndustries);
+        exactSources.put(source, true);
+    }
+
+    public boolean isExact(String source) {
+        return hasSource(source) && exactSources.getOrDefault(source, false);
+    }
+
+    @Override
+    public void advance(float days) {
+        super.advance(days);
+        exactSources.keySet().retainAll(getFlatMods().keySet());
+        beforeIndustries.keySet().retainAll(getFlatMods().keySet());
+        if (filledRawAmounts != null) {
+            filledRawAmounts.keySet().retainAll(getFlatMods().keySet());
+        }
     }
 
     public void setBeforeIndustries(String source, boolean beforeIndustries) {
@@ -181,6 +224,7 @@ public class AoTDAdditionalProdData extends MutableStatWithTempMods {
         super.unmodify(source);
 
         beforeIndustries.remove(source);
+        exactSources.remove(source);
 
         if (filledRawAmounts != null) {
             filledRawAmounts.remove(source);
@@ -192,6 +236,7 @@ public class AoTDAdditionalProdData extends MutableStatWithTempMods {
         super.unmodifyFlat(source);
 
         beforeIndustries.remove(source);
+        exactSources.remove(source);
 
         if (filledRawAmounts != null) {
             filledRawAmounts.remove(source);
@@ -203,6 +248,7 @@ public class AoTDAdditionalProdData extends MutableStatWithTempMods {
         super.unmodify();
 
         beforeIndustries.clear();
+        exactSources.clear();
 
         if (filledRawAmounts != null) {
             filledRawAmounts.clear();

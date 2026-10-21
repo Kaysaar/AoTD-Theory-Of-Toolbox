@@ -1,7 +1,6 @@
 package data.kaysaar.aotd.tot.ui.starsystems.components;
 
 
-
 import ashlib.data.plugins.ui.models.CustomButton;
 import ashlib.data.plugins.ui.models.DropDownButton;
 import ashlib.data.plugins.ui.plugins.UILinesRenderer;
@@ -34,6 +33,7 @@ public class StarSystemHoldingTable extends UITableImpl {
         widthMap.put("income", 100);
         widthMap.put("admin", 75);
     }
+
     public static void reDestributeAdditionalWidth(float additionalWidth) {
         if (additionalWidth <= 0) {
             return;
@@ -89,7 +89,7 @@ public class StarSystemHoldingTable extends UITableImpl {
         if (dropDownButtons.isEmpty()) {
             ArrayList<StarSystemAPI> systems = HoldingsUtilis.getSystemsWithPlayerFactionColonies();
             for (StarSystemAPI system : systems) {
-                StarSystemHoldingDropDown button = new StarSystemHoldingDropDown(this, width - 13, 75, 0, 0, false, system, HoldingsUtilis.getFactionMarketsInSystem(Global.getSector().getPlayerFaction(), system),originalPanel);
+                StarSystemHoldingDropDown button = new StarSystemHoldingDropDown(this, width - 13, 75, 0, 0, false, system, HoldingsUtilis.getFactionMarketsInSystem(Global.getSector().getPlayerFaction(), system), originalPanel);
                 dropDownButtons.add(button);
             }
             HoldingsUtilis.sortDropDownButtonsIncome(dropDownButtons, false);
@@ -126,14 +126,30 @@ public class StarSystemHoldingTable extends UITableImpl {
         lastCheckedState = buttonName;
     }
 
+    public boolean forceUnfold = false;
+
+    public void setForceUnfold(boolean forceUnfold) {
+        if(this.forceUnfold!=forceUnfold){
+            this.forceUnfold = forceUnfold;
+            if(currSystem==null&&!dropDownButtons.isEmpty()){
+                currSystem = ((StarSystemHoldingDropDown)dropDownButtons.get(0)).getStarSystem();
+            }
+            recreateTable();
+        }
+
+    }
+
     @Override
     public void createTable() {
         super.createTable();
         for (DropDownButton dropDownButton : dropDownButtons) {
             StarSystemHoldingDropDown button = (StarSystemHoldingDropDown) dropDownButton;
-            if (currSystem != null && !button.main.getId().equals(currSystem.getId())) {
+            if(forceUnfold){
+                button.isDropped = true;
+            }
+            else if (currSystem != null && !button.main.getId().equals(currSystem.getId())) {
                 button.isDropped = false;
-            } else if (currSystem!=null&&button.main.getId().equals(currSystem.getId())) {
+            } else if (currSystem != null && button.main.getId().equals(currSystem.getId())) {
                 button.isDropped = true;
             }
 

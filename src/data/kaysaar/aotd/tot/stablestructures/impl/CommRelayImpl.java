@@ -12,6 +12,16 @@ public class CommRelayImpl extends AoTDStableStructureImpl {
     }
 
     @Override
+    public boolean canMountAICores() {
+        return true;
+    }
+
+    @Override
+    public boolean canMountItems() {
+        return true;
+    }
+
+    @Override
     public void createTooltipForEffectSection(TooltipMakerAPI tooltip, AoTDStableStructureTooltipMode mode) {
         super.createTooltipForEffectSection(tooltip, mode);
 

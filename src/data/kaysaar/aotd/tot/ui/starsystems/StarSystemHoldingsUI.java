@@ -21,6 +21,7 @@ public class StarSystemHoldingsUI implements ExtendedUIPanelPlugin {
     CurrentStarSystemTab currSystem;
     Object originalPanel;
     ButtonAPI adminButton;
+    ButtonAPI unfold,foldAll;
     @Override
     public CustomPanelAPI getMainPanel() {
         return mainPanel;
@@ -70,6 +71,15 @@ public class StarSystemHoldingsUI implements ExtendedUIPanelPlugin {
         adminButton =tlButton.addButton("Manage Administrators",originalPanel, Misc.getBasePlayerColor(),Misc.getDarkPlayerColor(), Alignment.MID,CutStyle.BOTTOM,300,25,0f);
         adminButton.getPosition().inTL(0,0);
         adminButton.setShortcut(Keyboard.KEY_W,true);
+
+        unfold =tlButton.addButton("Expand All",null, Misc.getBasePlayerColor(),Misc.getDarkPlayerColor(), Alignment.MID,CutStyle.BOTTOM,150,25,0f);
+        unfold.getPosition().rightOfMid(adminButton,5f);
+        unfold.setShortcut(Keyboard.KEY_Z,true);
+
+        foldAll =tlButton.addButton("Hide All",null, Misc.getBasePlayerColor(),Misc.getDarkPlayerColor(), Alignment.MID,CutStyle.BOTTOM,150,25,0f);
+        foldAll.getPosition().rightOfMid(unfold,5f);
+        foldAll.setShortcut(Keyboard.KEY_X,true);
+
         contentPanel.addUIElement(tlButton).inTL(0,contentPanel.getPosition().getHeight()-23);
         mainPanel.addComponent(contentPanel).inTL(0,0);
 
@@ -108,6 +118,19 @@ public class StarSystemHoldingsUI implements ExtendedUIPanelPlugin {
                     currSystem.setCurrStarSystem(table.currSystem);
                     Global.getSector().getPlayerMemoryWithoutUpdate().set("$aotd_tab_holdings_star_id",table.currSystem.getId());
                 }
+
+            }
+            if(foldAll.isChecked()){
+                foldAll.setChecked(false);
+                foldAll.highlight();
+                unfold.unhighlight();
+                table.setForceUnfold(false);
+            }
+            if(unfold.isChecked()){
+                unfold.setChecked(false);
+                unfold.highlight();
+                foldAll.unhighlight();
+                table.setForceUnfold(true);
             }
             if(table.currentlyChosenMarket!=null){
                 MarketAPI copy = table.currentlyChosenMarket;
@@ -127,6 +150,7 @@ public class StarSystemHoldingsUI implements ExtendedUIPanelPlugin {
                 ReflectionUtilis.invokeMethodWithAutoProjection("actionPerformed",originalPanel,null,button);
             }
         }
+
 
     }
 

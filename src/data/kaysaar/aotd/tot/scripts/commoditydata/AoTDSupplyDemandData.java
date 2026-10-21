@@ -5,6 +5,7 @@ import com.fs.starfarer.api.campaign.econ.Industry;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.campaign.econ.MutableCommodityQuantity;
 import com.fs.starfarer.api.combat.MutableStat;
+import data.kaysaar.aotd.tot.industries.AoTDBaseIndustry;
 import data.kaysaar.aotd.tot.plugins.AoTDBaseDemSupCalc;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpec;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
@@ -32,6 +33,29 @@ public class AoTDSupplyDemandData {
     public transient AoTDCommodityEconSpec ecSpec;
     public int supply, demand, available;
     private transient int batchDemandExceptPending;
+    private transient LinkedHashMap<String,Float> filledRawDemandFromIndustries;
+    private transient boolean industryAllocation;
+
+    public void clearIndustryAllocation() {
+        if(filledRawDemandFromIndustries == null)filledRawDemandFromIndustries = new LinkedHashMap<>();
+        else filledRawDemandFromIndustries.clear();
+        industryAllocation = true;
+    }
+
+    public boolean hasIndustryAllocation() {
+        return industryAllocation;
+    }
+
+    public int getRawFilledDemandFromIndustry(Industry industry) {
+        if(AoTDIndustryData.getInstance(industry.getMarket()).isPending(industry.getId()))return 0;
+        if(filledRawDemandFromIndustries == null)return 0;
+        return Math.min(getRawDemandFromIndustry(industry),(int)Math.floor(filledRawDemandFromIndustries.getOrDefault(industry.getId(),0f)));
+    }
+
+    public int getRawDeficitFromIndustry(Industry industry) {
+        if(AoTDIndustryData.getInstance(industry.getMarket()).isPending(industry.getId()))return 0;
+        return Math.max(0,getRawDemandFromIndustry(industry) - getRawFilledDemandFromIndustry(industry));
+    }
 
     public AoTDAdditionalProdData additionalProduction = new AoTDAdditionalProdData(0f);
     public AoTDAdditionalProdData additionalDemand = new AoTDAdditionalProdData(0f);
@@ -190,7 +214,11 @@ public class AoTDSupplyDemandData {
             firstIndustry.putIfAbsent(industry.getId(), industry);
 
             collectInputs(market, industry, industry.getAllSupply(), true, known, inputs, fallback, includeFallback);
-            collectInputs(market, industry, industry.getAllDemand(), false, known, inputs, fallback, includeFallback);
+            collectInputs(market, industry, industry instanceof AoTDBaseIndustry ind ? ind.getVanillaDemandEntries() : industry.getAllDemand(), false, known, inputs, fallback, includeFallback);
+            if(industry instanceof AoTDBaseIndustry ind){
+                collectExactInputs(market,ind,ind.getExactProduction(),true,known,inputs,fallback,includeFallback);
+                collectExactInputs(market,ind,ind.getExactDemand(),false,known,inputs,fallback,includeFallback);
+            }
         }
 
         Set<AoTDSupplyDemandData> updated = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -202,21 +230,13 @@ public class AoTDSupplyDemandData {
             int nonPendingDemand = 0;
 
             for (Map.Entry<String, IndustryInput> entry : input.supplies.entrySet()) {
-                newSupply += input.calculator.getRawUnitsFromSupply(
-                        entry.getValue().quantity,
-                        null,
-                        input.data.commodityID,
-                        firstIndustry.get(entry.getKey())
-                );
+                newSupply += AoTDIndustryAmounts.getProduction(firstIndustry.get(entry.getKey()),input.data.commodityID,
+                        entry.getValue().quantity,input.calculator,null);
             }
 
             for (Map.Entry<String, IndustryInput> entry : input.demands.entrySet()) {
-                int raw = input.calculator.getRawUnitsFromDemand(
-                        entry.getValue().quantity,
-                        null,
-                        input.data.commodityID,
-                        firstIndustry.get(entry.getKey())
-                );
+                int raw = AoTDIndustryAmounts.getDemand(firstIndustry.get(entry.getKey()),input.data.commodityID,
+                        entry.getValue().quantity,input.calculator,null);
 
                 newDemand += raw;
 
@@ -279,6 +299,18 @@ public class AoTDSupplyDemandData {
         }
     }
 
+    private static void collectExactInputs(MarketAPI market,AoTDBaseIndustry industry,Map<String,MutableStat> entries,
+                                           boolean supply,Set<String> known,Map<String,CommodityInputs> inputs,
+                                           List<AoTDSupplyDemandData> fallback,boolean includeFallback) {
+        for (Map.Entry<String,MutableStat> entry : entries.entrySet()) {
+            String id = entry.getKey();
+            if(known.add(id))addCommodity(market.getCommodityData(id),inputs,fallback,includeFallback);
+            CommodityInputs input = inputs.get(id);
+            if(input == null)continue;
+            (supply ? input.supplies : input.demands).put(industry.getId(),new IndustryInput(entry.getValue()));
+        }
+    }
+
     public void updateSupplyDemandData(MarketAPI market) {
         MarketUpdateScope scope = ACTIVE_UPDATE.get();
         if (scope != null && scope.refresh(market, this)) return;
@@ -308,8 +340,10 @@ public class AoTDSupplyDemandData {
                 }
 
                 ids[count] = industry.getId();
-                demands[count] = industry.getDemand(commodityID).getQuantity();
-                supplies[count] = industry.getSupply(commodityID).getQuantity();
+                demands[count] = industry instanceof AoTDBaseIndustry ind && ind.hasExactDemand(commodityID)
+                        ? ind.getExactDemand().get(commodityID) : industry.getDemand(commodityID).getQuantity();
+                supplies[count] = industry instanceof AoTDBaseIndustry ind && ind.hasExactProduction(commodityID)
+                        ? ind.getExactProduction().get(commodityID) : industry.getSupply(commodityID).getQuantity();
                 count++;
             }
         } catch (Exception e) {
@@ -323,21 +357,13 @@ public class AoTDSupplyDemandData {
         replaceOrderedValues(supplyUnitsFromIndustries, ids, supplies, count);
 
         for (Map.Entry<String, MutableStat> entry : supplyUnitsFromIndustries.entrySet()) {
-            supply += getEconSpec().getCalculationScript().getRawUnitsFromSupply(
-                    entry.getValue(),
-                    null,
-                    commodityID,
-                    market.getIndustry(entry.getKey())
-            );
+            supply += AoTDIndustryAmounts.getProduction(market.getIndustry(entry.getKey()),commodityID,
+                    entry.getValue(),getEconSpec().getCalculationScript(),null);
         }
 
         for (Map.Entry<String, MutableStat> entry : demandUnitsFromIndustries.entrySet()) {
-            demand += getEconSpec().getCalculationScript().getRawUnitsFromDemand(
-                    entry.getValue(),
-                    null,
-                    commodityID,
-                    market.getIndustry(entry.getKey())
-            );
+            demand += AoTDIndustryAmounts.getDemand(market.getIndustry(entry.getKey()),commodityID,
+                    entry.getValue(),getEconSpec().getCalculationScript(),null);
         }
 
         if (getTotalRawUnitsFromSupply() != 0 || getTotalRawUnitsFromDemand() != 0) {
@@ -391,12 +417,7 @@ public class AoTDSupplyDemandData {
 
         for (Industry industry : market.getIndustries()) {
             if (!AoTDIndustryData.getInstance(market).isPending(industry.getId())) {
-                total += getEconSpec().getCalculationScript().getRawUnitsFromDemand(
-                        industry.getDemand(commodityID).getQuantity(),
-                        null,
-                        commodityID,
-                        industry
-                );
+                total += getRawDemandFromIndustry(industry);
             }
         }
 
@@ -404,27 +425,17 @@ public class AoTDSupplyDemandData {
     }
 
     public int getRawDemandFromIndustry(Industry industry) {
-        return getEconSpec().getCalculationScript().getRawUnitsFromDemand(
-                industry.getDemand(commodityID).getQuantity(),
-                null,
-                commodityID,
-                industry
-        );
+        return AoTDIndustryAmounts.getDemand(industry,commodityID,getEconSpec().getCalculationScript(),null);
     }
 
     public int getRawSupplyFromIndustry(Industry industry) {
-        if (industry.isDisrupted()) return 0;
-
-        return getEconSpec().getCalculationScript().getRawUnitsFromSupply(
-                industry.getSupply(commodityID).getQuantity(),
-                null,
-                commodityID,
-                industry
-        );
+        if(industry.isDisrupted())return 0;
+        return AoTDIndustryAmounts.getProduction(industry,commodityID,getEconSpec().getCalculationScript(),null);
     }
 
     public int getRawAdditionalDemand(MutableStat.StatMod mod, MarketAPI market) {
         if (mod == null || mod.getValue() <= 0f) return 0;
+        if (additionalDemand.isExact(mod.getSource())) return Math.max(0, Math.round(mod.getValue()));
 
         MutableStat stat = new MutableStat(0f);
         stat.modifyFlat(mod.getSource(), mod.getValue(), mod.getDesc());
@@ -453,6 +464,7 @@ public class AoTDSupplyDemandData {
 
     public int getRawAdditionalProduction(MutableStat.StatMod mod, MarketAPI market) {
         if (mod == null || mod.getValue() <= 0f) return 0;
+        if (additionalProduction.isExact(mod.getSource())) return Math.max(0, Math.round(mod.getValue()));
 
         MutableStat stat = new MutableStat(0f);
         stat.modifyFlat(mod.getSource(), mod.getValue(), mod.getDesc());
@@ -463,6 +475,10 @@ public class AoTDSupplyDemandData {
                 commodityID,
                 null
         );
+    }
+
+    public int getRawAdditionalProduction(String source, MarketAPI market) {
+        return getRawAdditionalProduction(additionalProduction.getFlatStatMod(source), market);
     }
 
     public int getTotalRawAdditionalProduction(MarketAPI market) {
@@ -536,39 +552,25 @@ public class AoTDSupplyDemandData {
 
     public int getAvailableOnThisMarket(float cargo, MarketAPI market, String commodityId) {
         int available = 0;
-        float remainingCargo = Math.max(0f, cargo);
-
+        float remainingCargo = Math.max(0f,cargo);
+        clearIndustryAllocation();
         additionalDemand.resetFilledAmounts();
-
-        remainingCargo = fillAdditionalDemand(remainingCargo, market, true);
+        remainingCargo = fillAdditionalDemand(remainingCargo,market,true);
 
         for (Industry industry : AoTDIndustryData.getInstance(market).getActiveIndustriesInOrder(market)) {
-            if (remainingCargo < 1f) break;
-
-            float raw = getEconSpec().getCalculationScript().getRawUnitsFromDemand(
-                    industry.getDemand(commodityId).getQuantity(),
-                    market,
-                    commodityId,
-                    industry
-            );
-
-            if (raw <= 0f) continue;
-
-            if (raw > remainingCargo) {
-                float filled = remainingCargo / raw;
-                int rem = Math.round(filled * industry.getDemand(commodityId).getQuantity().getModifiedInt());
-
-                available += rem;
-                remainingCargo = 0f;
-                break;
-            } else {
-                remainingCargo -= raw;
-                available += industry.getDemand(commodityId).getQuantity().getModifiedInt();
+            if(remainingCargo < 1f)break;
+            int raw = AoTDIndustryAmounts.getDemand(industry,commodityId,getEconSpec().getCalculationScript(),market);
+            if(raw <= 0)continue;
+            float filled = Math.min(raw,remainingCargo);
+            filledRawDemandFromIndustries.put(industry.getId(),filled);
+            remainingCargo -= filled;
+            if(!AoTDIndustryAmounts.hasExactDemand(industry,commodityId)){
+                int vanillaDemand = Math.max(0,industry.getDemand(commodityId).getQuantity().getModifiedInt());
+                available += filled >= raw ? vanillaDemand : Math.round(filled / raw * vanillaDemand);
             }
         }
 
-        fillAdditionalDemand(remainingCargo, market, false);
-
+        fillAdditionalDemand(remainingCargo,market,false);
         return available;
     }
 }

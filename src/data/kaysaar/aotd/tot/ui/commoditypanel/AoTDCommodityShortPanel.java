@@ -5,7 +5,6 @@ import ashlib.data.plugins.ui.models.resizable.ImageViewer;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.campaign.econ.Industry;
-import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.combat.MutableStat;
 import com.fs.starfarer.api.graphics.SpriteAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Factions;
@@ -13,8 +12,8 @@ import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
+import data.kaysaar.aotd.tot.industries.AoTDBaseIndustry;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
-import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDSectorProductionDemandDataUtils;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContract;
 
@@ -172,6 +171,15 @@ public class AoTDCommodityShortPanel implements ExtendedUIPanelPlugin {
         if (!demandMode) {
             tooltip.addPara(AoTDToolboxMisc.getDGSStringWithSign(number), textColor, 13f).setAlignment(al);
 
+        } else if (market instanceof AoTDBaseIndustry ind) {
+            int deficit = ignoreDeficit ? 0 : ind.getDeficitExact(commodityId);
+            if(deficit > 0){
+                tooltip.addPara(fmt(number),Color.ORANGE,2f).setAlignment(al);
+                tooltip.addPara(fmt(-deficit),Misc.getNegativeHighlightColor(),6f).setAlignment(al);
+            }
+            else{
+                tooltip.addPara(fmt(number),textColor,13f).setAlignment(al);
+            }
         } else if (market != null) {
             int def = market.getMaxDeficit(commodityId).two;
 

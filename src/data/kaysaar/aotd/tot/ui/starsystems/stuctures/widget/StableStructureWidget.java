@@ -1,5 +1,6 @@
-package data.kaysaar.aotd.tot.ui.starsystems.stuctures;
+package data.kaysaar.aotd.tot.ui.starsystems.stuctures.widget;
 
+import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.ButtonWithImageComponent;
 import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
 import ashlib.data.plugins.ui.plugins.UILinesRenderer;
@@ -11,17 +12,25 @@ import com.fs.starfarer.api.ui.PositionAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
+import org.lwjgl.util.vector.Vector2f;
 
 
 import java.awt.*;
 import java.util.List;
 
-import static data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureManager.memKeyInEntities;
+import static data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager.memKeyInEntities;
 
 public class StableStructureWidget implements ExtendedUIPanelPlugin {
     CustomPanelAPI mainPanel,contentPanel;
     SectorEntityToken token;
     UILinesRenderer renderer;
+
+    public AoTDStableStructureImpl getStructure(){
+        if(token!=null){
+            return (AoTDStableStructureImpl) token.getMemoryWithoutUpdate().get(memKeyInEntities);
+        }
+        return null;
+    }
     public static float width= 225;
     public static float height= 150;
     @Override
@@ -41,10 +50,22 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
             mainPanel.removeComponent(contentPanel);
         }
         contentPanel = Global.getSettings().createCustom(mainPanel.getPosition().getWidth(),mainPanel.getPosition().getHeight(),null);
+        final StableStructureWidget widget = this;
         ButtonWithImageComponent viewer = new ButtonWithImageComponent(contentPanel.getPosition().getWidth(),125,token.getCustomInteractionDialogImageVisual().getSpriteName()){
             @Override
             public void performActionOnClick(boolean isRightClick) {
-                super.performActionOnClick(isRightClick);
+                final  ButtonWithImageComponent v = this;
+                v.setClickable(false);
+                StableStructureWidgetButtons bt = new StableStructureWidgetButtons(widget){
+                    @Override
+                    public void onExit() {
+                        super.onExit();
+                        v.setClickable(true);
+                    }
+                };
+
+                AshMisc.placePopUpUIInTL(bt,this.getComponentPanel(),330,300,new Vector2f(-widget.contentPanel.getPosition().getWidth()-300,0f));
+
             }
         };
         viewer.setEnableRightClick(false);

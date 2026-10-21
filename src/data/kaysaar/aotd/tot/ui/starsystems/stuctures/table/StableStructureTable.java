@@ -4,18 +4,13 @@ package data.kaysaar.aotd.tot.ui.starsystems.stuctures.table;
 import ashlib.data.plugins.ui.models.CustomButton;
 import ashlib.data.plugins.ui.models.DropDownButton;
 import ashlib.data.plugins.ui.plugins.UITableImpl;
-import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.ui.ButtonAPI;
 import com.fs.starfarer.api.util.Misc;
-import data.kaysaar.aotd.tot.scripts.HoldingsUtilis;
-import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureManager;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
-import data.kaysaar.aotd.tot.ui.starsystems.components.StarSystemHoldingDropDown;
-import data.kaysaar.aotd.tot.ui.starsystems.stuctures.StableStructureConstructionDialog;
 
 import java.awt.Color;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -71,7 +66,7 @@ public class StableStructureTable extends UITableImpl {
         this.starSystemAPI = systemAPI;
         if (dropDownButtons.isEmpty()) {
 
-            for (AoTDStableStructureSpec spec : AoTDStableStructureManager.getAllBaseStructures()) {
+            for (AoTDStableStructureSpec spec : AoTDStableStructureSpecManager.getAllBaseStructures()) {
                 StableStructureDropDownButton button = new StableStructureDropDownButton(this, width-16, 63, 0, 0, spec,starSystemAPI);
                 dropDownButtons.add(button);
             }

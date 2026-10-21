@@ -3,17 +3,15 @@ package data.kaysaar.aotd.tot.ui.starsystems.stuctures;
 import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.PopUpUI;
 import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.ButtonAPI;
 import com.fs.starfarer.api.ui.CustomPanelAPI;
-import com.fs.starfarer.api.ui.Fonts;
 import com.fs.starfarer.api.ui.PositionAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
-import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureManager;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.input.Keyboard;
@@ -96,16 +94,16 @@ public class StableStructureUpgradePathUI extends PopUpUI {
             String id = pending.removeFirst();
             if (!component.add(id)) continue;
 
-            AoTDStableStructureSpec spec = AoTDStableStructureManager.getSpec(id);
+            AoTDStableStructureSpec spec = AoTDStableStructureSpecManager.getSpec(id);
             if (spec == null) continue;
 
             for (String parentId : spec.getDowngrades()) {
-                if (AoTDStableStructureManager.getSpec(parentId) != null) {
+                if (AoTDStableStructureSpecManager.getSpec(parentId) != null) {
                     pending.add(parentId);
                 }
             }
 
-            for (AoTDStableStructureSpec child : AoTDStableStructureManager.getUpgradeChildren(id)) {
+            for (AoTDStableStructureSpec child : AoTDStableStructureSpecManager.getUpgradeChildren(id)) {
                 pending.add(child.getId());
             }
         }
@@ -115,7 +113,7 @@ public class StableStructureUpgradePathUI extends PopUpUI {
         LinkedList<String> ready = new LinkedList<>();
 
         for (String id : component) {
-            AoTDStableStructureSpec spec = AoTDStableStructureManager.getSpec(id);
+            AoTDStableStructureSpec spec = AoTDStableStructureSpecManager.getSpec(id);
             if (spec == null) continue;
 
             int parents = 0;
@@ -134,7 +132,7 @@ public class StableStructureUpgradePathUI extends PopUpUI {
             String id = ready.removeFirst();
             int nextDepth = depth.get(id) + 1;
 
-            for (AoTDStableStructureSpec child : AoTDStableStructureManager.getUpgradeChildren(id)) {
+            for (AoTDStableStructureSpec child : AoTDStableStructureSpecManager.getUpgradeChildren(id)) {
                 String childId = child.getId();
                 if (!indegrees.containsKey(childId)) continue;
 
@@ -225,7 +223,7 @@ public class StableStructureUpgradePathUI extends PopUpUI {
 
         for (Map.Entry<String, Vector2f> entry : coordinates.entrySet()) {
             String structureId = entry.getKey();
-            AoTDStableStructureSpec spec = AoTDStableStructureManager.getSpec(structureId);
+            AoTDStableStructureSpec spec = AoTDStableStructureSpecManager.getSpec(structureId);
             if (spec == null) continue;
 
             AoTDStableStructureImpl impl = getImplementation(spec);

@@ -15,6 +15,7 @@ import com.fs.starfarer.campaign.econ.reach.MainWorkTask;
 import com.fs.starfarer.campaign.econ.reach.ReachEconomy;
 
 import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureEconomyTask;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityMarketData;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDMarketDemandData;
@@ -56,6 +57,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
     public MarketAPI singleMarketToUpdate;
 
     private boolean runOnce = false;
+    private AoTDStableStructureEconomyTask structureEffects;
     private transient boolean profileTask;
     private transient long prepNanos, dataNanos, priceNanos, listenerNanos;
     private transient boolean profileLogged;
@@ -227,6 +229,8 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             return;
         }
 
+        if (!prepareStructureEffects() || aotdIndex >= aotdCommodities.size()) return;
+
         String commodityId = aotdCommodities.get(aotdIndex);
         CommoditySpecAPI commoditySpec = Global.getSettings().getCommoditySpec(commodityId);
         aotdIndex++;
@@ -252,6 +256,8 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         MarketAPI market = singleMarketToUpdate;
 
         processMarketReapplyStage(market);
+        while (!prepareStructureEffects()) {
+        }
 
         for (String commodityId : aotdCommodities) {
             CommoditySpecAPI commoditySpec = Global.getSettings().getCommoditySpec(commodityId);
@@ -299,6 +305,8 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         /*
          * 2) Main-thread commodity market data creation.
          */
+        if (!prepareStructureEffects()) return;
+
         if (!mtDataCreated) {
             // Market totals are batched lazily on first access during this phase.
             // Scope ends before yielding, so subsequent industry changes cannot reuse it.
@@ -366,6 +374,7 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
         mtListenersNotified = false;
         mtFutures.clear();
 
+        structureEffects = null;
         aotdStarted = true;
     }
 
@@ -385,6 +394,14 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
 
         cachedEconGroups.clear();
         cachedEconGroups.addAll(groups);
+    }
+
+    private boolean prepareStructureEffects() {
+        long started = phaseStart();
+        if (structureEffects == null) structureEffects = new AoTDStableStructureEconomyTask();
+        if (!structureEffects.isDone()) structureEffects.doNextBatch();
+        prepNanos += phaseElapsed(started);
+        return structureEffects.isDone();
     }
 
     private void processMarketReapplyStage(MarketAPI market) {
@@ -552,7 +569,8 @@ public class AoTdMainWorkTask2 extends MainWorkTask2 {
             return runOnce;
         }
 
-        return aotdCommodities != null && aotdIndex >= aotdCommodities.size();
+        return aotdCommodities != null && aotdIndex >= aotdCommodities.size()
+                && structureEffects != null && structureEffects.isDone();
     }
 
     @Override

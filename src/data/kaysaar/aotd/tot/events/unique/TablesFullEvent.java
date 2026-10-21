@@ -96,7 +96,7 @@ public class TablesFullEvent extends BaseTradeEvent {
 
         @Override
         public String getIcon() {
-            return Global.getSettings().getSpriteName("illustrations", "crew_leaving");
+            return Global.getSettings().getSpriteName("illustrations", "aotd_trade_event");
         }
 
         @Override
