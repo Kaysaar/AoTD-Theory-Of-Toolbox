@@ -16,8 +16,31 @@ public class AoTDCommodityEconSpec {
         return commodityId;
     }
 
+    private transient AoTDBaseDemSupCalc sharedCalculation;
+    private transient String sharedCalculationScript;
+
+    private static final ClassValue<Boolean> STATELESS = new ClassValue<Boolean>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                    if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())) return false;
+                }
+            }
+            return true;
+        }
+    };
+
     public AoTDBaseDemSupCalc getCalculationScript() {
-        return (AoTDBaseDemSupCalc) Global.getSettings().getInstanceOfScript(calculationScript);
+        if (sharedCalculation != null && calculationScript != null && calculationScript.equals(sharedCalculationScript)) {
+            return sharedCalculation;
+        }
+        AoTDBaseDemSupCalc calculation = (AoTDBaseDemSupCalc) Global.getSettings().getInstanceOfScript(calculationScript);
+        if (calculation != null && STATELESS.get(calculation.getClass())) {
+            sharedCalculation = calculation;
+            sharedCalculationScript = calculationScript;
+        }
+        return calculation;
     }
     public static AoTDCommodityEconSpec generateFromJson(JSONObject obj) throws JSONException {
 
