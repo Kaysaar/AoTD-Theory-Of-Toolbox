@@ -19,15 +19,36 @@ public class AoTDCommodityEconSpec {
     private transient AoTDBaseDemSupCalc sharedCalculation;
     private transient String sharedCalculationScript;
 
+    private static final java.lang.invoke.MethodHandle DECLARED_FIELDS, FIELD_MODIFIERS;
+
+    static {
+        java.lang.invoke.MethodHandle fields = null, modifiers = null;
+        try {
+            Class<?> fieldClass = Class.forName("java.lang.reflect.Field", false, Class.class.getClassLoader());
+            java.lang.invoke.MethodHandles.Lookup lookup = java.lang.invoke.MethodHandles.lookup();
+            fields = lookup.findVirtual(Class.class, "getDeclaredFields", java.lang.invoke.MethodType.methodType(Class.forName("[Ljava.lang.reflect.Field;", false, Class.class.getClassLoader())));
+            modifiers = lookup.findVirtual(fieldClass, "getModifiers", java.lang.invoke.MethodType.methodType(int.class));
+        } catch (Throwable ignored) {
+        }
+        DECLARED_FIELDS = fields;
+        FIELD_MODIFIERS = modifiers;
+    }
+
     private static final ClassValue<Boolean> STATELESS = new ClassValue<Boolean>() {
         @Override
         protected Boolean computeValue(Class<?> type) {
-            for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
-                for (java.lang.reflect.Field f : c.getDeclaredFields()) {
-                    if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())) return false;
+            if (DECLARED_FIELDS == null || FIELD_MODIFIERS == null) return false;
+            try {
+                for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
+                    Object[] fields = (Object[]) DECLARED_FIELDS.invoke(c);
+                    for (Object f : fields) {
+                        if (((int) FIELD_MODIFIERS.invoke(f) & 0x0008) == 0) return false;
+                    }
                 }
+                return true;
+            } catch (Throwable e) {
+                return false;
             }
-            return true;
         }
     };
 
