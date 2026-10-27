@@ -19,6 +19,7 @@ import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContractManager;
 
 import java.awt.Color;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.Map;
 
@@ -534,9 +535,193 @@ public class AoTDStableStructureImpl {
         return getSpec().getCreditCost();
     }
 
+    /** Total credits for base construction and all upgrades leading to this tier. */
+    public long getCumulativeCreditCost() {
+        long total = 0L;
+        LinkedHashSet<String> visited = new LinkedHashSet<>();
+        AoTDStableStructureSpec current = getSpec();
+
+        while (current != null) {
+            if (!visited.add(current.getId())) {
+                throw new IllegalStateException("Circular stable structure upgrade path: " + current.getId());
+            }
+            total += Math.max(0, current.getCreditCost());
+            String downgrade = current.getDowngrade();
+            if (downgrade == null) return total;
+            current = AoTDStableStructureSpecManager.getSpec(downgrade);
+            if (current == null) {
+                throw new IllegalStateException("Unknown stable structure downgrade: " + downgrade);
+            }
+        }
+        return total;
+    }
+
+    /** Total build time for base construction and all upgrades leading to this tier. */
+    public int getCumulativeBuildDays() {
+        int total = 0;
+        LinkedHashSet<String> visited = new LinkedHashSet<>();
+        AoTDStableStructureSpec current = getSpec();
+
+        while (current != null) {
+            if (!visited.add(current.getId())) {
+                throw new IllegalStateException("Circular stable structure upgrade path: " + current.getId());
+            }
+            total += Math.max(0, current.getDaysToBuild());
+            String downgrade = current.getDowngrade();
+            if (downgrade == null) return total;
+            current = AoTDStableStructureSpecManager.getSpec(downgrade);
+            if (current == null) {
+                throw new IllegalStateException("Unknown stable structure downgrade: " + downgrade);
+            }
+        }
+        return total;
+    }
+
     public LinkedHashMap<String, Integer> getBuildCostResources() {
         return getSpec().getTotalResourcesNeeded();
     }
+
+    /** Returns the complete construction chain, starting with the base structure. */
+    protected LinkedList<AoTDStableStructureSpec> getConstructionStagesFromBase() {
+        LinkedList<AoTDStableStructureSpec> result = new LinkedList<>();
+        LinkedHashSet<String> visited = new LinkedHashSet<>();
+        AoTDStableStructureSpec current = getSpec();
+
+        while (current != null) {
+            if (!visited.add(current.getId())) {
+                throw new IllegalStateException("Circular stable structure upgrade path: " + current.getId());
+            }
+            result.addFirst(current);
+
+            String downgrade = current.getDowngrade();
+            if (downgrade == null) break;
+            current = AoTDStableStructureSpecManager.getSpec(downgrade);
+            if (current == null) {
+                throw new IllegalStateException("Unknown stable structure downgrade: " + downgrade);
+            }
+        }
+        return result;
+    }
+
+    protected void addBaseConstructionCostsToTooltip(TooltipMakerAPI tooltip, Color color, Color dark) {
+        Color highlight = Misc.getHighlightColor();
+        int days = getSpec().getDaysToBuild();
+        int months = Math.max(1, (int) Math.ceil(days / 30f));
+        LinkedHashMap<String, Integer> monthlyResources = new LinkedHashMap<>();
+        LinkedHashMap<String, Integer> immediateItems = new LinkedHashMap<>();
+
+        for (Map.Entry<String, Integer> entry : getBuildCostResources().entrySet()) {
+            if (entry.getValue() == null || entry.getValue() <= 0) continue;
+
+            String resourceId = entry.getKey();
+            int amount = entry.getValue();
+
+            if (Global.getSettings().getCommoditySpec(resourceId) != null) {
+                monthlyResources.put(resourceId, (int) Math.ceil(amount / (double) months));
+            } else if (Global.getSettings().getSpecialItemSpec(resourceId) != null) {
+                immediateItems.put(resourceId, amount);
+            } else {
+                throw new IllegalArgumentException("Unknown construction resource: " + resourceId);
+            }
+        }
+
+        if (!monthlyResources.isEmpty()) {
+            tooltip.addSectionHeading("Monthly resources for construction", color, dark, Alignment.MID, 10f);
+            tooltip.addPara("Construction takes %s " + (days == 1 ? "day" : "days")
+                            + ", requiring resources across %s monthly " + (months == 1 ? "installment" : "installments") + ".",
+                    5f, highlight, String.valueOf(days), String.valueOf(months));
+            CustomPanelAPI monthlyPanel = AoTDToolboxMisc.createCostSection(
+                    tooltip.getWidthSoFar(), 0f, monthlyResources, 0f,
+                    30f, 9f, 5f, 10f, false, false
+            );
+            tooltip.addCustom(monthlyPanel, 5f);
+            tooltip.addPara(
+                    "Construction materials are drawn from your faction's production capacity each month through trade contracts.",
+                    Misc.getGrayColor(), 3f
+            );
+        }
+        if (!immediateItems.isEmpty()) {
+            tooltip.addSectionHeading("Other construction costs", color, dark, Alignment.MID, 10f);
+            tooltip.addPara(
+                    "Unlike regular construction materials, these items are drawn directly from construction storage, through trade contract.",
+                    Misc.getGrayColor(), 5f
+            );
+            CustomPanelAPI immediatePanel = AoTDToolboxMisc.createCostSection(
+                    tooltip.getWidthSoFar(), 0f, immediateItems, 0f,
+                    30f, 9f, 5f, 10f, false, true
+            );
+            tooltip.addCustom(immediatePanel, 5f);
+        }
+    }
+
+    protected void addConstructionStagesToTooltip(TooltipMakerAPI tooltip, Color color, Color dark) {
+        Color highlight = Misc.getHighlightColor();
+        tooltip.addSectionHeading("Construction materials by stage", color, dark, Alignment.MID, 10f);
+        tooltip.addPara(
+                "Construction materials are drawn from your faction's production capacity each month through trade contracts. ",
+                Misc.getGrayColor(), 5f
+        );
+
+        for (AoTDStableStructureSpec stage : getConstructionStagesFromBase()) {
+            AoTDStableStructureImpl stageImpl = stage.getId().equals(id) ? this : stage.getImplClassInstance();
+            int days = Math.max(0, stage.getDaysToBuild());
+            int months = Math.max(1, (int) Math.ceil(days / 30f));
+            String installments = months == 1 ? "installment" : "installments";
+
+            tooltip.addPara("%s: %s days, %s monthly " + installments + ".", 8f, highlight,
+                    stageImpl.getName(), String.valueOf(days), String.valueOf(months));
+            tooltip.addPara("Credits charged at the start of this stage: %s.", 3f, highlight,
+                    Misc.getDGSCredits(stageImpl.getBuildCostCredits()));
+
+            LinkedHashMap<String, Integer> monthlyResources = new LinkedHashMap<>();
+            LinkedHashMap<String, Integer> immediateItems = new LinkedHashMap<>();
+            LinkedHashMap<String, Integer> resources = stageImpl.getBuildCostResources();
+            if (resources != null) {
+                for (Map.Entry<String, Integer> entry : resources.entrySet()) {
+                    if (entry.getValue() == null || entry.getValue() <= 0) continue;
+
+                    String resourceId = entry.getKey();
+                    int amount = entry.getValue();
+                    if (Global.getSettings().getCommoditySpec(resourceId) != null) {
+                        monthlyResources.put(resourceId, (int) Math.ceil(amount / (double) months));
+                    } else if (Global.getSettings().getSpecialItemSpec(resourceId) != null) {
+                        immediateItems.put(resourceId, amount);
+                    } else {
+                        throw new IllegalArgumentException("Unknown construction resource: " + resourceId);
+                    }
+                }
+            }
+
+            if (!monthlyResources.isEmpty()) {
+                tooltip.addPara("Materials per monthly installment:", Misc.getGrayColor(), 3f);
+                CustomPanelAPI monthlyPanel = AoTDToolboxMisc.createCostSection(
+                        tooltip.getWidthSoFar(), 0f, monthlyResources, 0f,
+                        30f, 9f, 5f, 10f, false, false
+                );
+                tooltip.addCustom(monthlyPanel, 5f);
+            }
+
+            if (!immediateItems.isEmpty()) {
+                tooltip.addPara("One-time items for this stage:", Misc.getGrayColor(), 3f);
+                CustomPanelAPI immediatePanel = AoTDToolboxMisc.createCostSection(
+                        tooltip.getWidthSoFar(), 0f, immediateItems, 0f,
+                        30f, 9f, 5f, 10f, false, true
+                );
+                tooltip.addCustom(immediatePanel, 5f);
+            }
+
+            if (monthlyResources.isEmpty() && immediateItems.isEmpty()) {
+                tooltip.addPara("No construction materials required for this stage.", Misc.getGrayColor(), 3f);
+            }
+        }
+
+        tooltip.addPara(
+                "Unlike monthly construction materials, special items are drawn directly from construction storage " +
+                        "when their respective stage begins.",
+                Misc.getGrayColor(), 5f
+        );
+    }
+
 
     public void applyEffectsOnChangeOfAICore(String currentAiCore) {
     }
@@ -700,74 +885,38 @@ public class AoTDStableStructureImpl {
 
         int credits = (int) Global.getSector().getPlayerFleet().getCargo().getCredits().get();
         String creditsStr = Misc.getDGSCredits(credits);
-        String costStr = Misc.getDGSCredits(getBuildCostCredits());
-        int days = getSpec().getDaysToBuild();
-        String daysStr = days == 1 ? "day" : "days";
+
+        // Base structures show their regular construction costs. Upgrades show the
+        // cumulative cost and time for all stages from the base structure.
+        boolean isUpgrade = getSpec().getDowngrade() != null;
+        boolean cumulativePreview = isUpgrade && (mode == AoTDStableStructureTooltipMode.UPGRADE_MENU
+                || mode == AoTDStableStructureTooltipMode.BUILDING_MENU);
+        long displayCost = cumulativePreview ? getCumulativeCreditCost() : (long) getBuildCostCredits();
+        int displayDays = cumulativePreview ? getCumulativeBuildDays() : getSpec().getDaysToBuild();
+        String costStr = Misc.getDGSCredits(displayCost);
+        String daysStr = displayDays == 1 ? "day" : "days";
 
         LabelAPI label = null;
-        if (mode == AoTDStableStructureTooltipMode.UPGRADE_MENU) {
-            label = tooltip.addPara("%s and %s " + daysStr + " to upgrade. You have %s.",
-                    10f, highlight, costStr, String.valueOf(days), creditsStr);
-        } else if (mode == AoTDStableStructureTooltipMode.BUILDING_MENU) {
-            label = tooltip.addPara("%s and %s " + daysStr + " to build. You have %s.",
-                    10f, highlight, costStr, String.valueOf(days), creditsStr);
+        if (mode == AoTDStableStructureTooltipMode.UPGRADE_MENU
+                || mode == AoTDStableStructureTooltipMode.BUILDING_MENU) {
+            label = tooltip.addPara("%s and %s " + daysStr + (isUpgrade ? " to upgrade. You have %s." : " to build. You have %s."),
+                    10f, highlight, costStr, String.valueOf(displayDays), creditsStr);
         }
 
         if (label != null) {
-            label.setHighlight(costStr, String.valueOf(days), creditsStr);
+            label.setHighlight(costStr, String.valueOf(displayDays), creditsStr);
             label.setHighlightColors(
-                    credits >= getBuildCostCredits() ? highlight : bad,
+                    credits >= displayCost ? highlight : bad,
                     highlight,
                     highlight
             );
         }
 
-        int months = Math.max(1, (int) Math.ceil(days / 30f));
-        LinkedHashMap<String, Integer> monthlyResources = new LinkedHashMap<>();
-        LinkedHashMap<String, Integer> immediateItems = new LinkedHashMap<>();
-
-        for (Map.Entry<String, Integer> entry : getBuildCostResources().entrySet()) {
-            if (entry.getValue() == null || entry.getValue() <= 0) continue;
-
-            String resourceId = entry.getKey();
-            int amount = entry.getValue();
-
-            if (Global.getSettings().getCommoditySpec(resourceId) != null) {
-                monthlyResources.put(resourceId, (int) Math.ceil(amount / (double) months));
-            } else if (Global.getSettings().getSpecialItemSpec(resourceId) != null) {
-                immediateItems.put(resourceId, amount);
+        if (mode != AoTDStableStructureTooltipMode.PANEL) {
+            if (isUpgrade) {
+                addConstructionStagesToTooltip(tooltip, color, dark);
             } else {
-                throw new IllegalArgumentException("Unknown construction resource: " + resourceId);
-            }
-        }
-
-        if(mode!=AoTDStableStructureTooltipMode.PANEL){
-            if (!monthlyResources.isEmpty()) {
-                tooltip.addSectionHeading("Monthly resources for construction", color, dark, Alignment.MID, 10f);
-                tooltip.addPara("Construction takes %s " + (days == 1 ? "day" : "days")
-                                + ", requiring resources across %s monthly " + (months == 1 ? "installment" : "installments") + ".",
-                        5f, highlight, String.valueOf(days), String.valueOf(months));
-                CustomPanelAPI monthlyPanel = AoTDToolboxMisc.createCostSection(
-                        tooltip.getWidthSoFar(), 0f, monthlyResources, 0f,
-                        30f, 9f, 5f, 10f, false, false
-                );
-                tooltip.addCustom(monthlyPanel, 5f);
-                tooltip.addPara(
-                        "Construction materials are drawn from colony production capacity each month, through trade contract.",
-                        Misc.getGrayColor(), 3f
-                );
-            }
-            if (!immediateItems.isEmpty()) {
-                tooltip.addSectionHeading("Other construction costs", color, dark, Alignment.MID, 10f);
-                tooltip.addPara(
-                        "Unlike regular construction materials, these items are drawn directly from construction storage, through trade contract.",
-                        Misc.getGrayColor(), 5f
-                );
-                CustomPanelAPI immediatePanel = AoTDToolboxMisc.createCostSection(
-                        tooltip.getWidthSoFar(), 0f, immediateItems, 0f,
-                        30f, 9f, 5f, 10f, false, true
-                );
-                tooltip.addCustom(immediatePanel, 5f);
+                addBaseConstructionCostsToTooltip(tooltip, color, dark);
             }
         }
         tooltip.addSectionHeading("Effects after construction", color, dark, Alignment.MID, 10f);

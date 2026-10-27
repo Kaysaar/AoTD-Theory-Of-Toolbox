@@ -87,7 +87,7 @@ public class StableStructureDetailedPanel implements ExtendedUIPanelPlugin {
 
             float mainContentHeight = height - imageAndTitleSection - 5f;
             boolean hasPath = AoTDStableStructureSpecManager.hasUpgrades(spec.getId())
-                    || spec.getDowngrade()!=null;
+                    || spec.getDowngrade() != null;
 
             if (hasPath) {
                 FactionAPI faction = AshMisc.getClaimingFaction(systemAPI.getCenter());
@@ -118,6 +118,7 @@ public class StableStructureDetailedPanel implements ExtendedUIPanelPlugin {
                     Math.max(0f, mainContentHeight),
                     true
             );
+
             impl.createTooltip(mainTooltip, AoTDStableStructureImpl.AoTDStableStructureTooltipMode.BUILDING_MENU);
             contentPanel.addUIElement(mainTooltip).inTL(0f, imageAndTitleSection + 5f);
         }

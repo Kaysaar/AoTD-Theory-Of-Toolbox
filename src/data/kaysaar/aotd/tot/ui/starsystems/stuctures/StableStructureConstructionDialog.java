@@ -59,6 +59,10 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
             table.createSections();
             table.createTable();
             detailedPanel = new StableStructureDetailedPanel(null,currentStarSystem,450,height);
+            detailedPanel.setQueueHandler(spec -> {
+                table.currentlyChosen = null;
+                detailedPanel.setSpec(spec);
+            });
         }
         else{
             table.recreateTable();
@@ -88,6 +92,7 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
         super.advance(amount);
         if(table!=null&&table.currentlyChosen!=null){
             AoTDStableStructureSpec spec = table.currentlyChosen.spec;
+            table.currentlyChosen = null;
             detailedPanel.setSpec(spec);
         }
     }
