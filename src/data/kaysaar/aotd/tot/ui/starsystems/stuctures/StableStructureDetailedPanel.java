@@ -87,7 +87,7 @@ public class StableStructureDetailedPanel implements ExtendedUIPanelPlugin {
 
             float mainContentHeight = height - imageAndTitleSection - 5f;
             boolean hasPath = AoTDStableStructureSpecManager.hasUpgrades(spec.getId())
-                    || !spec.getDowngrades().isEmpty();
+                    || spec.getDowngrade()!=null;
 
             if (hasPath) {
                 FactionAPI faction = AshMisc.getClaimingFaction(systemAPI.getCenter());

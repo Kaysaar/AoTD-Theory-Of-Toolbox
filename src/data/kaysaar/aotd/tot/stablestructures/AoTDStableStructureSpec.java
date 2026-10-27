@@ -3,7 +3,6 @@ package data.kaysaar.aotd.tot.stablestructures;
 import com.fs.starfarer.api.Global;
 
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 
 public class AoTDStableStructureSpec {
     //Note here id is also stable structure id as in enitityId
@@ -11,12 +10,13 @@ public class AoTDStableStructureSpec {
     public int creditCost;
     public int daysToBuild;
     public LinkedHashMap<String,Integer>totalResourcesNeeded;
-    public LinkedHashSet<String>downgrades = new LinkedHashSet<>();
+    public String downgrade = null;
     public String pluginClass;
 
-    public LinkedHashSet<String> getDowngrades() {
-        return downgrades;
+    public String getDowngrade() {
+        return downgrade;
     }
+
 
     public String getId() {
         return id;

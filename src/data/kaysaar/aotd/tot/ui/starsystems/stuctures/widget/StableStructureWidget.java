@@ -3,6 +3,7 @@ package data.kaysaar.aotd.tot.ui.starsystems.stuctures.widget;
 import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.ButtonWithImageComponent;
 import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
+import ashlib.data.plugins.ui.models.resizable.ImageViewer;
 import ashlib.data.plugins.ui.plugins.UILinesRenderer;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
@@ -56,26 +57,25 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
             public void performActionOnClick(boolean isRightClick) {
                 final  ButtonWithImageComponent v = this;
                 v.setClickable(false);
-                StableStructureWidgetButtons bt = new StableStructureWidgetButtons(widget){
-                    @Override
-                    public void onExit() {
-                        super.onExit();
-                        v.setClickable(true);
-                    }
-                };
+                StableStructureWidgetButtons bt = new StableStructureWidgetButtons(widget);
 
                 AshMisc.placePopUpUIInTL(bt,this.getComponentPanel(),330,300,new Vector2f(-widget.contentPanel.getPosition().getWidth()-300,0f));
 
             }
         };
         viewer.setEnableRightClick(false);
+
         TooltipMakerAPI tooltip = contentPanel.createUIElement(contentPanel.getPosition().getWidth(),contentPanel.getPosition().getHeight(),false);
         Color c = Misc.getGrayColor();
         if(token.getFaction()!=null){
             c= token.getFaction().getBaseUIColor();
         }
-        if(token.getMemoryWithoutUpdate().contains(memKeyInEntities)){
-            AoTDStableStructureImpl impl = (AoTDStableStructureImpl) token.getMemoryWithoutUpdate().get(memKeyInEntities);
+        if(getStructure()!=null){
+            AoTDStableStructureImpl impl = getStructure();
+            if(AshMisc.isStringValid(impl.getAICoreId())){
+                ImageViewer viewer1 = new ImageViewer(40,40,Global.getSettings().getCommoditySpec(impl.getAICoreId()).getIconName());
+                viewer.addComponent(viewer1,viewer.getComponentPanel().getPosition().getWidth()-40,2);
+            }
             tooltip.addPara(impl.getName(),c,0f);
             tooltip.addCustom(viewer.getComponentPanel(),2f);
             renderer.setBoxColor(c);

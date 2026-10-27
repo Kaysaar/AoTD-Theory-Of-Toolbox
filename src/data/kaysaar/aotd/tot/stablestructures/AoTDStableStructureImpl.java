@@ -4,6 +4,8 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.InteractionDialogImageVisual;
 import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
+import com.fs.starfarer.api.campaign.econ.Industry.AICoreDescriptionMode;
+import com.fs.starfarer.api.impl.campaign.ids.Commodities;
 import com.fs.starfarer.api.campaign.rules.MemoryAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
 import com.fs.starfarer.api.loading.Description;
@@ -40,6 +42,10 @@ public class AoTDStableStructureImpl {
     protected LinkedHashMap<String, Integer> delivered = new LinkedHashMap<>();
     protected float maintenanceDays;
     protected Long lastAdvanceTimestamp;
+
+    public SectorEntityToken getCurrentlyTiedEntity() {
+        return currentlyAssignedToken;
+    }
 
     protected Object readResolve() {
         if (constructionResources == null) constructionResources = new LinkedHashMap<>();
@@ -538,6 +544,87 @@ public class AoTDStableStructureImpl {
     public void applyEffectsOnChangeOfItem(String currentItem) {
     }
 
+    public boolean canInstallAICore(String coreId) {
+        return canMountAICores() && coreId != null
+                && Global.getSettings().getCommoditySpec(coreId).hasTag(Commodities.TAG_AI_CORE);
+    }
+
+    public void addAICoreSection(TooltipMakerAPI tooltip, AICoreDescriptionMode mode) {
+        addAICoreSection(tooltip, getAICoreId(), mode);
+    }
+
+    public void addAICoreSection(TooltipMakerAPI tooltip, String coreId, AICoreDescriptionMode mode) {
+        if (coreId == null) {
+            if (mode == AICoreDescriptionMode.MANAGE_CORE_TOOLTIP) {
+                tooltip.addPara("No AI core currently assigned. Click to assign an AI core from your cargo.", 0f);
+            }
+            return;
+        }
+        if (mode == AICoreDescriptionMode.INDUSTRY_TOOLTIP || mode == AICoreDescriptionMode.MANAGE_CORE_TOOLTIP) {
+            tooltip.addSectionHeading("Items",currentlyAssignedToken.getFaction().getBaseUIColor(),currentlyAssignedToken.getFaction().getDarkUIColor(),Alignment.MID,5f);
+            TooltipMakerAPI text = tooltip.beginImageWithText(Global.getSettings().getCommoditySpec(coreId).getIconName(), 48f);
+            addAICoreDescription(text, coreId, mode);
+            tooltip.addImageWithText(10f);
+        } else {
+            addAICoreDescription(tooltip, coreId, mode);
+        }
+    }
+
+    public void addAICoreDescription(TooltipMakerAPI tooltip, String coreId, AICoreDescriptionMode mode) {
+        if (coreId == null) return;
+
+        switch (coreId) {
+            case Commodities.GAMMA_CORE:
+                addGammaCoreDescription(tooltip, mode);
+                break;
+            case Commodities.BETA_CORE:
+                addBetaCoreDescription(tooltip, mode);
+                break;
+            case Commodities.ALPHA_CORE:
+                addAlphaCoreDescription(tooltip, mode);
+                break;
+            default:
+                addUnknownCoreDescription(tooltip, coreId, mode);
+                break;
+        }
+    }
+
+    public String getAICoreDescriptionPrefix(String name, AICoreDescriptionMode mode) {
+        boolean installed = mode == AICoreDescriptionMode.MANAGE_CORE_DIALOG_INSTALLED
+                || mode == AICoreDescriptionMode.MANAGE_CORE_TOOLTIP;
+        return name + (installed ? " currently assigned. " : ". ");
+    }
+
+    public void addGammaCoreDescription(TooltipMakerAPI tooltip, AICoreDescriptionMode mode) {
+        tooltip.addPara(
+                getAICoreDescriptionPrefix("Gamma-level AI core", mode)
+                        + "Reduces upkeep cost by %s.",
+                0f, Misc.getHighlightColor(), "25%"
+        );
+    }
+
+    public void addBetaCoreDescription(TooltipMakerAPI tooltip, AICoreDescriptionMode mode) {
+        tooltip.addPara(
+                getAICoreDescriptionPrefix("Beta-level AI core", mode)
+                        + "Reduces upkeep cost by %s. Reduces demand by %s unit.",
+                0f, Misc.getHighlightColor(), "25%", "1"
+        );
+    }
+
+    public void addAlphaCoreDescription(TooltipMakerAPI tooltip, AICoreDescriptionMode mode) {
+        tooltip.addPara(
+                getAICoreDescriptionPrefix("Alpha-level AI core", mode)
+                        + "Reduces upkeep cost by %s. Reduces demand by %s unit. "
+                        + "Increases production by %s unit.",
+                0f, Misc.getHighlightColor(), "25%", "1", "1"
+        );
+    }
+
+    public void addUnknownCoreDescription(TooltipMakerAPI tooltip, String coreId, AICoreDescriptionMode mode) {
+        String name = Global.getSettings().getCommoditySpec(coreId).getName();
+        tooltip.addPara(getAICoreDescriptionPrefix(name, mode).trim(), 0f);
+    }
+
     public void setAICoreId(String coreId) {
         currentAICoreID = coreId;
         applyEffectsOnChangeOfAICore(coreId);
@@ -685,5 +772,8 @@ public class AoTDStableStructureImpl {
         }
         tooltip.addSectionHeading("Effects after construction", color, dark, Alignment.MID, 10f);
         createTooltipForEffectSection(tooltip,mode);
+        if (getAICoreId() != null) {
+            addAICoreSection(tooltip, AICoreDescriptionMode.INDUSTRY_TOOLTIP);
+        }
     }
 }

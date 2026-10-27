@@ -5,6 +5,7 @@ import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.InstantPopUpUI;
 import ashlib.data.plugins.ui.plugins.UILinesRenderer;
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.impl.campaign.ids.Commodities;
 import com.fs.starfarer.api.ui.CustomPanelAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
@@ -20,7 +21,6 @@ import java.util.Map;
 public class StableStructureWidgetButtons extends InstantPopUpUI {
 
     public static final String AI_CORE = "ai_core";
-    public static final String ITEM = "item";
     public static final String UPGRADE = "upgrade";
     public static final String DOWNGRADE = "downgrade:";
     public static final String SHUTDOWN = "shutdown";
@@ -67,28 +67,19 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
             options.put(AI_CORE, "Assign AI Core...");
         }
 
-        if (impl.canMountItems()) {
-            options.put(ITEM, "Install Item...");
-        }
-
         if (AoTDStableStructureSpecManager.hasUpgrades(impl.id)) {
             options.put(UPGRADE, "Choose Upgrade...");
         }
 
         AoTDStableStructureSpec spec = impl.getSpec();
 
-        if (spec != null) {
-            for (String parentId : spec.getDowngrades()) {
-                if (AoTDStableStructureSpecManager.getSpec(parentId) == null) {
-                    continue;
-                }
+        if (spec != null&&spec.getDowngrade()!=null) {
+            String parentId = spec.getDowngrade();
+            String name = Global.getSettings().getCustomEntitySpec(parentId) != null
+                    ? Global.getSettings().getCustomEntitySpec(parentId).getDefaultName()
+                    : parentId;
 
-                String name = Global.getSettings().getCustomEntitySpec(parentId) != null
-                        ? Global.getSettings().getCustomEntitySpec(parentId).getDefaultName()
-                        : parentId;
-
-                options.put(DOWNGRADE + parentId, "Downgrade to " + name + "...");
-            }
+            options.put(DOWNGRADE, "Downgrade to " + name + "...");
         }
 
         options.put(SHUTDOWN, "Shut down...");
@@ -140,9 +131,7 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
 
             if (AI_CORE.equals(id)) {
                 keyBind = Keyboard.KEY_G;
-            } else if (ITEM.equals(id)) {
-                keyBind = Keyboard.KEY_Q;
-            } else if (UPGRADE.equals(id)) {
+            }  else if (UPGRADE.equals(id)) {
                 keyBind = Keyboard.KEY_U;
             } else if (SHUTDOWN.equals(id)) {
                 keyBind = Keyboard.KEY_W;
@@ -212,8 +201,17 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
                 float height = 530;
                 AssignAICoreStructure structure = new AssignAICoreStructure(widget);
                 AshMisc.initPopUpDialog(structure,width,height);
+                this.forceDismiss();
+                return;
             }
-
+            if(action.equals(DOWNGRADE)){
+                float width = 600;
+                float height = 170;
+                DowngradeInfoPopUp structure = new DowngradeInfoPopUp(widget);
+                AshMisc.initPopUpDialog(structure,width,height);
+                this.forceDismiss();
+                return;
+            }
             button.setChecked(false);
 
             return;
@@ -224,6 +222,7 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
     public void onExit() {
         buttons.clear();
         mainPanel = null;
+        widget.createUI();
         super.onExit();
     }
 }
