@@ -15,6 +15,8 @@ import com.fs.starfarer.api.ui.Fonts;
 import com.fs.starfarer.api.ui.LabelAPI;
 import com.fs.starfarer.api.ui.UIComponentAPI;
 import ashlib.data.plugins.ui.models.resizable.ImageViewer;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.ui.customprod.components.ProductionCustomButton;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
@@ -41,6 +43,35 @@ public class AoTDToolboxMisc {
             plus = "+";
         }
         return plus + Misc.getWithDGS(number);
+    }
+    public static long getCumulativeCost(AoTDStableStructureSpec spec) {
+        if (spec == null) return 0L;
+
+        long total = 0L;
+        LinkedHashSet<String> visited = new LinkedHashSet<>();
+        AoTDStableStructureSpec current = spec;
+
+        while (current != null) {
+            if (!visited.add(current.getId())) {
+                throw new IllegalStateException("Circular stable structure upgrade path: " + current.getId());
+            }
+
+            total += Math.max(0, current.getCreditCost());
+
+            String previousId = current.getDowngrade();
+            if (previousId == null) break;
+
+            current = AoTDStableStructureSpecManager.getSpec(previousId);
+            if (current == null) {
+                throw new IllegalStateException("Unknown stable structure downgrade: " + previousId);
+            }
+        }
+
+        return total;
+    }
+
+    public static String getFormattedCumulativeCost(AoTDStableStructureSpec spec) {
+        return Misc.getDGSCredits(getCumulativeCost(spec));
     }
     public static void setIndustryOnPlanet(String SystemName, String Planetname, String industryId, String removeIndustry, String potentialSwitch, boolean toImprove, String aiCore, String itemToInsert) {
         if (Global.getSector().getStarSystem(SystemName) == null) return;
