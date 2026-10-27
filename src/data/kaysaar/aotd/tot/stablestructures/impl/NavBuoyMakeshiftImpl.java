@@ -8,4 +8,9 @@ public class NavBuoyMakeshiftImpl extends NavBuoyImpl {
     protected float getBurnBonus() {
         return NavBuoyEntityPlugin.NAV_BONUS_MAKESHIFT;
     }
+
+    @Override
+    protected float getCoreEffectiveness() {
+        return 0.5f;
+    }
 }

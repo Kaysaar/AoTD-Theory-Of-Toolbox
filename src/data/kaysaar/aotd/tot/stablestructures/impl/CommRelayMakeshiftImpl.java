@@ -8,4 +8,9 @@ public class CommRelayMakeshiftImpl extends CommRelayImpl {
     protected float getStabilityBonus() {
         return CommRelayCondition.MAKESHIFT_COMM_RELAY_BONUS;
     }
+
+    @Override
+    protected float getCoreEffectiveness() {
+        return 0.5f;
+    }
 }

@@ -96,11 +96,8 @@ public class StableStructureUpgradePathUI extends PopUpUI {
 
             AoTDStableStructureSpec spec = AoTDStableStructureSpecManager.getSpec(id);
             if (spec == null) continue;
-
-            for (String parentId : spec.getDowngrades()) {
-                if (AoTDStableStructureSpecManager.getSpec(parentId) != null) {
-                    pending.add(parentId);
-                }
+            if (AoTDStableStructureSpecManager.getSpec(spec.getDowngrade()) != null) {
+                pending.add(spec.getDowngrade());
             }
 
             for (AoTDStableStructureSpec child : AoTDStableStructureSpecManager.getUpgradeChildren(id)) {
@@ -117,10 +114,7 @@ public class StableStructureUpgradePathUI extends PopUpUI {
             if (spec == null) continue;
 
             int parents = 0;
-            for (String parentId : spec.getDowngrades()) {
-                if (component.contains(parentId)) parents++;
-            }
-
+            if (component.contains(spec.getDowngrade())) parents++;
             indegrees.put(id, parents);
             if (parents == 0) {
                 depth.put(id, 0);
@@ -284,11 +278,10 @@ public class StableStructureUpgradePathUI extends PopUpUI {
                 color.getBlue() / 255f, color.getAlpha() / 255f * alphaMult * 0.75f);
 
         for (StableStructureUpgradeNode node : nodes.values()) {
-            for (String parentId : node.getSpec().getDowngrades()) {
-                StableStructureUpgradeNode parent = nodes.get(parentId);
-                if (parent != null) {
-                    drawConnection(parent.getImagePanel().getPosition(), node.getImagePanel().getPosition());
-                }
+            String parentId = node.getSpec().getDowngrade();
+            StableStructureUpgradeNode parent = nodes.get(parentId);
+            if (parent != null) {
+                drawConnection(parent.getImagePanel().getPosition(), node.getImagePanel().getPosition());
             }
         }
 

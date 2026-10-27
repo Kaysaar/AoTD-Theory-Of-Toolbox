@@ -46,7 +46,7 @@ public class AoTDStableStructureSpecManager {
                 }
 
                 String resources = jsonObject.optString("totalResourcesNeeded", "");
-                String downgrades = jsonObject.optString("downgrades", "");
+                String downgrades = jsonObject.optString("downgrade", "");
 
                 AoTDStableStructureSpec spec = new AoTDStableStructureSpec();
 
@@ -54,30 +54,22 @@ public class AoTDStableStructureSpecManager {
                 spec.setCreditCost(creditCost);
                 spec.setDaysToBuild(daysToBuild);
                 spec.setPluginClass(pluginClass);
+                if(AshMisc.isStringValid(downgrades)){
+                    spec.downgrade = downgrades;
 
-                spec.totalResourcesNeeded = loadResourceCosts(resources);
-
-                for (String downgrade : AshMisc.loadEntries(downgrades, ",")) {
-                    downgrade = downgrade.trim();
-
-                    if (AshMisc.isStringValid(downgrade) && !downgrade.equals(id)) {
-                        spec.downgrades.add(downgrade);
-                    }
                 }
-
+                spec.totalResourcesNeeded = loadResourceCosts(resources);
                 specsList.put(id, spec);
             }
 
             for (AoTDStableStructureSpec spec : specsList.values()) {
-                for (String downgradeId : spec.getDowngrades()) {
-                    if (!specsList.containsKey(downgradeId)) {
-                        throw new RuntimeException(
-                                "Stable structure " + spec.getId()
-                                        + " references missing downgrade "
-                                        + downgradeId
-                                        + " in " + filePath
-                        );
-                    }
+                if (spec.getDowngrade()!=null&&!specsList.containsKey(spec.getDowngrade())) {
+                    throw new RuntimeException(
+                            "Stable structure " + spec.getId()
+                                    + " references missing downgrade "
+                                    + spec.getDowngrade()
+                                    + " in " + filePath
+                    );
                 }
             }
 
@@ -135,15 +127,16 @@ public class AoTDStableStructureSpecManager {
         }
 
         for (AoTDStableStructureSpec spec : specsList.values()) {
-            for (String downgradeId : spec.getDowngrades()) {
-                if (downgradeId.equals(spec.getId())) continue;
+            String downgradeId = spec.getDowngrade();
+            if(downgradeId==null)continue;
+            if (downgradeId.equals(spec.getId())) continue;
 
-                LinkedHashSet<String> upgrades = directUpgrades.get(downgradeId);
+            LinkedHashSet<String> upgrades = directUpgrades.get(downgradeId);
 
-                if (upgrades != null) {
-                    upgrades.add(spec.getId());
-                }
+            if (upgrades != null) {
+                upgrades.add(spec.getId());
             }
+
         }
 
         for (String structureId : specsList.keySet()) {
@@ -260,7 +253,7 @@ public class AoTDStableStructureSpecManager {
         LinkedList<AoTDStableStructureSpec> result = new LinkedList<>();
 
         for (AoTDStableStructureSpec spec : specsList.values()) {
-            if (spec.getDowngrades().isEmpty()) {
+            if (spec.getDowngrade()==null) {
                 result.add(spec);
             }
         }

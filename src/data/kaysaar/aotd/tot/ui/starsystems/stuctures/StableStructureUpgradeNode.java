@@ -35,7 +35,7 @@ public class StableStructureUpgradeNode {
         imagePanel = createImagePanel(imageWidth, imageHeight, impl.getImageName(), Misc.getBasePlayerColor());
         tooltip.addCustom(imagePanel, 0f).getPosition().inTL(0f, 23f);
 
-        if (!spec.getDowngrades().isEmpty()) {
+        if (spec.getDowngrade()!=null) {
             queueButton = tooltip.addButton("Queue", spec.getId(), 70f, 20f, 0f);
             queueButton.getPosition().inTL(0f, 23f + imageHeight + 5f);
         } else {

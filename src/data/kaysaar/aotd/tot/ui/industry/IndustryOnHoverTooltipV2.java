@@ -1,4 +1,3 @@
-
 package data.kaysaar.aotd.tot.ui.industry;
 
 import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
@@ -35,14 +34,16 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
         this(width, ind, expanded, Industry.IndustryTooltipMode.NORMAL, false);
     }
 
-    public IndustryOnHoverTooltipV2(float width, Industry ind, boolean expanded, Industry.IndustryTooltipMode mode) {
+    public IndustryOnHoverTooltipV2(float width, Industry ind, boolean expanded,
+                                    Industry.IndustryTooltipMode mode) {
         this(width, ind, expanded, mode,
                 mode == Industry.IndustryTooltipMode.ADD_INDUSTRY
                         || mode == Industry.IndustryTooltipMode.UPGRADE
                         || mode == Industry.IndustryTooltipMode.DOWNGRADE);
     }
 
-    public IndustryOnHoverTooltipV2(float width, Industry ind, boolean expanded, boolean ignoreDeficits) {
+    public IndustryOnHoverTooltipV2(float width, Industry ind, boolean expanded,
+                                    boolean ignoreDeficits) {
         this(width, ind, expanded, Industry.IndustryTooltipMode.NORMAL, ignoreDeficits);
     }
 
@@ -65,6 +66,7 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
     public void createUI() {
         if (tl != null) {
             mainPanel.removeComponent(tl);
+            tl = null;
         }
 
         float width = mainPanel.getPosition().getWidth();
@@ -109,23 +111,28 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
             UIPanelAPI holder = (UIPanelAPI) ReflectionUtilis.getChildrenCopy(original).get(0);
             List<UIComponentAPI> comps = ReflectionUtilis.getChildrenCopy(holder);
 
+            float[] originalTops = new float[comps.size()];
+            float[] originalBottoms = new float[comps.size()];
+
             int productionIndex = -1;
             int demandIndex = -1;
 
-            if (!isAoTD) {
-                for (int i = 0; i < comps.size(); i++) {
-                    UIComponentAPI comp = comps.get(i);
+            for (int i = 0; i < comps.size(); i++) {
+                UIComponentAPI comp = comps.get(i);
+                PositionAPI position = comp.getPosition();
 
-                    if (comp instanceof LabelAPI label) {
-                        String text = label.getText();
+                originalBottoms[i] = Math.abs(position.getY());
+                originalTops[i] = originalBottoms[i] - position.getHeight();
 
-                        if ("Production".equals(text)) {
-                            productionIndex = i + 1;
-                        }
+                if (!isAoTD && comp instanceof LabelAPI label) {
+                    String text = label.getText();
 
-                        if ("Demand & effects".equals(text)) {
-                            demandIndex = i + 1;
-                        }
+                    if ("Production".equals(text)) {
+                        productionIndex = i + 1;
+                    }
+
+                    if ("Demand & effects".equals(text)) {
+                        demandIndex = i + 1;
                     }
                 }
             }
@@ -134,36 +141,31 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
             float totalHeight = 0f;
 
             for (int i = 0; i < comps.size(); ) {
-                if (!isAoTD && i == productionIndex && i > 0 && i + 1 < comps.size()) {
-                    AoTDCommodityShortPanelCombined production =
-                            new AoTDCommodityShortPanelCombined(width, 3, ind, false, false);
+                boolean replaceProduction = !isAoTD && i == productionIndex;
+                boolean replaceDemand = !isAoTD && i == demandIndex;
 
-                    float oldHeaderBottom = Math.abs(comps.get(i - 1).getPosition().getY());
-                    float oldSectionBottom = Math.abs(comps.get(i + 1).getPosition().getY());
+                if ((replaceProduction || replaceDemand) && i > 0 && i + 1 < comps.size()) {
+                    AoTDCommodityShortPanelCombined section =
+                            new AoTDCommodityShortPanelCombined(
+                                    width,
+                                    3,
+                                    ind,
+                                    replaceDemand,
+                                    replaceDemand && ignoreDeficits
+                            );
 
-                    float newTop = oldHeaderBottom + offsetY + 5f;
-                    float newBottom = newTop + production.getMainPanel().getPosition().getHeight();
-
-                    result.addCustom(production.getMainPanel(), 0f).getPosition().inTL(0f, newTop);
-
-                    totalHeight = Math.max(totalHeight, newBottom);
-                    offsetY += newBottom - (oldSectionBottom + offsetY);
-
-                    i += 2;
-                    continue;
-                }
-
-                if (!isAoTD && i == demandIndex && i > 0 && i + 1 < comps.size()) {
-                    AoTDCommodityShortPanelCombined demand =
-                            new AoTDCommodityShortPanelCombined(width, 3, ind, true, ignoreDeficits);
-
-                    float oldHeaderBottom = Math.abs(comps.get(i - 1).getPosition().getY());
-                    float oldSectionBottom = Math.abs(comps.get(i + 1).getPosition().getY());
+                    float oldHeaderBottom = originalBottoms[i - 1];
+                    float oldSectionBottom = Math.max(
+                            originalBottoms[i],
+                            originalBottoms[i + 1]
+                    );
 
                     float newTop = oldHeaderBottom + offsetY + 5f;
-                    float newBottom = newTop + demand.getMainPanel().getPosition().getHeight();
+                    float newHeight = section.getMainPanel().getPosition().getHeight();
+                    float newBottom = newTop + newHeight;
 
-                    result.addCustom(demand.getMainPanel(), 0f).getPosition().inTL(0f, newTop);
+                    result.addCustom(section.getMainPanel(), 0f)
+                            .getPosition().inTL(0f, newTop);
 
                     totalHeight = Math.max(totalHeight, newBottom);
                     offsetY += newBottom - (oldSectionBottom + offsetY);
@@ -174,8 +176,8 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
 
                 UIComponentAPI comp = comps.get(i);
 
-                float bottom = Math.abs(comp.getPosition().getY()) + offsetY;
-                float top = bottom - comp.getPosition().getHeight();
+                float top = originalTops[i] + offsetY;
+                float bottom = originalBottoms[i] + offsetY;
 
                 result.addCustom(comp, 0f).getPosition().inTL(0f, top);
 
@@ -186,7 +188,6 @@ public class IndustryOnHoverTooltipV2 implements ExtendedUIPanelPlugin {
             mainPanel.getPosition().setSize(width, Math.max(1f, totalHeight));
             mainPanel.addUIElement(result).inTL(0f, 0f);
             tl = result;
-
         } finally {
             if (!isAoTD) {
                 if (needToAddIndustry) {

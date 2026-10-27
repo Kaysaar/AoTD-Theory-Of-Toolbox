@@ -8,4 +8,9 @@ public class SensorArrayMakeshiftImpl extends SensorArrayImpl {
     protected float getSensorRangeBonus() {
         return SensorArrayEntityPlugin.SENSOR_BONUS_MAKESHIFT;
     }
+
+    @Override
+    protected float getCoreEffectiveness() {
+        return 0.5f;
+    }
 }
