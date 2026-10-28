@@ -148,12 +148,10 @@ public class AoTDStableStructureImpl {
 
     public String getBuildOrUpgradeProgressText() {
         if (isDisrupted()) return "Disrupted: " + getBuildOrUpgradeDaysText() + " left";
-        if (!isBuilding) return ultimateUpgradeId == null ? "" : "Upgrade queued: awaiting credits or availability";
-        String text = (isUpgrading() ? "Upgrading: " : "Building: ") + getBuildOrUpgradeDaysText() + " left";
-        if (getAllowedProgressOnConstruction() < 1f && buildProgress >= buildTime * getAllowedProgressOnConstruction()) {
-            text += " (awaiting resources)";
-        }
-        return text;
+        //        if (getAllowedProgressOnConstruction() < 1f && buildProgress >= buildTime * getAllowedProgressOnConstruction()) {
+//            text += " (awaiting resources)";
+//        }
+        return (isUpgrading() ? "Upgrading: " : "Building: ") + getBuildOrUpgradeDaysText() + " left";
     }
 
     public boolean startBuilding() {

@@ -1,10 +1,13 @@
 package data.kaysaar.aotd.tot.ui.starsystems.stuctures;
 
+import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.BasePopUpDialog;
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.CustomEntitySpecAPI;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
 import data.kaysaar.aotd.tot.ui.starsystems.stuctures.table.StableStructureTable;
 import org.lwjgl.input.Keyboard;
@@ -34,7 +37,6 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
         addTooltip(tooltip);
 
         createConfirmAndCancelSection(panelAPI);
-        confirmButton.setEnabled(false);
     }
 
     @Override
@@ -84,7 +86,9 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
 
     @Override
     public void applyConfirmScript() {
-        super.applyConfirmScript();
+        CustomEntitySpecAPI spec = Global.getSettings().getCustomEntitySpec(detailedPanel.spec.getId());
+        ChooseLocationForBuildingDialog bifrost = new ChooseLocationForBuildingDialog(detailedPanel.spec.getId(),"Choose location for "+spec.getDefaultName(),currentStarSystem);
+        AshMisc.initPopUpDialog(bifrost,1000,600);
     }
 
     @Override
@@ -94,6 +98,15 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
             AoTDStableStructureSpec spec = table.currentlyChosen.spec;
             table.currentlyChosen = null;
             detailedPanel.setSpec(spec);
+        }
+        if(confirmButton!=null&&detailedPanel!=null&&detailedPanel.spec!=null){
+            AoTDStableStructureImpl impl = detailedPanel.spec.getImplClassInstance();
+            impl.init(detailedPanel.spec.getId());
+            boolean currState = confirmButton.isEnabled();
+            boolean can = impl.isAvailableToBuild(this.currentStarSystem,Global.getSector().getPlayerFaction());
+            if(currState!=can){
+                confirmButton.setEnabled(can);
+            }
         }
     }
 }
