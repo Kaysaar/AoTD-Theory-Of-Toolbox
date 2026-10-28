@@ -3,12 +3,14 @@ package data.kaysaar.aotd.tot.ui.starsystems.stuctures.widget;
 import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.ButtonWithImageComponent;
 import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
+import ashlib.data.plugins.ui.models.ProgressBarComponentV2;
 import ashlib.data.plugins.ui.models.resizable.ImageViewer;
 import ashlib.data.plugins.ui.plugins.UILinesRenderer;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.CustomPanelAPI;
+import com.fs.starfarer.api.ui.Fonts;
 import com.fs.starfarer.api.ui.PositionAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
@@ -67,8 +69,11 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
 
         TooltipMakerAPI tooltip = contentPanel.createUIElement(contentPanel.getPosition().getWidth(),contentPanel.getPosition().getHeight(),false);
         Color c = Misc.getGrayColor();
+        Color base = null,bg= null;
         if(token.getFaction()!=null){
             c= token.getFaction().getBaseUIColor();
+            base = token.getFaction().getBaseUIColor();
+            bg = token.getFaction().getDarkUIColor();;
         }
         if(getStructure()!=null){
             AoTDStableStructureImpl impl = getStructure();
@@ -78,6 +83,13 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
             }
             tooltip.addPara(impl.getName(),c,0f);
             tooltip.addCustom(viewer.getComponentPanel(),2f);
+            if(getStructure().isBuilding()||getStructure().isUpgrading()||getStructure().isDisrupted()){
+                ProgressBarComponentV2 barComponentV2 = new ProgressBarComponentV2(contentPanel.getPosition().getWidth()+18f,12,getStructure().getBuildOrUpgradeProgressText(), Fonts.VICTOR_10,base,bg,getStructure().getBuildOrUpgradeProgress());
+                float y = tooltip.getHeightSoFar();
+                tooltip.addCustom(barComponentV2.getMainPanel(),1f).getPosition().inTL(-1,y+1);
+            }
+
+
             renderer.setBoxColor(c);
             renderer.setPanel(viewer.getComponentPanel());
             contentPanel.addUIElement(tooltip).inTL(0,0);
