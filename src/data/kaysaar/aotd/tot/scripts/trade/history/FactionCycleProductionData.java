@@ -16,8 +16,8 @@ public class FactionCycleProductionData {
         for (String s : AoTDTradeManager.getInstance().getPossibleCommoditiesDemandedOrSupplied()) {
             int dem = AoTDTradeManager.getInstance().getFactionTradeData(factionId).getFactionDemand(s);
             int sup = AoTDTradeManager.getInstance().getFactionTradeData(factionId).getFactionSupply(s);
-            productionData.put(s,sup);
-            demandData.put(s,dem);
+            if (sup != 0) productionData.put(s,sup);
+            if (dem != 0) demandData.put(s,dem);
         }
         FactionProductionData data = new FactionProductionData(month,productionData,demandData);
         cyclesOfData.put(month,data);

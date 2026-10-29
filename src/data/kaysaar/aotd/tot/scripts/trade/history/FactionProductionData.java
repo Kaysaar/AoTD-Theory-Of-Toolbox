@@ -12,6 +12,12 @@ public class FactionProductionData {
         this.demand = demand;
     }
 
+    private Object readResolve() {
+        if (production != null) production.values().removeIf(v -> v != null && v == 0);
+        if (demand != null) demand.values().removeIf(v -> v != null && v == 0);
+        return this;
+    }
+
     public int getMonth() {
         return month;
     }
