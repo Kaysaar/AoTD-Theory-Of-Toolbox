@@ -16,6 +16,8 @@ import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContractManager;
+import data.kaysaar.aotd.tot.ui.starsystems.stuctures.map.ChooseStablePointForBuildingMap;
+import data.kaysaar.aotd.tot.ui.starsystems.stuctures.map.StructureLocationPicker;
 
 import java.awt.Color;
 import java.util.LinkedHashMap;
@@ -80,6 +82,10 @@ public class AoTDStableStructureImpl {
 
     public boolean isAvailableToBuild(StarSystemAPI systemAPI, FactionAPI factionAttemptingToBuildIt) {
         return true;
+    }
+
+    public StructureLocationPicker createLocationPicker(float width, float height, StarSystemAPI systemAPI) {
+        return new ChooseStablePointForBuildingMap(width,height,systemAPI,id);
     }
 
     public void advance(float amount) {

@@ -44,6 +44,7 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
         ButtonAPI button = tooltip.addButton("Build","confirm",Misc.getBasePlayerColor(),Misc.getDarkPlayerColor(),Alignment.MID,CutStyle.TL_BR,160,25,0f);
         button.setShortcut(Keyboard.KEY_G,true);
         confirmButton = button;
+        button.setEnabled(false);
         return button;
     }
 
@@ -86,9 +87,12 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
 
     @Override
     public void applyConfirmScript() {
+        if(detailedPanel==null || detailedPanel.spec==null)return;
+        AoTDStableStructureImpl impl = detailedPanel.spec.getImplClassInstance();
+        if(!impl.isAvailableToBuild(currentStarSystem,Global.getSector().getPlayerFaction()))return;
         CustomEntitySpecAPI spec = Global.getSettings().getCustomEntitySpec(detailedPanel.spec.getId());
-        ChooseLocationForBuildingDialog bifrost = new ChooseLocationForBuildingDialog(detailedPanel.spec.getId(),"Choose location for "+spec.getDefaultName(),currentStarSystem);
-        AshMisc.initPopUpDialog(bifrost,1000,600);
+        ChooseLocationForBuildingDialog dialog = new ChooseLocationForBuildingDialog(impl,"Choose location for "+spec.getDefaultName(),currentStarSystem);
+        AshMisc.initPopUpDialog(dialog,1000,600);
     }
 
     @Override
@@ -99,6 +103,7 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
             table.currentlyChosen = null;
             detailedPanel.setSpec(spec);
         }
+        if(confirmButton!=null && (detailedPanel==null || detailedPanel.spec==null))confirmButton.setEnabled(false);
         if(confirmButton!=null&&detailedPanel!=null&&detailedPanel.spec!=null){
             AoTDStableStructureImpl impl = detailedPanel.spec.getImplClassInstance();
             impl.init(detailedPanel.spec.getId());
