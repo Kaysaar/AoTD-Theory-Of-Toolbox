@@ -7,14 +7,19 @@ import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
+import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDSupplyDemandData;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContract;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContractManager;
 import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 import data.kaysaar.aotd.tot.strings.AoTDTradeTags;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 
 public class AoTDSectorProductionDemandDataUtils {
@@ -251,15 +256,84 @@ public class AoTDSectorProductionDemandDataUtils {
     }
 
     public static int getTotalEffectiveDemandFromSectorOutsideFromFactionIgnoreContracts(String commodityId, String factionId) {
+        final List<MarketAPI> markets = Global.getSector().getEconomy().getMarketsCopy();
+
+        final LinkedHashSet<FactionAPI> factions = new LinkedHashSet<>();
+        for (MarketAPI market : markets) {
+            if (!market.isHidden()) factions.add(market.getFaction());
+        }
+        final Set<String> countedFactionIds = new HashSet<>();
+        boolean countsSector = false;
+        for (FactionAPI faction : factions) {
+            if (faction.getId().equals(factionId)) continue;
+            if (faction.getId().equals(Factions.NEUTRAL)) countsSector = true;
+            else countedFactionIds.add(faction.getId());
+        }
+
+        final Map<String, int[]> totals = new HashMap<>();
+        int sectorProduction = 0;
+        int sectorDemand = 0;
+        for (MarketAPI market : markets) {
+            final boolean counted = countedFactionIds.contains(market.getFactionId());
+            if (!counted && !countsSector) continue;
+            final AoTDSupplyDemandData data = AoTDCommodityOnMarket.getComMarketInstanceSave(market, commodityId).getSupplyDemandData();
+            final int production = data.getTotalRawUnitsFromSupply();
+            final int demand = data.getTotalRawUnitsFromDemand();
+            if (countsSector) {
+                sectorProduction += production;
+                sectorDemand += demand;
+            }
+            if (counted) {
+                final int[] factionTotals = totals.computeIfAbsent(market.getFactionId(), k -> new int[2]);
+                factionTotals[0] += production;
+                factionTotals[1] += demand;
+            }
+        }
+
         int effectiveDemand = 0;
-        for (FactionAPI factionAPI : getFactionsInEconomy()) {
-            if (factionAPI.getId().equals(factionId)) continue;
-            final int prod = getTotalProductionFromFaction(commodityId, factionAPI.getId());
-            final int dem = getTotalDemandFromFaction(commodityId, factionAPI.getId());
+        for (FactionAPI faction : factions) {
+            final String id = faction.getId();
+            if (id.equals(factionId)) continue;
+            final int prod;
+            final int dem;
+            if (id.equals(Factions.NEUTRAL)) {
+                prod = sectorProduction;
+                dem = sectorDemand + getSectorContractDemand(commodityId);
+            } else {
+                final int[] factionTotals = totals.get(id);
+                prod = factionTotals == null ? 0 : factionTotals[0];
+                final int marketDemand = factionTotals == null ? 0 : factionTotals[1];
+                dem = id.equals(Factions.PLAYER) ? marketDemand + getPlayerContractDemand(commodityId) : marketDemand;
+            }
             final int effectiveDem = dem - prod;
             if (effectiveDem > 0) effectiveDemand += effectiveDem;
         }
         return effectiveDemand;
+    }
+
+    private static int getPlayerContractDemand(String commodityId) {
+        int prod = 0;
+        for (AoTDTradeContract value : AoTDTradeContractManager.getInstance().getActiveContracts().values()) {
+            if (value.isExpired() || value.isTerminated() || value.isContractFrozen()) continue;
+            if (value.getContractData().containsKey(commodityId)) {
+                prod += value.getContractData().get(commodityId).getReqMonthly();
+            }
+        }
+        return prod;
+    }
+
+    private static int getSectorContractDemand(String commodityId) {
+        int prod = 0;
+        for (AoTDTradeContract value : AoTDTradeContractManager.getInstance().getActiveContracts().values()) {
+            if (value.isExpired() || value.isTerminated() || value.isContractFrozen()) continue;
+            if (value.isPrivate() || value.isIssuedByPlayer()) {
+                if (value.getContractData().containsKey(commodityId)) {
+                    prod += value.getContractData().get(commodityId).getReqMonthly();
+                }
+            }
+
+        }
+        return prod;
     }
 
     public static int getTotalDemandFromSectorOutsideFromFaction(String commodityId, String factionId) {
