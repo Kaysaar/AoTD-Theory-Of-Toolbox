@@ -2,71 +2,96 @@ package data.kaysaar.aotd.tot.ui.starsystems.stuctures;
 
 import ashlib.data.plugins.ui.models.BasePopUpDialog;
 import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
+import com.fs.starfarer.api.ui.ButtonAPI;
 import com.fs.starfarer.api.ui.CustomPanelAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
-import data.kaysaar.aotd.tot.ui.starsystems.stuctures.map.ChooseOrbitForBuildingMap;
-import java.awt.*;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
+import data.kaysaar.aotd.tot.ui.starsystems.stuctures.map.StructureLocationPicker;
 
 public class ChooseLocationForBuildingDialog extends BasePopUpDialog {
-    String customEntitySpecId;
-    ChooseOrbitForBuildingMap map;
+    AoTDStableStructureImpl structure;
+    StructureLocationPicker map;
     CustomPanelAPI panelOfInfoMain;
     CustomPanelAPI contentForInfo;
-    SectorEntityToken orbitFocus = null;
     StarSystemAPI currentStarSystem;
+    float contentHeight;
+
     public ChooseLocationForBuildingDialog(String customEntityToPlace, String headerTitle, StarSystemAPI currentStarSystem) {
+        this(AoTDStableStructureSpecManager.getSpec(customEntityToPlace).getImplClassInstance(),headerTitle,currentStarSystem);
+    }
+
+    public ChooseLocationForBuildingDialog(AoTDStableStructureImpl structure, String headerTitle, StarSystemAPI currentStarSystem) {
         super(headerTitle);
-        this.customEntitySpecId = customEntityToPlace;
+        this.structure = structure;
         this.currentStarSystem = currentStarSystem;
     }
+
+    public StructureLocationPicker getPicker(){
+        return map;
+    }
+
+    @Override
+    public void createUI(CustomPanelAPI panelAPI) {
+        createHeaader(panelAPI);
+        float width = panelAPI.getPosition().getWidth()-30;
+        contentHeight = panelAPI.getPosition().getHeight()-y-55;
+        TooltipMakerAPI tooltip = panelAPI.createUIElement(width,contentHeight,false);
+        createContentForDialog(tooltip,width);
+        addTooltip(tooltip);
+        panelAPI.addUIElement(tooltip).inTL(x,y);
+        createConfirmAndCancelSection(panelAPI);
+    }
+
     @Override
     public void createContentForDialog(TooltipMakerAPI tooltip, float width) {
-        map = new ChooseOrbitForBuildingMap(width-10,500,currentStarSystem,customEntitySpecId);
-        panelOfInfoMain = Global.getSettings().createCustom(width-10,100,null);
-        contentForInfo = Global.getSettings().createCustom(width-10,100,null);
-        panelOfInfoMain.addComponent(contentForInfo).inTL(0,0);
-        tooltip.addCustom(map.getMainPanel(),5f);
+        if(map!=null)map.clearUI();
+        map = structure.createLocationPicker(width-10,contentHeight-90,currentStarSystem);
+        panelOfInfoMain = Global.getSettings().createCustom(width-10,80,null);
+        contentForInfo = null;
+        tooltip.addCustom(map.getMainPanel(),0f);
         tooltip.addCustom(panelOfInfoMain,10f);
-        tooltip.setHeightSoFar(0f);
-
-        super.createContentForDialog(tooltip,width);
+        map.consumeSelectionTextUpdate();
+        updateInfo();
     }
+
     public void updateInfo(){
-        panelOfInfoMain.removeComponent(contentForInfo);
+        if(contentForInfo!=null)panelOfInfoMain.removeComponent(contentForInfo);
         contentForInfo = Global.getSettings().createCustom(panelOfInfoMain.getPosition().getWidth(),panelOfInfoMain.getPosition().getHeight(),null);
-        TooltipMakerAPI tooltip = contentForInfo.createUIElement(contentForInfo.getPosition().getWidth(),contentForInfo.getPosition().getHeight(),false);
-        String font = "graphics/fonts/insignia21LTaa.fnt";
-        tooltip.setParaFont( font);
-        Float rad = map.getOrbitComponent().getSavedRadiusWorld();
-        int r = 0;
-        if(rad!=null){
-            r = Math.round(rad);
-        }
-        tooltip.addPara("Orbit Focus : %s",0f, Color.ORANGE,orbitFocus.getName());
-        contentForInfo.addUIElement(tooltip);
-        panelOfInfoMain.addComponent(contentForInfo);
-
+        TooltipMakerAPI tooltip = contentForInfo.createUIElement(contentForInfo.getPosition().getWidth()-10,contentForInfo.getPosition().getHeight(),true);
+        tooltip.setParaFont("graphics/fonts/insignia21LTaa.fnt");
+        map.createSelectionText(tooltip);
+        contentForInfo.addUIElement(tooltip).inTL(0,0);
+        panelOfInfoMain.addComponent(contentForInfo).inTL(0,0);
     }
+
+    @Override
+    public ButtonAPI generateConfirmButton(TooltipMakerAPI tooltip) {
+        ButtonAPI button = super.generateConfirmButton(tooltip);
+        button.setEnabled(map!=null && map.hasSelection());
+        return button;
+    }
+
     @Override
     public void advance(float amount) {
-        super.advance(amount);
-        if(map!=null && map.getOrbitComponent()!=null && map.getOrbitComponent().isLocked() && map.getOrbitComponent().getCurrentlyCenteredAround()!=null){
-            if(!map.getOrbitComponent().getCurrentlyCenteredAround().getToken().equals(orbitFocus)){
-                orbitFocus = map.getOrbitComponent().getCurrentlyCenteredAround().getToken();
-                updateInfo();
-            }
+        if(map!=null){
+            if(confirmButton!=null)confirmButton.setEnabled(map.hasSelection());
+            if(panelOfInfoMain!=null && map.consumeSelectionTextUpdate())updateInfo();
         }
+        super.advance(amount);
     }
+
+    @Override
+    public void applyConfirmScript() {
+        if(map==null || !map.hasSelection())return;
+        // TODO: Build structure at map.getSelectedLocation(), using map.getSelectedEntity()
+        // as the stable point/orbit focus. Selection and preview do not change the campaign.
+    }
+
     @Override
     public void onExit() {
+        if(map!=null)map.clearUI();
         super.onExit();
-        if(map.getOrbitComponent()!=null && map.getOrbitComponent().isLocked()){
-            /// TODO accept
-        }
-        else{
-            /// TODO decline
-        }
     }
 }
