@@ -23,6 +23,7 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
     public static final String AI_CORE = "ai_core";
     public static final String UPGRADE = "upgrade";
     public static final String DOWNGRADE = "downgrade:";
+    public static final String CANCEL_CONSTRUCTION = "cancel_construction";
     public static final String SHUTDOWN = "shutdown";
 
     private static final float BUTTON_HEIGHT = 24f;
@@ -63,6 +64,10 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
             return options;
         }
 
+        if (impl.isBuilding() && !impl.isUpgrading()) {
+            options.put(CANCEL_CONSTRUCTION, "Cancel construction");
+            return options;
+        }
         if (impl.canMountAICores()) {
             options.put(AI_CORE, "Assign AI Core...");
         }
@@ -196,6 +201,12 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
             }
 
             String action = entry.getKey();
+            if (action.equals(CANCEL_CONSTRUCTION)) {
+                AoTDStableStructureImpl impl = widget.getStructure();
+                if (impl != null && impl.isCurrentImplementation() && impl.isPlayerOwned()) impl.cancelBuilding();
+                forceDismiss();
+                return;
+            }
             if(action.equals(AI_CORE)){
                 float width = 520;
                 float height = 530;

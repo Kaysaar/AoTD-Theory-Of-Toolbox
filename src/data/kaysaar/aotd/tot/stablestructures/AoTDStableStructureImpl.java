@@ -45,6 +45,7 @@ public class AoTDStableStructureImpl {
     protected LinkedHashMap<String, Integer> delivered = new LinkedHashMap<>();
     protected float maintenanceDays;
     protected Long lastAdvanceTimestamp;
+    protected SectorEntityToken upgradeScaffold;
 
     public SectorEntityToken getCurrentlyTiedEntity() {
         return currentlyAssignedToken;
@@ -154,9 +155,7 @@ public class AoTDStableStructureImpl {
 
     public String getBuildOrUpgradeProgressText() {
         if (isDisrupted()) return "Disrupted: " + getBuildOrUpgradeDaysText() + " left";
-        //        if (getAllowedProgressOnConstruction() < 1f && buildProgress >= buildTime * getAllowedProgressOnConstruction()) {
-//            text += " (awaiting resources)";
-//        }
+        if (!isBuilding) return ultimateUpgradeId == null ? "" : "Upgrade queued: awaiting credits or availability";
         return (isUpgrading() ? "Upgrading: " : "Building: ") + getBuildOrUpgradeDaysText() + " left";
     }
 
@@ -256,6 +255,7 @@ public class AoTDStableStructureImpl {
             AoTDTradeContractManager.getInstance().addContract(new AoTDStableStructureConstructionContract(this));
         }
         deliverSpecialItemsFromStorage();
+        if (isUpgrading()) upgradeScaffold = AoTDStableStructureConstruction.showUpgradeScaffold(this);
         return true;
     }
 
@@ -265,7 +265,12 @@ public class AoTDStableStructureImpl {
         boolean upgrading = isUpgrading();
         AoTDStableStructureImpl next = upgrading
                 ? AoTDStableStructureSpecManager.getSpec(constructionTargetId).getImplClassInstance() : null;
+        boolean scaffold = AoTDStableStructureConstruction.SCAFFOLD.equals(currentlyAssignedToken.getCustomEntityType());
+        SectorEntityToken built = upgrading || scaffold
+                ? AoTDStableStructureConstruction.createFinishedEntity(this, upgrading ? next : this) : null;
         removeConstructionContract();
+        AoTDStableStructureConstruction.removeOverlay(upgradeScaffold);
+        upgradeScaffold = null;
         isBuilding = false;
         creditsPaid = 0f;
         buildProgress = 0f;
@@ -280,15 +285,14 @@ public class AoTDStableStructureImpl {
             next.constructionStorage = constructionStorage;
             next.ultimateUpgradeId = ultimateUpgradeId;
             next.isDisrupted = isDisrupted();
-            currentlyAssignedToken.getMemoryWithoutUpdate().set(AoTDStableStructureSpecManager.memKeyInEntities, next);
-            next.setCurrentlyAssignedToken(currentlyAssignedToken);
-            next.updateEntityPresentation(this);
+            AoTDStableStructureConstruction.replaceEntity(this, next, built);
             next.upgradeFinished(this);
             ultimateUpgradeId = null;
             upgradeId = null;
             next.updateNextUpgradeId();
             next.startNextUpgrade();
         } else {
+            if (built != null) AoTDStableStructureConstruction.replaceEntity(this, this, built);
             buildingFinished();
             updateNextUpgradeId();
             startNextUpgrade();
@@ -322,6 +326,8 @@ public class AoTDStableStructureImpl {
     protected void cancelCurrentStage(boolean cancelledBase) {
         float refund = creditsPaid * (1f - getBuildOrUpgradeProgress());
         removeConstructionContract();
+        AoTDStableStructureConstruction.removeOverlay(upgradeScaffold);
+        upgradeScaffold = null;
         isBuilding = false;
         constructionCancelled = cancelledBase;
         ultimateUpgradeId = null;
@@ -333,6 +339,7 @@ public class AoTDStableStructureImpl {
         constructionResources.clear();
         delivered.clear();
         if (refund > 0f) Global.getSector().getPlayerFleet().getCargo().getCredits().add(refund);
+        if (cancelledBase) AoTDStableStructureConstruction.cancelScaffold(this);
     }
 
     public String getUniqueIdForContract() {
@@ -469,6 +476,8 @@ public class AoTDStableStructureImpl {
 
     public void notifyRemoved() {
         removeConstructionContract();
+        AoTDStableStructureConstruction.removeOverlay(upgradeScaffold);
+        upgradeScaffold = null;
         isBuilding = false;
         constructionCancelled = true;
         ultimateUpgradeId = null;
@@ -519,7 +528,8 @@ public class AoTDStableStructureImpl {
     }
 
     public String getName() {
-        if (currentlyAssignedToken != null) return currentlyAssignedToken.getName();
+        if (currentlyAssignedToken != null
+                && !AoTDStableStructureConstruction.SCAFFOLD.equals(currentlyAssignedToken.getCustomEntityType())) return currentlyAssignedToken.getName();
         return getSpecEntity().getDefaultName();
     }
 
@@ -840,7 +850,7 @@ public class AoTDStableStructureImpl {
             tooltip.addTitle(getName());
         }
 
-        String descriptionId = currentlyAssignedToken != null
+        String descriptionId = currentlyAssignedToken != null && !AoTDStableStructureConstruction.SCAFFOLD.equals(currentlyAssignedToken.getCustomEntityType())
                 ? currentlyAssignedToken.getCustomDescriptionId()
                 : getSpecEntity().getCustomDescriptionId();
         if (descriptionId != null) {
@@ -858,10 +868,6 @@ public class AoTDStableStructureImpl {
         Color bad = Misc.getNegativeHighlightColor();
 
         if (mode == AoTDStableStructureTooltipMode.PANEL) {
-            if (isBuilding || isDisrupted() || ultimateUpgradeId != null) {
-                tooltip.addSectionHeading("Status", color, dark, Alignment.MID, 10f);
-                tooltip.addPara(getBuildOrUpgradeProgressText(), isDisrupted() ? bad : highlight, 5f);
-            }
             if (isBuilding) {
                 tooltip.addPara("Under construction: %s", 5f, highlight,
                         Global.getSettings().getCustomEntitySpec(constructionTargetId).getDefaultName());

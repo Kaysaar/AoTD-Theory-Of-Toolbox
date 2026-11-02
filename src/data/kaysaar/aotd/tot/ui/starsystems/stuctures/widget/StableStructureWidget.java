@@ -20,6 +20,8 @@ import org.lwjgl.util.vector.Vector2f;
 
 import java.awt.*;
 import java.util.List;
+import java.util.Objects;
+import com.fs.starfarer.api.util.IntervalUtil;
 
 import static data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager.memKeyInEntities;
 
@@ -27,6 +29,10 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
     CustomPanelAPI mainPanel,contentPanel;
     SectorEntityToken token;
     UILinesRenderer renderer;
+    IntervalUtil refresh = new IntervalUtil(0.25f, 0.25f);
+    AoTDStableStructureImpl displayedStructure;
+    String displayedStatus;
+    float displayedProgress;
 
     public AoTDStableStructureImpl getStructure(){
         if(token!=null){
@@ -52,9 +58,13 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
         if(contentPanel!=null){
             mainPanel.removeComponent(contentPanel);
         }
+        if (token.isExpired()) return;
         contentPanel = Global.getSettings().createCustom(mainPanel.getPosition().getWidth(),mainPanel.getPosition().getHeight(),null);
+        displayedStructure = getStructure();
+        displayedStatus = displayedStructure == null ? "" : displayedStructure.getBuildOrUpgradeProgressText();
+        displayedProgress = displayedStructure == null ? 0f : displayedStructure.getBuildOrUpgradeProgress();
         final StableStructureWidget widget = this;
-        ButtonWithImageComponent viewer = new ButtonWithImageComponent(contentPanel.getPosition().getWidth(),125,token.getCustomInteractionDialogImageVisual().getSpriteName()){
+        ButtonWithImageComponent viewer = new ButtonWithImageComponent(contentPanel.getPosition().getWidth(),125,getStructure() != null ? getStructure().getImageName() : token.getCustomEntitySpec().getInteractionImage()){
             @Override
             public void performActionOnClick(boolean isRightClick) {
                 final  ButtonWithImageComponent v = this;
@@ -145,7 +155,12 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
 
     @Override
     public void advance(float amount) {
-
+        refresh.advance(amount);
+        if (!refresh.intervalElapsed()) return;
+        AoTDStableStructureImpl impl = getStructure();
+        if (impl != displayedStructure || impl != null &&
+                (!Objects.equals(displayedStatus, impl.getBuildOrUpgradeProgressText())
+                        || Math.abs(displayedProgress - impl.getBuildOrUpgradeProgress()) > 0.001f)) createUI();
     }
 
     @Override
