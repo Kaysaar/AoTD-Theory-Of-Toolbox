@@ -10,15 +10,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-/**
- * Cooperative worker save barrier.
- *
- * Use AoTDWorkerManager.submit() to start AoTD workers.
- * Workers should call checkpoint() inside long loops.
- *
- * beforeGameSave() should call beginSaveAndWait().
- * afterGameSave() should call endSave().
- */
 public final class AoTDWorkerManager {
     private AoTDWorkerManager() {}
 
@@ -68,11 +59,20 @@ public final class AoTDWorkerManager {
     }
 
     private static void enterWorker() {
-        synchronized (LOCK) {
-            while (saveBarrierActive) {
-                waitQuietly();
+        boolean interrupted = false;
+        try {
+            synchronized (LOCK) {
+                while (saveBarrierActive) {
+                    try {
+                        LOCK.wait(250L);
+                    } catch (InterruptedException ex) {
+                        interrupted = true;
+                    }
+                }
+                runningWorkers++;
             }
-            runningWorkers++;
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
     }
 
@@ -88,41 +88,52 @@ public final class AoTDWorkerManager {
     }
 
     public static void checkpoint() {
-        synchronized (LOCK) {
-            if (!saveBarrierActive) {
-                return;
-            }
+        boolean interrupted = false;
+        try {
+            synchronized (LOCK) {
+                if (saveBarrierActive) {
+                    runningWorkers--;
+                    if (runningWorkers < 0) runningWorkers = 0;
+                    LOCK.notifyAll();
 
-            runningWorkers--;
-            if (runningWorkers < 0) {
-                runningWorkers = 0;
-            }
-
-            LOCK.notifyAll();
-
-            try {
-                while (saveBarrierActive) {
-                    LOCK.wait();
+                    try {
+                        while (saveBarrierActive) {
+                            try {
+                                LOCK.wait();
+                            } catch (InterruptedException ex) {
+                                interrupted = true;
+                            }
+                        }
+                    } finally {
+                        runningWorkers++;
+                    }
                 }
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-            } finally {
-                runningWorkers++;
             }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
     }
 
     public static void beginSaveAndWait() {
-        synchronized (LOCK) {
-            saveBarrierActive = true;
-            LOCK.notifyAll();
+        boolean interrupted = false;
+        try {
+            synchronized (LOCK) {
+                saveBarrierActive = true;
+                LOCK.notifyAll();
 
-            while (runningWorkers > 0) {
-                waitQuietly();
+                while (runningWorkers > 0) {
+                    try {
+                        LOCK.wait(250L);
+                    } catch (InterruptedException ex) {
+                        interrupted = true;
+                    }
+                }
             }
-        }
 
-        cleanupFinishedTasks();
+            cleanupFinishedTasks();
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
+        }
     }
 
     public static void endSave() {
@@ -165,14 +176,6 @@ public final class AoTDWorkerManager {
     private static void cleanupFinishedTasks() {
         synchronized (TASKS) {
             TASKS.removeIf(Future::isDone);
-        }
-    }
-
-    private static void waitQuietly() {
-        try {
-            LOCK.wait(250L);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
         }
     }
 }

@@ -306,12 +306,24 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
     @Override
     public void beforeGameSave() {
         afterSaveState = false;
-        AoTDWorkerManager.beginSaveAndWait();
-        super.beforeGameSave();
+        try {
+            AoTDWorkerManager.beginSaveAndWait();
+            super.beforeGameSave();
+        } catch (RuntimeException | Error ex) {
+            afterSaveState = true;
+            AoTDWorkerManager.endSave();
+            throw ex;
+        }
     }
 
     @Override
     public void afterGameSave() {
+        afterSaveState = true;
+        AoTDWorkerManager.endSave();
+    }
+
+    @Override
+    public void onGameSaveFailed() {
         afterSaveState = true;
         AoTDWorkerManager.endSave();
     }

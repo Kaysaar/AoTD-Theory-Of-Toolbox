@@ -1,5 +1,10 @@
 package data.kaysaar.aotd.tot.misc;
 
+import com.fs.starfarer.api.campaign.SectorEntityToken;
+import com.fs.starfarer.api.campaign.StarSystemAPI;
+import com.fs.starfarer.api.impl.campaign.ids.Tags;
+import data.kaysaar.aotd.tot.ids.AoTDTags;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.PlanetAPI;
@@ -36,6 +41,151 @@ import java.util.Map;
 import static data.kaysaar.aotd.tot.scripts.economy.AoTDSectorProductionDemandDataUtils.getPriceForAmount;
 
 public class AoTDToolboxMisc {
+    public static final String SYSTEM_STRUCTURE_CAPACITY_MEMORY_KEY = "$aotd_system_structure_capacity";
+    public static final String NATURAL_SYSTEM_STRUCTURE_CAPACITY_MOD = "aotd_natural_structure_capacity";
+
+    public static class NaturalSystemStructureCapacity {
+        public int availableStableLocations;
+        public int occupiedStableLocations;
+        public int stableLocations;
+        public int stars;
+        public int planets;
+        public int moons;
+        public int pointsPerStar;
+        public int pointsPerPlanet;
+        public int pointsPerMoon;
+        public int pointsPerSlot;
+        public int celestialPoints;
+        public int celestialSlots;
+        public int maxNaturalCapacity;
+        public int naturalCapacity;
+    }
+
+    public static NaturalSystemStructureCapacity calculateNaturalSystemStructureCapacity(StarSystemAPI system) {
+        // Natural capacity balance. Change these values freely.
+        int pointsPerStar = 10;  // +1 slot per star
+        int pointsPerPlanet = 2; // +1 slot per 5 planets
+        int pointsPerMoon = 1;   // +1 slot per 10 moons
+        int pointsPerSlot = 10;
+        int maxNaturalCapacity = 6;
+
+        NaturalSystemStructureCapacity data = new NaturalSystemStructureCapacity();
+        data.pointsPerStar = pointsPerStar;
+        data.pointsPerPlanet = pointsPerPlanet;
+        data.pointsPerMoon = pointsPerMoon;
+        data.pointsPerSlot = pointsPerSlot;
+        data.maxNaturalCapacity = maxNaturalCapacity;
+
+        LinkedHashSet<SectorEntityToken> available = new LinkedHashSet<>();
+        LinkedHashSet<SectorEntityToken> occupied = new LinkedHashSet<>();
+        for (SectorEntityToken token : system.getAllEntities()) {
+            if (token.isExpired()) continue;
+            if (isSystemStableLocation(token)) {
+                available.add(token);
+            } else if (isSystemStructure(token)) {
+                SectorEntityToken original = token.getMemoryWithoutUpdate().getEntity(AoTDStableStructureConstruction.ORIGINAL_LOCATION);
+                if (original != null && isSystemStableLocation(original)) {
+                    occupied.add(original);
+                } else if (token.getMemoryWithoutUpdate().contains(AoTDStableStructureConstruction.USES_STABLE_LOCATION)) {
+                    if (token.getMemoryWithoutUpdate().getBoolean(AoTDStableStructureConstruction.USES_STABLE_LOCATION)) occupied.add(token);
+                } else if (!AoTDStableStructureConstruction.SCAFFOLD.equals(token.getCustomEntityType())) {
+                    // Legacy objectives predate free/orbit placement and occupied stable points.
+                    occupied.add(token);
+                }
+            }
+        }
+        // During replacement, the original and its scaffold can briefly coexist.
+        available.removeAll(occupied);
+        data.availableStableLocations = available.size();
+        data.occupiedStableLocations = occupied.size();
+        data.stableLocations = data.availableStableLocations + data.occupiedStableLocations;
+
+        // Count stars explicitly; the primary star may not be listed in getPlanets().
+        LinkedHashSet<PlanetAPI> celestialBodies = new LinkedHashSet<>();
+        for (SectorEntityToken token : system.getAllEntities()) {
+            if (token instanceof PlanetAPI && !token.isExpired()) {
+                celestialBodies.add((PlanetAPI) token);
+            }
+        }
+        if (system.getStar() != null && !system.getStar().isExpired()) {
+            celestialBodies.add(system.getStar());
+        }
+        celestialBodies.addAll(system.getPlanets());
+
+        for (PlanetAPI planet : celestialBodies) {
+            if (planet == null || planet.isExpired()) continue;
+            if (planet.isStar()) {
+                data.stars++;
+            } else {
+                SectorEntityToken focus = planet.getOrbitFocus();
+                if (focus instanceof PlanetAPI && !((PlanetAPI) focus).isStar()) data.moons++;
+                else data.planets++;
+            }
+        }
+
+        data.celestialPoints = data.stars * pointsPerStar
+                + data.planets * pointsPerPlanet
+                + data.moons * pointsPerMoon;
+        data.celestialSlots = data.celestialPoints / Math.max(1, pointsPerSlot);
+        data.naturalCapacity = Math.min(maxNaturalCapacity, data.stableLocations + data.celestialSlots);
+        return data;
+    }
+
+    public static MutableStat getSystemStructureCapacityStat(StarSystemAPI system) {
+        Object stored = system.getMemoryWithoutUpdate().get(SYSTEM_STRUCTURE_CAPACITY_MEMORY_KEY);
+        MutableStat stat;
+        if (stored instanceof MutableStat) {
+            stat = (MutableStat) stored;
+        } else {
+            stat = new MutableStat(0f);
+            system.getMemoryWithoutUpdate().set(SYSTEM_STRUCTURE_CAPACITY_MEMORY_KEY, stat);
+        }
+
+        // Replaces only the Natural Capacity mod. VoK and other modifiers are retained.
+        int natural = calculateNaturalSystemStructureCapacity(system).naturalCapacity;
+        stat.modifyFlat(NATURAL_SYSTEM_STRUCTURE_CAPACITY_MOD, natural, "Natural Capacity");
+        return stat;
+    }
+
+    public static boolean isSystemStableLocation(SectorEntityToken token) {
+        return token != null && (AoTDStableStructureConstruction.isStablePoint(token)
+                || token.hasTag(AoTDTags.AOTD_STABLE_LOCATION) || token.hasTag(Tags.STABLE_LOCATION));
+    }
+
+    public static boolean isSystemStructure(SectorEntityToken token) {
+        if (token == null || token.isExpired() || isSystemStableLocation(token)
+                || AoTDStableStructureConstruction.OVERLAY.equals(token.getCustomEntityType())) return false;
+        return token.hasTag(AoTDTags.AOTD_OBJECTIVE) || token.hasTag(Tags.OBJECTIVE)
+                || AoTDStableStructureConstruction.SCAFFOLD.equals(token.getCustomEntityType())
+                || token.getMemoryWithoutUpdate().contains(AoTDStableStructureSpecManager.memKeyInEntities);
+    }
+
+    public static List<SectorEntityToken> getSystemStructureEntities(StarSystemAPI system) {
+        List<SectorEntityToken> result = new ArrayList<>();
+        for (SectorEntityToken token : system.getAllEntities()) {
+            if (isSystemStructure(token)) result.add(token);
+        }
+        return result;
+    }
+
+    public static int getUsedSystemStructureSlots(StarSystemAPI system) {
+        int used = 0;
+        for (SectorEntityToken token : system.getAllEntities()) {
+            if (isSystemStructure(token)) used++;
+        }
+        return used;
+    }
+
+    public static int getAvailableSystemStructureSlots(StarSystemAPI system) {
+        return Math.max(0, getSystemStructureCapacityStat(system).getModifiedInt()
+                - getUsedSystemStructureSlots(system));
+    }
+
+    public static boolean hasAvailableSystemStructureSlot(StarSystemAPI system) {
+        return getAvailableSystemStructureSlots(system) > 0;
+    }
+
+
     public static String getDGSStringWithSign(int number) {
 
         String plus = "";
