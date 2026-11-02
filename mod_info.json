@@ -23,6 +23,12 @@
         "id": "bmo",
        "name": "Building Menu Overhaul",
         "version": "2.1.0"
+    },
+
+    {
+      "id": "razen_microforge",
+      "name": "Microforge",
+      "version": "1.0.0"
     }
 ],
 	
