@@ -2,8 +2,10 @@
 package data.kaysaar.aotd.tot.ui.starsystems.stuctures.widget;
 
 import ashlib.data.plugins.ui.models.CustomButton;
-import com.fs.starfarer.api.ui.LabelAPI;
-import com.fs.starfarer.api.ui.TooltipMakerAPI;
+import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.CustomUIPanelPlugin;
+import com.fs.starfarer.api.ui.*;
+import data.kaysaar.aotd.tot.plugins.ReflectionUtilis;
 import org.lwjgl.input.Keyboard;
 
 import java.awt.Color;
@@ -19,7 +21,23 @@ public class BetterAreaCheckbox extends CustomButton {
         this.c =base;
         this.buttonText = buttonText;
     }
+    public void createUI() {
+        if (this.panel != null) {
+            this.mainPanel.removeComponent(this.panel);
+        }
 
+        this.panel = Global.getSettings().createCustom(this.width, this.height, (CustomUIPanelPlugin)null);
+        CustomPanelAPI panelCheater =Global.getSettings().createCustom(this.width, this.height, (CustomUIPanelPlugin)null);
+        TooltipMakerAPI tooltip = panelCheater.createUIElement(this.width, this.height, false);
+        TooltipMakerAPI tooltipActualButton = this.panel.createUIElement(this.width, this.height, false);
+        this.mainButton = this.createButton(tooltipActualButton);
+        this.createButtonContent(tooltip);
+        panelCheater.addUIElement(tooltip).inTL(0,0);
+        this.panel.addUIElement(tooltipActualButton).inTL(0.0F, 0.0F);
+        ((UIPanelAPI) ReflectionUtilis.invokeMethodWithAutoProjection("getPanel",mainButton)).addComponent(panelCheater).inTL(0,0f);
+        this.mainPanel.addComponent(this.panel).inTL(0.0F, 0.0F);
+        this.isCreated = true;
+    }
     public BetterAreaCheckbox(float width, float height, Object buttonData, float indent, Color base, Color bg, Color bright, String buttonText, int keyBind) {
         super(width, height, buttonData, indent, base, bg, bright);
         this.buttonText = buttonText;

@@ -14,6 +14,7 @@ import com.fs.starfarer.api.impl.campaign.ids.Commodities;
 import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
 import data.kaysaar.aotd.tot.ui.components.ItemExplanationButton;
 import org.lwjgl.input.Keyboard;
@@ -44,6 +45,12 @@ public class AssignAICoreStructure extends BasePopUpDialog {
         this.structure = structure;
         originalAICoreAssigned = structure.getAICoreId();
         currentAICoreAssigned = originalAICoreAssigned;
+    }
+
+    public static boolean canAssignAICore(AoTDStableStructureImpl impl) {
+        return impl != null && impl.isCurrentImplementation() && impl.isPlayerOwned()
+                && impl.canMountAICores() && (!impl.isBuilding() || impl.isUpgrading())
+                && !AoTDStableStructureConstruction.SCAFFOLD.equals(impl.getCurrentlyTiedEntity().getCustomEntityType());
     }
 
     public List<CargoAPI> getLocalStorages() {
@@ -242,8 +249,7 @@ public class AssignAICoreStructure extends BasePopUpDialog {
     }
 
     public boolean canConfirm() {
-        if (!structure.isCurrentImplementation()
-                || !structure.isPlayerOwned()
+        if (!canAssignAICore(structure)
                 || !Objects.equals(structure.getAICoreId(), originalAICoreAssigned)) {
             return false;
         }
@@ -277,6 +283,7 @@ public class AssignAICoreStructure extends BasePopUpDialog {
     }
 
     public boolean handleAICoreTransfer(String previousCoreId, String selectedCoreId) {
+        if (!canConfirm()) return false;
         if (Objects.equals(previousCoreId, selectedCoreId)) {
             return true;
         }
