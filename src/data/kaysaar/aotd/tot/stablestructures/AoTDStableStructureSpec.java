@@ -9,6 +9,7 @@ public class AoTDStableStructureSpec {
     public String id;
     public int creditCost;
     public int daysToBuild;
+    public int order = Integer.MAX_VALUE;
     public LinkedHashMap<String,Integer>totalResourcesNeeded;
     public String downgrade = null;
     public String pluginClass;
@@ -17,9 +18,12 @@ public class AoTDStableStructureSpec {
         return downgrade;
     }
 
-
     public String getId() {
         return id;
+    }
+
+    public int getOrder() {
+        return order;
     }
 
     public int getCreditCost() {
@@ -45,6 +49,7 @@ public class AoTDStableStructureSpec {
     public void setPluginClass(String pluginClass) {
         this.pluginClass = pluginClass;
     }
+
     public AoTDStableStructureImpl getImplClassInstance() {
         try {
             AoTDStableStructureImpl impl = (AoTDStableStructureImpl) Global.getSettings().getScriptClassLoader().loadClass(pluginClass).newInstance();
@@ -53,8 +58,5 @@ public class AoTDStableStructureSpec {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-
-
     }
-
 }

@@ -528,8 +528,6 @@ public class AoTDStableStructureImpl {
     }
 
     public String getName() {
-        if (currentlyAssignedToken != null
-                && !AoTDStableStructureConstruction.SCAFFOLD.equals(currentlyAssignedToken.getCustomEntityType())) return currentlyAssignedToken.getName();
         return getSpecEntity().getDefaultName();
     }
 
@@ -869,8 +867,6 @@ public class AoTDStableStructureImpl {
 
         if (mode == AoTDStableStructureTooltipMode.PANEL) {
             if (isBuilding) {
-                tooltip.addPara("Under construction: %s", 5f, highlight,
-                        Global.getSettings().getCustomEntitySpec(constructionTargetId).getDefaultName());
                 if (!isPlayerOwned()) tooltip.addPara("Construction is paused while the structure is not player-owned.", bad, 5f);
                 if (!constructionResources.isEmpty()) {
                     tooltip.addSectionHeading("Construction resources delivered", color, dark, Alignment.MID, 10f);

@@ -1,4 +1,3 @@
-
 package data.kaysaar.aotd.tot.ui.starsystems.stuctures.widget;
 
 import ashlib.data.plugins.misc.AshMisc;
@@ -9,6 +8,7 @@ import com.fs.starfarer.api.impl.campaign.ids.Commodities;
 import com.fs.starfarer.api.ui.CustomPanelAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
@@ -23,7 +23,7 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
     public static final String AI_CORE = "ai_core";
     public static final String UPGRADE = "upgrade";
     public static final String DOWNGRADE = "downgrade:";
-    public static final String CANCEL_CONSTRUCTION = "cancel_construction";
+    public static final String CANCEL_UPGRADE = "cancel_upgrade";
     public static final String SHUTDOWN = "shutdown";
 
     private static final float BUTTON_HEIGHT = 24f;
@@ -60,16 +60,23 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
 
         AoTDStableStructureImpl impl = widget.getStructure();
 
-        if (impl == null || !impl.isPlayerOwned()) {
+        if (impl == null || !impl.isCurrentImplementation() || !impl.isPlayerOwned()) {
             return options;
         }
 
-        if (impl.isBuilding() && !impl.isUpgrading()) {
-            options.put(CANCEL_CONSTRUCTION, "Cancel construction");
-            return options;
-        }
         if (impl.canMountAICores()) {
             options.put(AI_CORE, "Assign AI Core...");
+        }
+
+        if (impl.isBuilding() && !impl.isUpgrading()) {
+            options.put(SHUTDOWN, "Stop Construction");
+            return options;
+        }
+
+        if (impl.isUpgrading()) {
+            options.put(CANCEL_UPGRADE, "Cancel Upgrade");
+            options.put(SHUTDOWN, "Shut down...");
+            return options;
         }
 
         if (AoTDStableStructureSpecManager.hasUpgrades(impl.id)) {
@@ -78,7 +85,7 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
 
         AoTDStableStructureSpec spec = impl.getSpec();
 
-        if (spec != null&&spec.getDowngrade()!=null) {
+        if (spec != null && AoTDStableStructureConstruction.canDowngrade(impl)) {
             String parentId = spec.getDowngrade();
             String name = Global.getSettings().getCustomEntitySpec(parentId) != null
                     ? Global.getSettings().getCustomEntitySpec(parentId).getDefaultName()
@@ -87,7 +94,7 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
             options.put(DOWNGRADE, "Downgrade to " + name + "...");
         }
 
-        options.put(SHUTDOWN, "Shut down...");
+        if (AoTDStableStructureConstruction.canShutDown(impl)) options.put(SHUTDOWN, "Shut down...");
 
         return options;
     }
@@ -134,9 +141,9 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
 
             int keyBind = -1;
 
-            if (AI_CORE.equals(id)) {
+            if (AI_CORE.equals(id) && AssignAICoreStructure.canAssignAICore(widget.getStructure())) {
                 keyBind = Keyboard.KEY_G;
-            }  else if (UPGRADE.equals(id)) {
+            } else if (UPGRADE.equals(id)) {
                 keyBind = Keyboard.KEY_U;
             } else if (SHUTDOWN.equals(id)) {
                 keyBind = Keyboard.KEY_W;
@@ -172,6 +179,10 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
             }
 
             button.createUI();
+            if (AI_CORE.equals(id)) {
+                boolean enabled = AssignAICoreStructure.canAssignAICore(widget.getStructure());
+                button.mainButton.setEnabled(enabled);
+            }
 
             tooltip.addCustom(button.getMainPanel(), 0f)
                     .getPosition().inTL(PANEL_PAD, currY);
@@ -195,35 +206,52 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
 
         for (Map.Entry<String, BetterAreaCheckbox> entry : buttons.entrySet()) {
             BetterAreaCheckbox button = entry.getValue();
-
             if (!button.isChecked()) {
                 continue;
             }
-
+            button.setChecked(false);
             String action = entry.getKey();
-            if (action.equals(CANCEL_CONSTRUCTION)) {
-                AoTDStableStructureImpl impl = widget.getStructure();
-                if (impl != null && impl.isCurrentImplementation() && impl.isPlayerOwned()) impl.cancelBuilding();
+            AoTDStableStructureImpl impl = widget.getStructure();
+            if (impl == null || !impl.isCurrentImplementation() || !impl.isPlayerOwned()) {
                 forceDismiss();
                 return;
             }
-            if(action.equals(AI_CORE)){
-                float width = 520;
-                float height = 530;
-                AssignAICoreStructure structure = new AssignAICoreStructure(widget);
-                AshMisc.initPopUpDialog(structure,width,height);
+            if (action.equals(AI_CORE)) {
+                if (AssignAICoreStructure.canAssignAICore(impl)) {
+                    AssignAICoreStructure structure = new AssignAICoreStructure(widget);
+                    AshMisc.initPopUpDialog(structure, 520, 530);
+                }
+                forceDismiss();
+                return;
+            }
+            if (action.equals(CANCEL_UPGRADE)) {
+                if (AoTDStableStructureConstruction.canCancelUpgrade(impl)) {
+                    CancelUpgradeInfoPopUp structure = new CancelUpgradeInfoPopUp(widget);
+                    AshMisc.initPopUpDialog(structure, 700, 205);
+                }
+                forceDismiss();
+                return;
+            }
+            if (action.equals(SHUTDOWN)) {
+                if (AoTDStableStructureConstruction.canCancelConstruction(impl)) {
+                    StopConstructionInfoPopUp structure = new StopConstructionInfoPopUp(widget);
+                    AshMisc.initPopUpDialog(structure, 600, 170);
+                } else if (AoTDStableStructureConstruction.canShutDown(impl)) {
+                    ShutdownInfoPopUp structure = new ShutdownInfoPopUp(widget);
+                    AshMisc.initPopUpDialog(structure, 600, 170);
+                }
+                forceDismiss();
+                return;
+            }
+            if (action.equals(DOWNGRADE)) {
+                if (AoTDStableStructureConstruction.canDowngrade(widget.getStructure())) {
+                    DowngradeInfoPopUp structure = new DowngradeInfoPopUp(widget);
+                    AshMisc.initPopUpDialog(structure, 600, 170);
+                }
                 this.forceDismiss();
                 return;
             }
-            if(action.equals(DOWNGRADE)){
-                float width = 600;
-                float height = 170;
-                DowngradeInfoPopUp structure = new DowngradeInfoPopUp(widget);
-                AshMisc.initPopUpDialog(structure,width,height);
-                this.forceDismiss();
-                return;
-            }
-            button.setChecked(false);
+
 
             return;
         }

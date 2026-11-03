@@ -10,7 +10,9 @@ import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.ui.starsystems.stuctures.widget.StableStructureWidget;
 import org.lwjgl.input.Keyboard;
@@ -29,7 +31,48 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
     int displayedCapacity;
 
     public List<SectorEntityToken> getStructureEntities() {
-        return AoTDToolboxMisc.getSystemStructureEntities(system);
+        List<SectorEntityToken> entities = AoTDToolboxMisc.getSystemStructureEntities(system);
+
+        int nextOrder = 0;
+        for (SectorEntityToken token : entities) {
+            Object value = token.getMemoryWithoutUpdate().get(AoTDStableStructureConstruction.WIDGET_ORDER);
+            if (value instanceof Number) {
+                nextOrder = Math.max(nextOrder, ((Number) value).intValue() + 1);
+            }
+        }
+        for (SectorEntityToken token : entities) {
+            Object value = token.getMemoryWithoutUpdate().get(AoTDStableStructureConstruction.WIDGET_ORDER);
+            if (!(value instanceof Number)) {
+                token.getMemoryWithoutUpdate().set(AoTDStableStructureConstruction.WIDGET_ORDER, nextOrder++);
+            }
+        }
+
+        entities.sort((first, second) -> {
+            int result = Boolean.compare(isUnderConstruction(first), isUnderConstruction(second));
+            if (result != 0) return result;
+            result = Integer.compare(getStructureOrder(first), getStructureOrder(second));
+            if (result != 0) return result;
+            return Integer.compare(getWidgetOrder(first), getWidgetOrder(second));
+        });
+        return entities;
+    }
+
+    public boolean isUnderConstruction(SectorEntityToken token) {
+        AoTDStableStructureImpl impl = (AoTDStableStructureImpl) token.getMemoryWithoutUpdate().get(AoTDStableStructureSpecManager.memKeyInEntities);
+        if (impl != null) return impl.isBuilding() && !impl.isUpgrading();
+        return AoTDStableStructureConstruction.SCAFFOLD.equals(token.getCustomEntityType());
+    }
+
+    public int getStructureOrder(SectorEntityToken token) {
+        AoTDStableStructureImpl impl = (AoTDStableStructureImpl) token.getMemoryWithoutUpdate().get(AoTDStableStructureSpecManager.memKeyInEntities);
+        String id = impl != null ? impl.id : token.getCustomEntityType();
+        AoTDStableStructureSpec spec = AoTDStableStructureSpecManager.getSpec(id);
+        return spec == null ? Integer.MAX_VALUE : spec.getOrder();
+    }
+
+    public int getWidgetOrder(SectorEntityToken token) {
+        Object value = token.getMemoryWithoutUpdate().get(AoTDStableStructureConstruction.WIDGET_ORDER);
+        return value instanceof Number ? ((Number) value).intValue() : Integer.MAX_VALUE;
     }
 
     public StarSystemStructuresUI(float width, float height, StarSystemAPI system) {

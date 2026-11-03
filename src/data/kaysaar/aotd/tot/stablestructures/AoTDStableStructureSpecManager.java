@@ -51,6 +51,7 @@ public class AoTDStableStructureSpecManager {
                 AoTDStableStructureSpec spec = new AoTDStableStructureSpec();
 
                 spec.id = id;
+                spec.order = jsonObject.optInt("order", Integer.MAX_VALUE);
                 spec.setCreditCost(creditCost);
                 spec.setDaysToBuild(daysToBuild);
                 spec.setPluginClass(pluginClass);
