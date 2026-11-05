@@ -5,8 +5,13 @@ import com.fs.starfarer.api.combat.MutableStatWithTempMods;
 
 public class AoTDAvailableStat extends MutableStatWithTempMods {
 
+    private static final float DATA_ADVANCE_INTERVAL_DAYS = 0.05f;
+
     AoTDExcDefData data = new AoTDExcDefData();
     private AoTDSupplyDemandData supplyDemandData;
+
+    private transient float pendingDataDays;
+    private transient float nextDataFlushDays;
 
     public AoTDAvailableStat(float base) {
         super(base);
@@ -46,7 +51,15 @@ public class AoTDAvailableStat extends MutableStatWithTempMods {
     public void advance(float days) {
         super.advance(days);
 
-        data.advance(days);
+        if (nextDataFlushDays <= 0f) {
+            nextDataFlushDays = DATA_ADVANCE_INTERVAL_DAYS * (0.25f + 0.75f * (float) Math.random());
+        }
+        pendingDataDays += days;
+        if (pendingDataDays >= nextDataFlushDays) {
+            data.advance(pendingDataDays);
+            pendingDataDays = 0f;
+            nextDataFlushDays = DATA_ADVANCE_INTERVAL_DAYS;
+        }
 
         if (supplyDemandData != null) {
             supplyDemandData.advance(days);
