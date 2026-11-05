@@ -6,6 +6,7 @@ import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.util.IntervalUtil;
+import data.kaysaar.aotd.tot.listeners.AoTDSystemStructureColonizationListener;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -18,7 +19,9 @@ public class AoTDStableStructureAdvanceScript implements EveryFrameScript {
         if(!Global.getSector().hasScript(AoTDStableStructureAdvanceScript.class)){
             Global.getSector().addScript(new AoTDStableStructureAdvanceScript());
         }
-
+        if (!Global.getSector().getListenerManager().hasListenerOfClass(AoTDSystemStructureColonizationListener.class)) {
+            Global.getSector().getListenerManager().addListener(new AoTDSystemStructureColonizationListener(), true);
+        }
     }
 
     @Override

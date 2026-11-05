@@ -1,12 +1,13 @@
-
 package data.kaysaar.aotd.tot.ui.starsystems.stuctures.table;
 
 import ashlib.data.plugins.ui.models.CustomButton;
 import ashlib.data.plugins.ui.models.DropDownButton;
 import ashlib.data.plugins.ui.plugins.UITableImpl;
+import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.ui.ButtonAPI;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
 
@@ -21,7 +22,7 @@ public class StableStructureTable extends UITableImpl {
     StarSystemAPI starSystemAPI;
 
     float currYPos = 0f;
-   public StableStructureButton currentlyChosen;
+    public StableStructureButton currentlyChosen;
     static {
         widthMap.put("name", 290);
         widthMap.put("buildingTime", 80);
@@ -61,18 +62,21 @@ public class StableStructureTable extends UITableImpl {
         return x;
     }
 
-    public StableStructureTable(float width, float height, boolean doesHaveScroller, float xCord, float yCord,StarSystemAPI systemAPI) {
+    public StableStructureTable(float width, float height, boolean doesHaveScroller, float xCord, float yCord, StarSystemAPI systemAPI) {
         super(width, height, doesHaveScroller, xCord, yCord);
         this.starSystemAPI = systemAPI;
         if (dropDownButtons.isEmpty()) {
-
             for (AoTDStableStructureSpec spec : AoTDStableStructureSpecManager.getAllBaseStructures()) {
-                StableStructureDropDownButton button = new StableStructureDropDownButton(this, width-16, 63, 0, 0, spec,starSystemAPI);
+                AoTDStableStructureImpl impl = spec.getImplClassInstance();
+                if (!impl.isAvailableToBuild(systemAPI, Global.getSector().getPlayerFaction())
+                        && !impl.showWhenUnavailable(systemAPI, Global.getSector().getPlayerFaction())) continue;
+
+                StableStructureDropDownButton button = new StableStructureDropDownButton(this, width - 16, 63, 0, 0, spec, starSystemAPI);
                 dropDownButtons.add(button);
             }
-
         }
     }
+
     @Override
     public void createTable() {
         super.createTable();
@@ -134,7 +138,6 @@ public class StableStructureTable extends UITableImpl {
         mainPanel.addUIElement(tooltipOfButtons).inTL(0, 0);
     }
 
-
     @Override
     public void advance(float amount) {
         super.advance(amount);
@@ -161,7 +164,7 @@ public class StableStructureTable extends UITableImpl {
 
     @Override
     public void reportButtonPressed(CustomButton buttonPressed) {
-        if(buttonPressed instanceof StableStructureButton bt){
+        if (buttonPressed instanceof StableStructureButton bt) {
             currentlyChosen = bt;
         }
     }

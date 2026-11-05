@@ -17,7 +17,9 @@ public class AoTDStableStructureAdvanceTask extends MultiFrameTask {
     @Override
     public void doNextBatch() {
         if (isDone()) return;
-        for (AoTDStableStructureImpl impl : AoTDStableStructureAdvanceScript.getStructures(systems.get(systemIndex))) {
+        StarSystemAPI system = systems.get(systemIndex);
+        AoTDSystemStructureCapacityManager.update(system);
+        for (AoTDStableStructureImpl impl : AoTDStableStructureAdvanceScript.getStructures(system)) {
             if (impl.lastAdvanceTimestamp == null) impl.resetAdvanceTimestamp();
             float days = Math.max(0f, Global.getSector().getClock().getElapsedDaysSince(impl.lastAdvanceTimestamp));
             impl.resetAdvanceTimestamp();
