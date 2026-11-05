@@ -8,6 +8,7 @@ import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
 import com.fs.starfarer.api.impl.campaign.ids.Entities;
+import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.api.impl.campaign.rulecmd.salvage.Objectives;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.entities.AoTDStableStructureScaffold;
@@ -39,11 +40,14 @@ public class AoTDStableStructureConstruction {
         if (system == null || position == null || !Float.isFinite(position.x) || !Float.isFinite(position.y)) return false;
         FactionAPI faction = AshMisc.getClaimingFaction(system.getCenter());
         if (faction == null || !faction.isPlayerFaction()) return false;
+        AoTDSystemStructureCapacityManager.update(system);
         if (!AoTDToolboxMisc.hasAvailableSystemStructureSlot(system)) return false;
         if (focus != null && (focus.isExpired() || focus.getContainingLocation() != system
                 || !system.getAllEntities().contains(focus))) return false;
         if (isStablePoint(focus) && focus.getMemoryWithoutUpdate().contains(AoTDStableStructureSpecManager.memKeyInEntities)) return false;
         if (focus != null && !isStablePoint(focus) && Vector2f.sub(position, focus.getLocation(), null).length() <= focus.getRadius()) return false;
+        if (base instanceof AoTDLinkedStructureImpl linked && !linked.canPlaceAt(system, focus, position)) return false;
+        if (selected.getSpec() == null || base.getSpec() == null) return false;
         return selected.isAvailableToBuild(system, faction) && base.isAvailableToBuild(system, faction)
                 && Global.getSector().getPlayerFleet().getCargo().getCredits().get() >= Math.max(0f, base.getBuildCostCredits());
     }
@@ -69,6 +73,7 @@ public class AoTDStableStructureConstruction {
         scaffold.addTag(AoTDTags.AOTD_OBJECTIVE);
         scaffold.addTag(CustomEntityIconComponent.SHOW_ONLY_ICON_ON_MAP);
         base.setCurrentlyAssignedToken(scaffold);
+        if (base instanceof AoTDLinkedStructureImpl linked) linked.setConstructionFocus(focus);
         ((AoTDStableStructureScaffold) scaffold.getCustomPlugin()).setImplToConstruct(base);
         setPresentation(scaffold, base);
         if (!base.startBuilding(selected.id)) {
@@ -81,6 +86,7 @@ public class AoTDStableStructureConstruction {
             system.removeEntity(focus);
             new Objectives().updateOrbitingEntities(system, focus, scaffold);
         }
+        if (base instanceof AoTDLinkedStructureImpl linked) linked.onConstructionStarted();
         return base;
     }
 
@@ -231,7 +237,7 @@ public class AoTDStableStructureConstruction {
     }
 
     public static boolean canShutDown(AoTDStableStructureImpl impl) {
-        return impl != null && impl.isCurrentImplementation() && impl.isPlayerOwned();
+        return impl != null && impl.isCurrentImplementation() && impl.isPlayerOwned() && impl.canBeShutDown();
     }
 
     public static long getShutdownRefund(AoTDStableStructureImpl impl) {
@@ -254,7 +260,6 @@ public class AoTDStableStructureConstruction {
         if (location == null) return false;
 
         long refund = Math.max(0L, Math.round(impl.getCumulativeCreditCost() * (double) SHUTDOWN_REFUND_MULT));
-        SectorEntityToken original = current.getMemoryWithoutUpdate().getEntity(ORIGINAL_LOCATION);
 
         if (canCancelUpgrade(impl)) cancelUpgrade(impl);
 
@@ -273,12 +278,7 @@ public class AoTDStableStructureConstruction {
         }
 
         impl.notifyRemoved();
-        if (original != null) {
-            copyPosition(current, original);
-            original.setExpired(false);
-            location.addEntity(original);
-            new Objectives().updateOrbitingEntities(location, current, original);
-        }
+        restoreStableLocation(current);
 
         location.removeEntity(current);
         current.setExpired(true);
@@ -290,16 +290,27 @@ public class AoTDStableStructureConstruction {
         SectorEntityToken current = impl.currentlyAssignedToken;
         if (!SCAFFOLD.equals(current.getCustomEntityType())) return;
         LocationAPI location = current.getContainingLocation();
-        SectorEntityToken original = current.getMemoryWithoutUpdate().getEntity(ORIGINAL_LOCATION);
-        if (original != null) {
-            copyPosition(current, original);
-            original.setExpired(false);
-            location.addEntity(original);
-            new Objectives().updateOrbitingEntities(location, current, original);
-        }
+        restoreStableLocation(current);
         current.getMemoryWithoutUpdate().unset(AoTDStableStructureSpecManager.memKeyInEntities);
         location.removeEntity(current);
         current.setExpired(true);
+    }
+
+    private static void restoreStableLocation(SectorEntityToken current) {
+        if (current == null || current.getContainingLocation() == null) return;
+
+        // Naturally spawned and legacy structures have no placement flag, but still occupy a stable location.
+        // Explicitly free-placed structures carry the flag set to false and must not create stable points.
+        boolean usesStableLocation = current.getMemoryWithoutUpdate().contains(USES_STABLE_LOCATION)
+                ? current.getMemoryWithoutUpdate().getBoolean(USES_STABLE_LOCATION)
+                : !SCAFFOLD.equals(current.getCustomEntityType());
+        if (!usesStableLocation) return;
+
+        LocationAPI location = current.getContainingLocation();
+        CustomCampaignEntityAPI stableLocation = location.addCustomEntity(
+                Misc.genUID(), null, Entities.STABLE_LOCATION, Factions.NEUTRAL);
+        copyPosition(current, stableLocation);
+        new Objectives().updateOrbitingEntities(location, current, stableLocation);
     }
 
     public static void copyPosition(SectorEntityToken from, SectorEntityToken to) {

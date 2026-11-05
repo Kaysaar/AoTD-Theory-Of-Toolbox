@@ -97,7 +97,7 @@ public class AoTDStableStructureConstructionContract extends AoTDTradeContract {
 
     @Override
     public String getContractType() {
-        return "Stable Structure Construction";
+        return "S.T. Construction";
     }
 
     @Override

@@ -9,10 +9,9 @@ import com.fs.starfarer.campaign.econ.reach.*;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public class AoTDReachEconomy extends ReachEconomy {
-    /** Enable temporarily when measuring UI updates. No timers/logging when false. */
+    /** Enable when profiling campaign ticks and forced UI economy updates. */
     public static volatile boolean PROFILE_NEXT_STEP = true;
 
     public void nextStepForPlayer(MainWorkTask.EconWorkParams econWorkParams) {
@@ -27,6 +26,8 @@ public class AoTDReachEconomy extends ReachEconomy {
     private void runStep(MainWorkTask.EconWorkParams params, boolean playerOnly) {
         final boolean profile = PROFILE_NEXT_STEP;
         final long started = profile ? System.nanoTime() : 0L;
+        final long[] phaseNanos = profile ? new long[5] : null;
+        final int[] phaseCalls = profile ? new int[5] : null;
         final List<MarketAPI> markets = new ArrayList<>();
         if (playerOnly) {
             for (MarketAPI market : getMarkets()) {
@@ -43,43 +44,57 @@ public class AoTDReachEconomy extends ReachEconomy {
         } else {
             for (MarketAPI market : markets) refreshAdmin(market);
         }
-        final long adminDone = profile ? System.nanoTime() : 0L;
+        long previous = profile ? System.nanoTime() : 0L;
+        if (profile) {
+            phaseNanos[0] = previous - started;
+            phaseCalls[0] = openMarket == null ? markets.size() : 1;
+        }
 
         // Full input scope is retained: an open market still depends on other markets.
-        drain(openMarket == null
+        phaseCallsUpdate(profile, phaseCalls, 1, openMarket == null
                 ? new AoTdMainWorkTask2(markets, this, params)
                 : new AoTdMainWorkTask2(markets, this, params, openMarket));
-        final long mainDone = profile ? System.nanoTime() : 0L;
+        if (profile) {
+            long finished = System.nanoTime();
+            phaseNanos[1] = finished - previous;
+            previous = finished;
+        }
 
         // The player-only entry point intentionally retains its all-market second pass.
         Economy economy = (Economy) Global.getSector().getEconomy();
-        drain(openMarket == null
+        phaseCallsUpdate(profile, phaseCalls, 2, openMarket == null
                 ? new AoTDUpdateMarketAgainTask(economy)
                 : new AoTDUpdateMarketAgainTask(economy, openMarket));
-        final long secondDone = profile ? System.nanoTime() : 0L;
-
-        if (params.withImmigration) {
-            drain(new ImmigrationTask(markets, this, !params.forceNonUIStep));
-        }
-        final long immigrationDone = profile ? System.nanoTime() : 0L;
-
-        AoTDFinishEconomyUpdateTask finish = new AoTDFinishEconomyUpdateTask(
-                (Economy) Global.getSector().getEconomy());
-        if (playerOnly) finish.doForPlayerOnly();
-        else finish.runSynchronously();
-
         if (profile) {
             long finished = System.nanoTime();
-            Global.getLogger(AoTDReachEconomy.class).info(String.format(Locale.ROOT,
-                    "AoTD nextStep mode=%s markets=%d total=%.3f ms " +
-                    "snapshot/admin=%.3f main=%.3f second=%.3f immigration=%.3f finish=%.3f",
+            phaseNanos[2] = finished - previous;
+            previous = finished;
+        }
+
+        if (params.withImmigration) {
+            phaseCallsUpdate(profile, phaseCalls, 3, new ImmigrationTask(markets, this, !params.forceNonUIStep));
+        }
+        if (profile) {
+            long finished = System.nanoTime();
+            phaseNanos[3] = finished - previous;
+            previous = finished;
+        }
+
+        AoTDFinishEconomyUpdateTask finish = new AoTDFinishEconomyUpdateTask(economy);
+        if (playerOnly) {
+            finish.doForPlayerOnly();
+            if (profile) phaseCalls[4] = 1;
+        } else {
+            finish.runSynchronously();
+            if (profile) phaseCalls[4] = 1;
+        }
+        if (profile) {
+            long finished = System.nanoTime();
+            phaseNanos[4] = finished - previous;
+            AoTDEconomyPerformanceProfiler.logSynchronous(
                     playerOnly ? "player" : openMarket == null ? "all" : "open-market",
-                    markets.size(), (finished - started) / 1_000_000d,
-                    (adminDone - started) / 1_000_000d,
-                    (mainDone - adminDone) / 1_000_000d,
-                    (secondDone - mainDone) / 1_000_000d,
-                    (immigrationDone - secondDone) / 1_000_000d,
-                    (finished - immigrationDone) / 1_000_000d));
+                    markets, params, phaseNanos, phaseCalls, openMarket == null ? markets.size() : 1,
+                    finished - started);
         }
     }
 
@@ -89,8 +104,11 @@ public class AoTDReachEconomy extends ReachEconomy {
         admin.getStats().refreshGovernedOutpostEffects(market);
     }
 
-    private static void drain(MultiFrameTask task) {
-        while (!task.isDone()) task.doNextBatch();
+    private static void phaseCallsUpdate(boolean profile, int[] calls, int phase, MultiFrameTask task) {
+        while (!task.isDone()) {
+            task.doNextBatch();
+            if (profile) calls[phase]++;
+        }
     }
 
     @Override

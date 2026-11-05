@@ -14,6 +14,7 @@ import com.fs.starfarer.api.ui.Fonts;
 import com.fs.starfarer.api.ui.PositionAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
@@ -31,6 +32,7 @@ public class StableStructureDetailedPanel implements ExtendedUIPanelPlugin {
     private Consumer<AoTDStableStructureSpec> queueHandler;
     private AoTDStableStructureSpec pendingQueueRequest;
     private AoTDStableStructureImpl currentImpl;
+    private float initialStageCost;
     float imageAndTitleSection = 175f;
     float potentialUpgradeButtonHeight = 20f;
 
@@ -62,6 +64,7 @@ public class StableStructureDetailedPanel implements ExtendedUIPanelPlugin {
         if (spec != null) {
             if (currentImpl == null || !spec.getId().equals(currentImpl.id)) {
                 currentImpl = spec.getImplClassInstance();
+                initialStageCost = AoTDStableStructureConstruction.getBaseStructure(currentImpl).getBuildCostCredits();
             }
             AoTDStableStructureImpl impl = currentImpl;
             float width = mainPanel.getPosition().getWidth();
@@ -72,13 +75,14 @@ public class StableStructureDetailedPanel implements ExtendedUIPanelPlugin {
             titleTooltip.setParaFont(Fonts.ORBITRON_20AA);
             titleTooltip.addPara(impl.getName(), Misc.getTooltipTitleAndLightHighlightColor(), 0f)
                     .setAlignment(Alignment.MID);
+            titleTooltip.getPrev().getPosition().inTL(0,0);
 
             CustomPanelAPI imageContentPanel = panelTitleImage.createCustomPanel(width, 150f, null);
             CustomPanelAPI viewer = StableStructureUpgradeNode.createImagePanel(
                     240f, 150f, impl.getImageName(), Misc.getBasePlayerColor()
             );
             imageContentPanel.addComponent(viewer).inTL(
-                    (width - viewer.getPosition().getWidth()) / 2f,
+                    (width - viewer.getPosition().getWidth()) / 2f - 5f,
                     0f
             );
             titleTooltip.addCustom(imageContentPanel, 5f);
@@ -91,6 +95,7 @@ public class StableStructureDetailedPanel implements ExtendedUIPanelPlugin {
 
             if (hasPath) {
                 FactionAPI faction = AshMisc.getClaimingFaction(systemAPI.getCenter());
+                if (faction == null) faction = Global.getSector().getPlayerFaction();
                 mainContentHeight -= potentialUpgradeButtonHeight + 10f;
 
                 TooltipMakerAPI buttonTooltip = contentPanel.createUIElement(
@@ -119,11 +124,20 @@ public class StableStructureDetailedPanel implements ExtendedUIPanelPlugin {
                     true
             );
 
-            impl.createTooltip(mainTooltip, AoTDStableStructureImpl.AoTDStableStructureTooltipMode.BUILDING_MENU);
+            impl.createTooltip(mainTooltip, AoTDStableStructureImpl.AoTDStableStructureTooltipMode.BUILDING_MENU,
+                    systemAPI, Global.getSector().getPlayerFaction());
             contentPanel.addUIElement(mainTooltip).inTL(0f, imageAndTitleSection + 5f);
         }
 
         mainPanel.addComponent(contentPanel).inTL(0f, 0f);
+    }
+
+    public AoTDStableStructureImpl getCurrentImpl() {
+        return currentImpl;
+    }
+
+    public float getInitialStageCost() {
+        return initialStageCost;
     }
 
     public void setQueueHandler(Consumer<AoTDStableStructureSpec> queueHandler) {

@@ -4,7 +4,9 @@ import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.BasePopUpDialog;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CustomEntitySpecAPI;
+import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
+import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
@@ -66,6 +68,7 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
             table.createTable();
             detailedPanel = new StableStructureDetailedPanel(null, currentStarSystem, 450, height);
             detailedPanel.setQueueHandler(spec -> {
+                if (spec == null || !canShowStructure(spec.getImplClassInstance())) return;
                 table.currentlyChosen = null;
                 detailedPanel.setSpec(spec);
             });
@@ -97,27 +100,35 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
         return spec;
     }
 
+    public boolean canShowStructure(AoTDStableStructureImpl impl) {
+        if (impl == null) return false;
+        return impl.isAvailableToBuild(currentStarSystem, Global.getSector().getPlayerFaction())
+                || impl.showWhenUnavailable(currentStarSystem, Global.getSector().getPlayerFaction());
+    }
+
     public boolean canStartConstruction() {
         if (detailedPanel == null || detailedPanel.spec == null) return false;
 
-        AoTDStableStructureImpl impl = detailedPanel.spec.getImplClassInstance();
-
-        if (!impl.isAvailableToBuild(currentStarSystem,
-                Global.getSector().getPlayerFaction())) return false;
+        AoTDStableStructureImpl impl = detailedPanel.getCurrentImpl();
+        if (impl == null || !AoTDToolboxMisc.hasAvailableSystemStructureSlot(currentStarSystem)) return false;
+        FactionAPI claiming = AshMisc.getClaimingFaction(currentStarSystem.getCenter());
+        if (claiming == null || !claiming.isPlayerFaction()) return false;
+        if (!impl.isAvailableToBuild(currentStarSystem, Global.getSector().getPlayerFaction())) return false;
 
         float credits = Global.getSector().getPlayerFleet().getCargo().getCredits().get();
-
-        return credits >= impl.getCumulativeCreditCost();
+        return credits >= Math.max(0f, detailedPanel.getInitialStageCost());
     }
+
     @Override
     public void applyConfirmScript() {
         if (!canStartConstruction()) return;
 
-        AoTDStableStructureImpl impl = detailedPanel.spec.getImplClassInstance();
+        AoTDStableStructureImpl impl = detailedPanel.getCurrentImpl();
         CustomEntitySpecAPI spec = Global.getSettings().getCustomEntitySpec(detailedPanel.spec.getId());
         ChooseLocationForBuildingDialog dialog = new ChooseLocationForBuildingDialog(impl, "Choose location for " + spec.getDefaultName(), currentStarSystem);
         AshMisc.initPopUpDialog(dialog, 1000, 600);
     }
+
     public void setButtonStage(ButtonAPI bt, boolean stage) {
         if (stage != bt.isEnabled()) {
             bt.setEnabled(stage);
@@ -129,7 +140,7 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
         if (table != null && table.currentlyChosen != null) {
             AoTDStableStructureSpec spec = table.currentlyChosen.spec;
             table.currentlyChosen = null;
-            detailedPanel.setSpec(spec);
+            if (spec != null && canShowStructure(spec.getImplClassInstance())) detailedPanel.setSpec(spec);
         }
 
         if (confirmButton != null) {

@@ -1,6 +1,5 @@
 package data.kaysaar.aotd.tot.ui.starsystems.components;
 
-
 import ashlib.data.plugins.ui.models.CustomButton;
 import ashlib.data.plugins.ui.models.DropDownButton;
 import ashlib.data.plugins.ui.plugins.UILinesRenderer;
@@ -35,66 +34,51 @@ public class StarSystemHoldingTable extends UITableImpl {
     }
 
     public static void reDestributeAdditionalWidth(float additionalWidth) {
-        if (additionalWidth <= 0) {
-            return;
-        }
-
+        if (additionalWidth <= 0) return;
         int remaining = (int) additionalWidth;
-
-        // 1. Name gets up to 30px
         if (remaining > 0 && widthMap.containsKey("name")) {
             int add = Math.min(30, remaining);
             widthMap.put("name", widthMap.get("name") + add);
             remaining -= add;
         }
-
-        // 2. Income gets up to 20px
         if (remaining > 0 && widthMap.containsKey("income")) {
             int add = Math.min(20, remaining);
             widthMap.put("income", widthMap.get("income") + add);
             remaining -= add;
         }
-
-        // 3. Rest goes to data
         if (remaining > 0 && widthMap.containsKey("data")) {
             widthMap.put("data", widthMap.get("data") + remaining);
         }
     }
 
-
     public static int getWidth() {
         int width = 0;
-        for (Integer value : widthMap.values()) {
-            width += value + 1;
-        }
-        width -= 1;
-        return width;
+        for (Integer value : widthMap.values()) width += value + 1;
+        return width - 1;
     }
 
     public static int getStartingX(String id) {
         int x = 0;
         for (Map.Entry<String, Integer> value : widthMap.entrySet()) {
-
-            if (id.equals(value.getKey())) {
-                break;
-            }
+            if (id.equals(value.getKey())) break;
             x += value.getValue() + 1;
         }
         return x;
     }
 
-    public StarSystemHoldingTable(float width, float height, CustomPanelAPI panelToPlace, boolean doesHaveScroller, float xCord, float yCord, Object originalPanel) {
+    public StarSystemHoldingTable(float width, float height, CustomPanelAPI panelToPlace, boolean doesHaveScroller,
+                                  float xCord, float yCord, Object originalPanel) {
         super(width, height, panelToPlace, doesHaveScroller, xCord, yCord);
         renderer.setPanel(this.mainPanel);
         if (dropDownButtons.isEmpty()) {
             ArrayList<StarSystemAPI> systems = HoldingsUtilis.getSystemsWithPlayerFactionColonies();
             for (StarSystemAPI system : systems) {
-                StarSystemHoldingDropDown button = new StarSystemHoldingDropDown(this, width - 13, 75, 0, 0, false, system, HoldingsUtilis.getFactionMarketsInSystem(Global.getSector().getPlayerFaction(), system), originalPanel);
+                StarSystemHoldingDropDown button = new StarSystemHoldingDropDown(this, width - 13, 75, 0, 0, false,
+                        system, HoldingsUtilis.getFactionMarketsInSystem(Global.getSector().getPlayerFaction(), system), originalPanel);
                 dropDownButtons.add(button);
             }
             HoldingsUtilis.sortDropDownButtonsIncome(dropDownButtons, false);
         }
-
     }
 
     @Override
@@ -129,32 +113,26 @@ public class StarSystemHoldingTable extends UITableImpl {
     public boolean forceUnfold = false;
 
     public void setForceUnfold(boolean forceUnfold) {
-        if(this.forceUnfold!=forceUnfold){
-            this.forceUnfold = forceUnfold;
-            if(currSystem==null&&!dropDownButtons.isEmpty()){
-                currSystem = ((StarSystemHoldingDropDown)dropDownButtons.get(0)).getStarSystem();
-            }
-            recreateTable();
+        this.forceUnfold = forceUnfold;
+        // Apply Expand All / Hide All as an explicit action, not on each table rebuild.
+        // A player can still expand one system manually afterwards.
+        for (DropDownButton dropDownButton : dropDownButtons) {
+            dropDownButton.isDropped = forceUnfold;
         }
-
+        if (currSystem == null && !dropDownButtons.isEmpty()) {
+            currSystem = ((StarSystemHoldingDropDown) dropDownButtons.get(0)).getStarSystem();
+        }
+        recreateTable();
     }
 
     @Override
     public void createTable() {
         super.createTable();
         for (DropDownButton dropDownButton : dropDownButtons) {
-            StarSystemHoldingDropDown button = (StarSystemHoldingDropDown) dropDownButton;
-            if(forceUnfold){
-                button.isDropped = true;
-            }
-            else if (currSystem != null && !button.main.getId().equals(currSystem.getId())) {
-                button.isDropped = false;
-            } else if (currSystem != null && button.main.getId().equals(currSystem.getId())) {
-                button.isDropped = true;
-            }
-
-            button.resetUI();
-            button.createUI();
+            // Do not force the last selected system open. The selection and expansion
+            // state are independent, and the remembered mode defaults to Hide All.
+            dropDownButton.resetUI();
+            dropDownButton.createUI();
             tooltipOfImpl.addCustom(dropDownButton.getPanelOfImpl(), 2f);
         }
 
@@ -163,25 +141,16 @@ public class StarSystemHoldingTable extends UITableImpl {
             if (currYPos + panelToWorkWith.getPosition().getHeight() - 2 >= tooltipOfImpl.getHeightSoFar()) {
                 currYPos = tooltipOfImpl.getHeightSoFar() - panelToWorkWith.getPosition().getHeight() + 2;
             }
-            if (currYPos <= 0) {
-                currYPos = 0;
-            }
+            if (currYPos <= 0) currYPos = 0;
             tooltipOfImpl.getExternalScroller().setYOffset(currYPos);
         }
-
         mainPanel.addComponent(panelToWorkWith).inTL(0, 22);
     }
 
     private SortingState changeState(SortingState state) {
-        if (state == SortingState.NON_INITIALIZED) {
-            return SortingState.ASCENDING;
-        }
-        if (state == SortingState.ASCENDING) {
-            return SortingState.DESCENDING;
-        }
-        if (state == SortingState.DESCENDING) {
-            return SortingState.ASCENDING;
-        }
+        if (state == SortingState.NON_INITIALIZED) return SortingState.ASCENDING;
+        if (state == SortingState.ASCENDING) return SortingState.DESCENDING;
+        if (state == SortingState.DESCENDING) return SortingState.ASCENDING;
         return SortingState.NON_INITIALIZED;
     }
 
@@ -196,25 +165,17 @@ public class StarSystemHoldingTable extends UITableImpl {
             lastCheckedState = buttonName;
             SortingState state = (SortingState) buttonName.getCustomData();
             state = changeState(state);
-            boolean ascending = false;
-            if (state == SortingState.ASCENDING) {
-                ascending = true;
-            }
+            boolean ascending = state == SortingState.ASCENDING;
             HoldingsUtilis.sortDropDownButtonsByName(dropDownButtons, ascending);
             buttonName.setCustomData(state);
-
             this.recreateTable();
-
         }
         if (buttonIncome.isChecked()) {
             buttonIncome.setChecked(false);
             lastCheckedState = buttonIncome;
             SortingState state = (SortingState) buttonIncome.getCustomData();
             state = changeState(state);
-            boolean ascending = false;
-            if (state == SortingState.ASCENDING) {
-                ascending = true;
-            }
+            boolean ascending = state == SortingState.ASCENDING;
             HoldingsUtilis.sortDropDownButtonsIncome(dropDownButtons, ascending);
             buttonIncome.setCustomData(state);
             this.recreateTable();
@@ -230,10 +191,7 @@ public class StarSystemHoldingTable extends UITableImpl {
                 }
             });
         });
-
-
     }
-
 
     @Override
     public void reportButtonPressed(CustomButton buttonPressed) {
@@ -243,7 +201,6 @@ public class StarSystemHoldingTable extends UITableImpl {
         if (buttonPressed.buttonData instanceof MarketAPI market) {
             this.currentlyChosenMarket = market;
         }
-
     }
 
     @Override

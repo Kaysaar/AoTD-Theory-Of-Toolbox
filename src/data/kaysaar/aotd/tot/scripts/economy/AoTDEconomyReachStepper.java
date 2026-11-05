@@ -37,6 +37,10 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
     private int iterLeft;
     private int prevMonth;
 
+    private transient AoTDEconomyPerformanceProfiler.StepProfile stepProfile;
+    private transient AoTDEconomyPerformanceProfiler.RollingProfile rollingProfile;
+    private transient int profileTaskIndex;
+
     public AoTDEconomyReachStepper(ReachEconomy reachEconomy) {
         super(reachEconomy);
         state = ReachEconomyStepper.State.WAITING;
@@ -48,7 +52,14 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
     }
 
     public void doEconomyTick() {
+        if (!AoTDReachEconomy.PROFILE_NEXT_STEP) {
+            doEndOfStepStuff(-1);
+            return;
+        }
+        long started = System.nanoTime();
         doEndOfStepStuff(-1);
+        Global.getLogger(AoTDEconomyReachStepper.class).info(String.format(java.util.Locale.ROOT,
+                "AoTD reachStep manualEndStep=%.3fms", (System.nanoTime() - started) / 1_000_000d));
     }
 
     @Override
@@ -91,16 +102,25 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
     }
 
     public void performBeforeMonthEnds(int prevMonth) {
+        boolean profile = AoTDReachEconomy.PROFILE_NEXT_STEP;
+        long started = profile ? System.nanoTime() : 0L;
+        long last = started;
+        long[] phases = profile ? new long[7] : null;
+        int marketCount = 0;
+        int eligible = 0;
         SectorSurplusConsumptionStats.getInstance().clear();
 
         for (AoTDFactionTradeData tradeData : AoTDTradeManager.getInstance().getAllFactionTradeData().values()) {
             tradeData.doEndOfMonthStuffForHistory(prevMonth);
         }
+        if (profile) {
+            long now = System.nanoTime();
+            phases[0] = now - last;
+            last = now;
+        }
 
         if (!AoTDEconomy.runningPrePlayerEconomy) {
-
-            // The previous tick's balances do not include newly starting/ending orders.
-            // Rebuild them before internal trade, contracts and external trade assign cargo.
+            // Rebuild balances before contracts and external allocation when trade orders changed.
             if (AoTDTradeDemandEvent.prepareForMonthlyAllocation()) {
                 AoTDTradeManager manager = AoTDTradeManager.getInstance();
                 for (AoTDFactionTradeData tradeData : manager.getAllFactionTradeData().values()) {
@@ -115,30 +135,48 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
                 }
                 AoTDTradeContractManager.getInstance().invalidatePredictions();
             }
+            if (profile) {
+                long now = System.nanoTime();
+                phases[1] = now - last;
+                last = now;
+            }
 
-            // NEW: contracts phase (after internal, before external)
             AoTDTradeContractManager.getInstance().runMonthlyContracts();
+            if (profile) {
+                long now = System.nanoTime();
+                phases[2] = now - last;
+                last = now;
+            }
 
-            // Build external index from remainingNet (post-internal, post-contract)
+            // Build external index from remainingNet (post-internal, post-contract).
             final AoTDSectorExternalIndex idx = new AoTDSectorExternalIndex();
             for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
+                if (profile) marketCount++;
                 final AoTDFactionTradeData f = AoTDTradeManager.getInstance().getFactionTradeData(market.getFactionId());
                 final AoTDMarketData md = f.getTradeData().get(market.getId());
                 if (md == null) continue;
 
-                md.resetExternalResults(); // excess-exported tracking for this month
+                md.resetExternalResults();
                 if(!market.hasSpaceport()||market.getAccessibilityMod().computeEffective(0f)<=0f)continue;
                 idx.addMarket(market, md);
+                if (profile) eligible++;
+            }
+            if (profile) {
+                long now = System.nanoTime();
+                phases[3] = now - last;
+                last = now;
             }
 
             new AoTDExternalTradeSolver().runMonthEndExternalTrade(idx);
+            if (profile) {
+                long now = System.nanoTime();
+                phases[4] = now - last;
+                last = now;
+            }
 
-            // 5) Apply leftover deficit/excess to AoTDExcDefData
             final float durDays = 31;
-
             for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
                 AoTDFactionTradeData f = AoTDTradeManager.getInstance().getFactionTradeData(market.getFactionId());
-
                 AoTDMarketData md = f.getTradeData().get(market.getId());
                 if (md == null) continue;
                 AoTDIndustryData.getInstance(market).applyEndOfMonthChange(market);
@@ -154,9 +192,13 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
                     com.getExcDefData().recordDemandForThisMonth(com);
                     com.getExcDefData().applyExternalTrade(deficit, excess, durDays, com);
                 }
-
             }
-            // Only after all markets have their allocation and baseline demand recorded.
+            if (profile) {
+                long now = System.nanoTime();
+                phases[5] = now - last;
+                last = now;
+            }
+
             AshlibBaseEventManager events = AshlibBaseEventManager.getInstance();
             for (int day = 1; day <= 2; day++) {
                 events.scheduleMinorEventTrigger(AoTDColonyDemandShockEvent.TRIGGER_ID, day,
@@ -165,7 +207,18 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
         } else {
             for (MarketAPI marketAPI : Global.getSector().getEconomy().getMarketsCopy()) {
                 AoTDIndustryData.getInstance(marketAPI).applyEndOfMonthChange(marketAPI);
+                if (profile) marketCount++;
             }
+            if (profile) {
+                long now = System.nanoTime();
+                phases[5] = now - last;
+                last = now;
+            }
+        }
+        if (profile) {
+            phases[6] = System.nanoTime() - last;
+            AoTDEconomyPerformanceProfiler.logMonthEnd(prevMonth, marketCount, eligible, phases,
+                    System.nanoTime() - started);
         }
     }
 
@@ -186,8 +239,18 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
                 elapsed = untilNext / 2f;
                 performBeforeMonthEnds(prevMonth);
                 AoTDTradeManager.endOfMonth = true;
+                long endStarted = AoTDReachEconomy.PROFILE_NEXT_STEP ? System.nanoTime() : 0L;
                 doEndOfStepStuff(Economy.NUM_ITER_PER_MONTH - 1);
+                if (AoTDReachEconomy.PROFILE_NEXT_STEP) {
+                    Global.getLogger(AoTDEconomyReachStepper.class).info(String.format(java.util.Locale.ROOT,
+                            "AoTD monthEnd endStep=%.3fms", (System.nanoTime() - endStarted) / 1_000_000d));
+                }
+                long monthStarted = AoTDReachEconomy.PROFILE_NEXT_STEP ? System.nanoTime() : 0L;
                 doEndOfMonthStuff();
+                if (AoTDReachEconomy.PROFILE_NEXT_STEP) {
+                    Global.getLogger(AoTDEconomyReachStepper.class).info(String.format(java.util.Locale.ROOT,
+                            "AoTD monthEnd reportAndFinish=%.3fms", (System.nanoTime() - monthStarted) / 1_000_000d));
+                }
             }
         }
 
@@ -207,16 +270,27 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
             if (isDone()) return;
 
             final MultiFrameTask firstTask = (MultiFrameTask) tasks.get(0);
+            if (stepProfile != null) stepProfile.nextFrame();
+            long started = stepProfile != null ? System.nanoTime() : 0L;
             firstTask.advance(delta);
+            if (stepProfile != null) stepProfile.add(profileTaskIndex, System.nanoTime() - started);
             if (firstTask.isDone()) {
                 tasks.remove(0);
+                profileTaskIndex++;
             }
 
             if (isDone()) {
+                long postStarted = stepProfile != null ? System.nanoTime() : 0L;
                 if (iterLeft > 0) {
                     doEndOfStepStuff(Economy.NUM_ITER_PER_MONTH - iterLeft - 1);
                 }
-
+                if (stepProfile != null) {
+                    stepProfile.add(5, System.nanoTime() - postStarted);
+                    stepProfile.log();
+                    if (rollingProfile == null) rollingProfile = new AoTDEconomyPerformanceProfiler.RollingProfile();
+                    rollingProfile.add(stepProfile);
+                    stepProfile = null;
+                }
                 state = ReachEconomyStepper.State.WAITING;
             }
         }
@@ -235,6 +309,12 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
         tasks.add(new ImmigrationTask(econ.getMarkets(), econ, false));
         tasks.add(new AoTDFactionInternalTradeTask(mainEcon));
         tasks.add(new AoTDFinishEconomyUpdateTask(mainEcon));
+
+        profileTaskIndex = 0;
+        stepProfile = AoTDReachEconomy.PROFILE_NEXT_STEP
+                ? new AoTDEconomyPerformanceProfiler.StepProfile(
+                        "campaign", Economy.NUM_ITER_PER_MONTH - iterLeft, econ.getMarkets(), mainWork)
+                : null;
     }
 
     public final float getNumDaysInCurrMonth() {

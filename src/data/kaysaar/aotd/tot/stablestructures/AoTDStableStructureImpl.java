@@ -1,6 +1,10 @@
 package data.kaysaar.aotd.tot.stablestructures;
 
+import ashlib.data.plugins.misc.AshMisc;
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.comm.CommMessageAPI.MessageClickAction;
+import com.fs.starfarer.api.impl.campaign.intel.BaseIntelPlugin;
+import com.fs.starfarer.api.impl.campaign.intel.MessageIntel;
 import com.fs.starfarer.api.InteractionDialogImageVisual;
 import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
@@ -85,6 +89,14 @@ public class AoTDStableStructureImpl {
         return true;
     }
 
+    public boolean showWhenUnavailable(StarSystemAPI systemAPI, FactionAPI factionAttemptingToBuildIt) {
+        return true;
+    }
+
+    public String getUnavailableReason(StarSystemAPI systemAPI, FactionAPI factionAttemptingToBuildIt) {
+        return "Construction requirements are not met in this star system.";
+    }
+
     public StructureLocationPicker createLocationPicker(float width, float height, StarSystemAPI systemAPI) {
         return new ChooseStablePointForBuildingMap(width,height,systemAPI,id);
     }
@@ -114,8 +126,10 @@ public class AoTDStableStructureImpl {
     }
 
     public boolean isCurrentImplementation() {
-        return currentlyAssignedToken != null && !currentlyAssignedToken.isExpired()
-                && currentlyAssignedToken.getMemoryWithoutUpdate().get(AoTDStableStructureSpecManager.memKeyInEntities) == this;
+        if (currentlyAssignedToken == null || currentlyAssignedToken.isExpired()) return false;
+        Object current = currentlyAssignedToken.getMemoryWithoutUpdate().get(AoTDStableStructureSpecManager.memKeyInEntities);
+        if (current == this) return true;
+        return false;
     }
 
     public boolean isPlayerOwned() {
@@ -256,6 +270,7 @@ public class AoTDStableStructureImpl {
         }
         deliverSpecialItemsFromStorage();
         if (isUpgrading()) upgradeScaffold = AoTDStableStructureConstruction.showUpgradeScaffold(this);
+        sendConstructionMessage(target.getName(), "Construction started");
         return true;
     }
 
@@ -287,6 +302,7 @@ public class AoTDStableStructureImpl {
             next.isDisrupted = isDisrupted();
             AoTDStableStructureConstruction.replaceEntity(this, next, built);
             next.upgradeFinished(this);
+            next.sendBuildOrUpgradeMessage();
             ultimateUpgradeId = null;
             upgradeId = null;
             next.updateNextUpgradeId();
@@ -294,6 +310,7 @@ public class AoTDStableStructureImpl {
         } else {
             if (built != null) AoTDStableStructureConstruction.replaceEntity(this, this, built);
             buildingFinished();
+            sendBuildOrUpgradeMessage();
             updateNextUpgradeId();
             startNextUpgrade();
         }
@@ -324,6 +341,11 @@ public class AoTDStableStructureImpl {
     }
 
     protected void cancelCurrentStage(boolean cancelledBase) {
+        String cancelledName = getName();
+        if (isUpgrading()) {
+            AoTDStableStructureSpec target = AoTDStableStructureSpecManager.getSpec(constructionTargetId);
+            if (target != null) cancelledName = target.getImplClassInstance().getName();
+        }
         float refund = creditsPaid * (1f - getBuildOrUpgradeProgress());
         removeConstructionContract();
         AoTDStableStructureConstruction.removeOverlay(upgradeScaffold);
@@ -339,6 +361,7 @@ public class AoTDStableStructureImpl {
         constructionResources.clear();
         delivered.clear();
         if (refund > 0f) Global.getSector().getPlayerFleet().getCargo().getCredits().add(refund);
+        sendConstructionMessage(cancelledName, "Construction aborted");
         if (cancelledBase) AoTDStableStructureConstruction.cancelScaffold(this);
     }
 
@@ -507,6 +530,23 @@ public class AoTDStableStructureImpl {
         return "aotd_stable_structure_" + (currentlyAssignedToken == null ? id : currentlyAssignedToken.getId());
     }
 
+    protected void sendBuildOrUpgradeMessage() {
+        sendConstructionMessage(getName(), "Construction completed");
+    }
+
+    protected void sendConstructionMessage(String name, String status) {
+        if (!isPlayerOwned()) return;
+
+        StarSystemAPI system = currentlyAssignedToken.getStarSystem();
+        String location = system == null ? "" : " at " + system.getName();
+        MessageIntel intel = new MessageIntel(name + location, Misc.getBasePlayerColor());
+        intel.addLine(BaseIntelPlugin.BULLET + status);
+        intel.setIcon(Global.getSector().getPlayerFaction().getCrest());
+        intel.setSound(BaseIntelPlugin.getSoundStandardUpdate());
+        // Opens the Command screen only when the player clicks the message.
+        Global.getSector().getCampaignUI().addMessage(intel, MessageClickAction.COLONY_INFO);
+    }
+
     protected void buildingFinished() {
     }
 
@@ -533,6 +573,14 @@ public class AoTDStableStructureImpl {
 
     public String getImageName() {
         return getSpecEntity().getInteractionImage();
+    }
+
+    public boolean canBeShutDown() {
+        return true;
+    }
+
+    public int getSystemStructureCapacityBonus() {
+        return 0;
     }
 
     public boolean canMountAICores() {
@@ -844,6 +892,12 @@ public class AoTDStableStructureImpl {
     }
 
     public void createTooltip(TooltipMakerAPI tooltip, AoTDStableStructureTooltipMode mode) {
+        StarSystemAPI system = currentlyAssignedToken == null ? null : currentlyAssignedToken.getStarSystem();
+        createTooltip(tooltip, mode, system, Global.getSector().getPlayerFaction());
+    }
+
+    public void createTooltip(TooltipMakerAPI tooltip, AoTDStableStructureTooltipMode mode,
+                              StarSystemAPI system, FactionAPI factionAttemptingToBuildIt) {
         if (mode != AoTDStableStructureTooltipMode.BUILDING_MENU) {
             tooltip.addTitle(getName());
         }
@@ -864,6 +918,23 @@ public class AoTDStableStructureImpl {
         Color dark = faction.getDarkUIColor();
         Color highlight = Misc.getHighlightColor();
         Color bad = Misc.getNegativeHighlightColor();
+
+        if ((mode == AoTDStableStructureTooltipMode.BUILDING_MENU
+                || mode == AoTDStableStructureTooltipMode.UPGRADE_MENU)
+                && system != null && factionAttemptingToBuildIt != null
+                && !isAvailableToBuild(system, factionAttemptingToBuildIt)) {
+            String reason = getUnavailableReason(system, factionAttemptingToBuildIt);
+            if (reason != null && !reason.trim().isEmpty()) tooltip.addPara(reason, bad, 10f);
+        }
+        if (mode == AoTDStableStructureTooltipMode.BUILDING_MENU && system != null) {
+            FactionAPI claiming = AshMisc.getClaimingFaction(system.getCenter());
+            if (claiming == null || !claiming.isPlayerFaction()) {
+                tooltip.addPara("This star system must be controlled by your faction to begin construction.", bad, 10f);
+            }
+            if (!AoTDToolboxMisc.hasAvailableSystemStructureSlot(system)) {
+                tooltip.addPara("Maximum number of system structures reached.", bad, 10f);
+            }
+        }
 
         if (mode == AoTDStableStructureTooltipMode.PANEL) {
             if (isBuilding) {
@@ -898,6 +969,9 @@ public class AoTDStableStructureImpl {
         boolean cumulativePreview = isUpgrade && (mode == AoTDStableStructureTooltipMode.UPGRADE_MENU
                 || mode == AoTDStableStructureTooltipMode.BUILDING_MENU);
         long displayCost = cumulativePreview ? getCumulativeCreditCost() : (long) getBuildCostCredits();
+        float initialCost = cumulativePreview && mode == AoTDStableStructureTooltipMode.BUILDING_MENU
+                ? getConstructionStagesFromBase().getFirst().getImplClassInstance().getBuildCostCredits()
+                : displayCost;
         int displayDays = cumulativePreview ? getCumulativeBuildDays() : getSpec().getDaysToBuild();
         String costStr = Misc.getDGSCredits(displayCost);
         String daysStr = displayDays == 1 ? "day" : "days";
@@ -912,10 +986,14 @@ public class AoTDStableStructureImpl {
         if (label != null) {
             label.setHighlight(costStr, String.valueOf(displayDays), creditsStr);
             label.setHighlightColors(
-                    credits >= displayCost ? highlight : bad,
+                    credits >= initialCost ? highlight : bad,
                     highlight,
-                    highlight
+                    credits >= initialCost ? highlight : bad
             );
+        }
+        if (cumulativePreview && mode == AoTDStableStructureTooltipMode.BUILDING_MENU) {
+            tooltip.addPara("Only %s is required to begin construction. Remaining upgrades are paid when their stages begin.",
+                    3f, credits >= initialCost ? highlight : bad, Misc.getDGSCredits(initialCost));
         }
 
         if (mode != AoTDStableStructureTooltipMode.PANEL) {
@@ -925,7 +1003,7 @@ public class AoTDStableStructureImpl {
                 addBaseConstructionCostsToTooltip(tooltip, color, dark);
             }
         }
-        tooltip.addSectionHeading("Effects after construction", color, dark, Alignment.MID, 10f);
+        tooltip.addSectionHeading(mode == AoTDStableStructureTooltipMode.PANEL && !canBeShutDown() ? "Effects" : "Effects after construction", color, dark, Alignment.MID, 10f);
         createTooltipForEffectSection(tooltip,mode);
         if (getAICoreId() != null) {
             addAICoreSection(tooltip, AICoreDescriptionMode.INDUSTRY_TOOLTIP);

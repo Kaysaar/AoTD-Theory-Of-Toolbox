@@ -15,8 +15,9 @@ import com.fs.starfarer.api.ui.PositionAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import org.lwjgl.util.vector.Vector2f;
-
 
 import java.awt.*;
 import java.util.List;
@@ -33,12 +34,21 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
     AoTDStableStructureImpl displayedStructure;
     String displayedStatus;
     float displayedProgress;
+    Runnable onSystemStructuresRefresh;
 
     public AoTDStableStructureImpl getStructure(){
-        if(token!=null){
-            return (AoTDStableStructureImpl) token.getMemoryWithoutUpdate().get(memKeyInEntities);
-        }
-        return null;
+        if (token == null || token.isExpired()) return null;
+
+        Object value = token.getMemoryWithoutUpdate().get(memKeyInEntities);
+        if (value instanceof AoTDStableStructureImpl) return (AoTDStableStructureImpl) value;
+        if (value != null || token.getCustomEntitySpec() == null) return null;
+
+        AoTDStableStructureSpec spec = AoTDStableStructureSpecManager.getSpec(token.getCustomEntitySpec().getId());
+        if (spec == null) return null;
+
+        AoTDStableStructureImpl impl = spec.getImplClassInstance();
+        impl.setCurrentlyAssignedToken(token);
+        return impl;
     }
     public static float width= 225;
     public static float height= 150;
@@ -48,6 +58,11 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
     }
 
     public StableStructureWidget(SectorEntityToken token) {
+        this(token, null);
+    }
+
+    public StableStructureWidget(SectorEntityToken token, Runnable onSystemStructuresRefresh) {
+        this.onSystemStructuresRefresh = onSystemStructuresRefresh;
         this.token = token;
         this.mainPanel = Global.getSettings().createCustom(width,height,this);
         renderer = new UILinesRenderer(0f);
@@ -67,12 +82,10 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
         ButtonWithImageComponent viewer = new ButtonWithImageComponent(contentPanel.getPosition().getWidth(),125,getStructure() != null ? getStructure().getImageName() : token.getCustomEntitySpec().getInteractionImage()){
             @Override
             public void performActionOnClick(boolean isRightClick) {
-                final  ButtonWithImageComponent v = this;
-                v.setClickable(false);
                 StableStructureWidgetButtons bt = new StableStructureWidgetButtons(widget);
-
+                if (!bt.hasOptions()) return;
+                this.setClickable(false);
                 AshMisc.placePopUpUIInTL(bt,this.getComponentPanel(),330,300,new Vector2f(-widget.contentPanel.getPosition().getWidth()-300,0f));
-
             }
         };
         viewer.setEnableRightClick(false);
@@ -131,6 +144,11 @@ public class StableStructureWidget implements ExtendedUIPanelPlugin {
             mainPanel.addComponent(contentPanel).inTL(0,0);
         }
 
+    }
+
+    public void requestSystemStructuresRefresh() {
+        if (onSystemStructuresRefresh != null) onSystemStructuresRefresh.run();
+        else createUI();
     }
 
     @Override

@@ -14,6 +14,7 @@ import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
+import data.kaysaar.aotd.tot.stablestructures.AoTDSystemStructureCapacityManager;
 import data.kaysaar.aotd.tot.ui.starsystems.stuctures.widget.StableStructureWidget;
 import org.lwjgl.input.Keyboard;
 
@@ -29,9 +30,19 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
     IntervalUtil refresh = new IntervalUtil(0.25f, 0.25f);
     List<SectorEntityToken> displayedEntities = new ArrayList<>();
     int displayedCapacity;
+    boolean refreshRequested;
+
+    public void requestRefresh() {
+        refreshRequested = true;
+    }
 
     public List<SectorEntityToken> getStructureEntities() {
         List<SectorEntityToken> entities = AoTDToolboxMisc.getSystemStructureEntities(system);
+        for (SectorEntityToken token : system.getAllEntities()) {
+            if (token.isExpired() || token.getCustomEntitySpec() == null) continue;
+            if (AoTDStableStructureSpecManager.getSpec(token.getCustomEntitySpec().getId()) == null) continue;
+            if (!entities.contains(token)) entities.add(token);
+        }
 
         int nextOrder = 0;
         for (SectorEntityToken token : entities) {
@@ -93,6 +104,7 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
 
     @Override
     public void createUI() {
+        AoTDSystemStructureCapacityManager.update(system);
         if (contentPanel != null) {
             mainPanel.removeComponent(contentPanel);
         }
@@ -124,6 +136,7 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
         List<SectorEntityToken> objs = getStructureEntities();
         displayedEntities = new ArrayList<>(objs);
         int total = objs.size();
+        int structuresUsed = AoTDToolboxMisc.getUsedSystemStructureSlots(system);
 
         int perRow = (int) Math.floor((availableWidth + separator) / (widgetW + separator));
         perRow = Math.max(1, perRow);
@@ -147,14 +160,7 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
             float y = row * (widgetH + rowGap);
 
             SectorEntityToken token = objs.get(i);
-            if(!token.getMemoryWithoutUpdate().contains(AoTDStableStructureSpecManager.memKeyInEntities)
-                    && token.getCustomEntitySpec()!=null && AoTDStableStructureSpecManager.getSpec(token.getCustomEntitySpec().getId())!=null){
-                AoTDStableStructureImpl impl = AoTDStableStructureSpecManager.getSpec(token.getCustomEntitySpec().getId()).getImplClassInstance();
-                impl.init(token.getCustomEntitySpec().getId());
-                impl.setCurrentlyAssignedToken(token);
-                token.getMemoryWithoutUpdate().set(AoTDStableStructureSpecManager.memKeyInEntities,impl);
-            }
-            StableStructureWidget widget = new StableStructureWidget(token);
+            StableStructureWidget widget = new StableStructureWidget(token, this::requestRefresh);
 
             tooltip.addCustom(widget.getMainPanel(), 0f).getPosition().inTL(x, y);
         }
@@ -165,8 +171,8 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
         tooltipBottom.setParaFont(Fonts.INSIGNIA_LARGE);
         displayedCapacity = AoTDToolboxMisc.getSystemStructureCapacityStat(system).getModifiedInt();
         LabelAPI label = tooltipBottom.addPara("System Structures: %s / %s", 0f, Misc.getGrayColor(),
-                total >= displayedCapacity ? Misc.getNegativeHighlightColor() : Color.ORANGE,
-                String.valueOf(total), String.valueOf(displayedCapacity));
+                structuresUsed >= displayedCapacity ? Misc.getNegativeHighlightColor() : Color.ORANGE,
+                String.valueOf(structuresUsed), String.valueOf(displayedCapacity));
         label.getPosition().inTL(contentPanel.getPosition().getWidth() - label.computeTextWidth(label.getText()) - 5, 1);
         tooltipBottom.addTooltipToPrevious(new TooltipMakerAPI.TooltipCreator() {
             @Override
@@ -183,7 +189,7 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
         float x = contentPanel.getPosition().getWidth() - label.computeTextWidth(label.getText()) - 5;
         manageButton = tooltipBottom.addButton("Build new Structure", null, faction.getBaseUIColor(), faction.getDarkUIColor(), Alignment.MID, CutStyle.TL_BR, Math.min(x - 20, 300), 25, 0f);
         manageButton.setShortcut(Keyboard.KEY_A, true);
-        if (!faction.isPlayerFaction() || total >= displayedCapacity) {
+        if (!faction.isPlayerFaction() || structuresUsed >= displayedCapacity) {
             manageButton.setEnabled(false);
         }
 
@@ -218,12 +224,16 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
 
     @Override
     public void advance(float amount) {
+        if (refreshRequested) {
+            refreshRequested = false;
+            createUI();
+        }
         refresh.advance(amount);
         if (refresh.intervalElapsed()) {
             if (!displayedEntities.equals(getStructureEntities())
                     || displayedCapacity != AoTDToolboxMisc.getSystemStructureCapacityStat(system).getModifiedInt()) createUI();
             manageButton.setEnabled(AshMisc.getClaimingFaction(system.getCenter()).isPlayerFaction()
-                    && displayedEntities.size() < displayedCapacity);
+                    && AoTDToolboxMisc.getUsedSystemStructureSlots(system) < displayedCapacity);
         }
         if (manageButton != null && manageButton.isChecked()) {
             manageButton.setChecked(false);

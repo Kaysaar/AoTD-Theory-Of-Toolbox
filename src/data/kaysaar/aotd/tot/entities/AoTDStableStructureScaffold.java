@@ -17,6 +17,9 @@ import com.fs.starfarer.api.util.IntervalUtil;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 
 public class AoTDStableStructureScaffold extends BaseCampaignObjectivePlugin {
+    public static final String INDEPENDENT_SCAFFOLD = "aotd_independent_scaffold";
+    public static final String SCAFFOLD_ENTITY_SPEC = "$aotd_scaffold_entity_spec";
+    public static final String CONSTRUCTION_CONTROLLER = "$aotd_scaffold_controller";
     AoTDStableStructureImpl implToConstruct;
     CampaignEngineLayers renderLayer = CampaignEngineLayers.STATIONS;
     transient SpriteAPI scaffoldSprite, movingSprite, entityToRenderSprite;
@@ -33,8 +36,21 @@ public class AoTDStableStructureScaffold extends BaseCampaignObjectivePlugin {
         this.implToConstruct = implToConstruct;
     }
 
+    public void setIndependentConstruction(AoTDStableStructureImpl impl, String entitySpecId) {
+        setImplToConstruct(impl);
+        entity.addTag(INDEPENDENT_SCAFFOLD);
+        entity.getMemoryWithoutUpdate().set(SCAFFOLD_ENTITY_SPEC, entitySpecId);
+        entity.getMemoryWithoutUpdate().set(CONSTRUCTION_CONTROLLER, impl.currentlyAssignedToken);
+    }
+
+    public boolean isIndependent() {
+        return entity != null && entity.hasTag(INDEPENDENT_SCAFFOLD);
+    }
+
     public AoTDStableStructureImpl getImplToConstruct() {
-        SectorEntityToken token = implToConstruct == null ? entity : implToConstruct.currentlyAssignedToken;
+        SectorEntityToken token = entity == null ? null
+                : entity.getMemoryWithoutUpdate().getEntity(CONSTRUCTION_CONTROLLER);
+        if (token == null) token = implToConstruct == null ? entity : implToConstruct.currentlyAssignedToken;
         if (token != null) {
             Object current = token.getMemoryWithoutUpdate().get(AoTDStableStructureSpecManager.memKeyInEntities);
             if (current instanceof AoTDStableStructureImpl impl) implToConstruct = impl;
@@ -56,8 +72,8 @@ public class AoTDStableStructureScaffold extends BaseCampaignObjectivePlugin {
         if (amount <= 0f || Global.getSector().isPaused()) return;
         AoTDStableStructureImpl impl = getImplToConstruct();
         if (impl == null || !impl.isCurrentImplementation() || !impl.isBuilding()) return;
-        // Upgrade overlays follow the real entity; construction advances through the existing task.
-        if (entity != impl.currentlyAssignedToken) {
+        // Only regular upgrade scaffolds follow the original entity.
+        if (entity != impl.currentlyAssignedToken && !isIndependent()) {
             entity.setLocation(impl.currentlyAssignedToken.getLocation().x, impl.currentlyAssignedToken.getLocation().y);
             entity.setFacing(impl.currentlyAssignedToken.getFacing());
         }
@@ -94,6 +110,8 @@ public class AoTDStableStructureScaffold extends BaseCampaignObjectivePlugin {
     }
 
     protected CustomEntitySpecAPI getConstructionSpec(AoTDStableStructureImpl impl) {
+        String specId = entity.getMemoryWithoutUpdate().getString(SCAFFOLD_ENTITY_SPEC);
+        if (specId != null && !specId.isEmpty()) return Global.getSettings().getCustomEntitySpec(specId);
         return impl.getConstructionTargetId() == null ? impl.getSpecEntity()
                 : Global.getSettings().getCustomEntitySpec(impl.getConstructionTargetId());
     }
@@ -144,7 +162,8 @@ public class AoTDStableStructureScaffold extends BaseCampaignObjectivePlugin {
         if (building && movingSprite == null) {
             movingSprite = Global.getSettings().getSprite("aotd_entities", "aotd_scaffold_movable");
         }
-        float progress = building && !impl.isUpgrading() ? impl.getBuildOrUpgradeProgress() : 1f;
+        float progress = building && (!impl.isUpgrading() || isIndependent())
+                ? impl.getBuildOrUpgradeProgress() : 1f;
         progress = Math.max(0f, Math.min(1f, progress));
         float alpha = viewport.getAlphaMult() * entity.getSensorFaderBrightness();
 
@@ -165,7 +184,7 @@ public class AoTDStableStructureScaffold extends BaseCampaignObjectivePlugin {
             GL11.glTexEnvi(GL11.GL_TEXTURE_ENV, GL11.GL_TEXTURE_ENV_MODE, GL11.GL_MODULATE);
 
             // The real entity already draws its complete sprite during upgrades.
-            if (entity == impl.currentlyAssignedToken) {
+            if (entity == impl.currentlyAssignedToken || isIndependent()) {
                 renderPart(entityToRenderSprite, width, height, 0f, progress, Color.WHITE, alpha);
                 if (progress < 1f) {
                     renderPart(entityToRenderSprite, width, height, progress, 1f, hologramColor, alpha * 0.55f);

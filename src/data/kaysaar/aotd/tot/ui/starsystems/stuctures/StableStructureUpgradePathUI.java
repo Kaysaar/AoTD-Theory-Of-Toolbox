@@ -3,6 +3,7 @@ package data.kaysaar.aotd.tot.ui.starsystems.stuctures;
 import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.PopUpUI;
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.ButtonAPI;
@@ -241,7 +242,8 @@ public class StableStructureUpgradePathUI extends PopUpUI {
                 @Override
                 public void createTooltip(TooltipMakerAPI hoverTooltip, boolean expanded, Object tooltipParam) {
                     impl.createTooltip(hoverTooltip,
-                            AoTDStableStructureImpl.AoTDStableStructureTooltipMode.UPGRADE_MENU);
+                            AoTDStableStructureImpl.AoTDStableStructureTooltipMode.UPGRADE_MENU,
+                            systemAPI, Global.getSector().getPlayerFaction());
                 }
             }, TooltipMakerAPI.TooltipLocation.RIGHT, false);
 
@@ -265,9 +267,8 @@ public class StableStructureUpgradePathUI extends PopUpUI {
         super.renderBelow(alphaMult);
         if (mainPanel == null || nodes.isEmpty() || !reachedMaxHeight || pressedConfirmCancel) return;
 
-        Color color = systemAPI != null
-                ? AshMisc.getClaimingFaction(systemAPI.getCenter()).getGridUIColor()
-                : Misc.getBasePlayerColor();
+        FactionAPI claiming = systemAPI == null ? null : AshMisc.getClaimingFaction(systemAPI.getCenter());
+        Color color = claiming == null ? Misc.getBasePlayerColor() : claiming.getGridUIColor();
 
         AshMisc.startStencil(mainPanel, 1f);
         glPushAttrib(GL_ENABLE_BIT | GL_LINE_BIT | GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT);
