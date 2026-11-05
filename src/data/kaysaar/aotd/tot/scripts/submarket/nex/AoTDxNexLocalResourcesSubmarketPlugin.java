@@ -20,6 +20,86 @@ import exerelin.campaign.submarkets.Nex_LocalResourcesSubmarketPlugin;
 import java.util.*;
 
 public class AoTDxNexLocalResourcesSubmarketPlugin extends Nex_LocalResourcesSubmarketPlugin {
+    private static final float STOCKPILE_ADVANCE_INTERVAL_DAYS = 0.05f;
+
+    private transient boolean inAdvance;
+    private transient float pendingStockpileAmount;
+    private transient float nextStockpileAdvance;
+    private transient boolean stockpileAdvanceStarted;
+    private transient boolean pendingShortageCountering;
+    private transient boolean pendingDecreaseToLimit;
+    private transient boolean pendingCargoUpdate;
+    private transient boolean perFrameStockpiles;
+
+    @Override
+    public void advance(float amount) {
+        inAdvance = true;
+        try {
+            super.advance(amount);
+        } finally {
+            inAdvance = false;
+        }
+    }
+
+    @Override
+    public void addAndRemoveStockpiledResources(float amount, boolean withShortageCountering,
+                                                boolean withDecreaseToLimit, boolean withCargoUpdate) {
+        if (!inAdvance) {
+            flushPendingStockpileAdvance();
+            super.addAndRemoveStockpiledResources(amount, withShortageCountering, withDecreaseToLimit, withCargoUpdate);
+            return;
+        }
+        if (perFrameStockpiles) {
+            super.addAndRemoveStockpiledResources(amount, withShortageCountering, withDecreaseToLimit, withCargoUpdate);
+            perFrameStockpiles = hasCounterableDeficit();
+            if (!perFrameStockpiles) nextStockpileAdvance = STOCKPILE_ADVANCE_INTERVAL_DAYS * Global.getSector().getClock().getSecondsPerDay();
+            return;
+        }
+        if (pendingStockpileAmount > 0f && (pendingShortageCountering != withShortageCountering
+                || pendingDecreaseToLimit != withDecreaseToLimit || pendingCargoUpdate != withCargoUpdate)) {
+            flushPendingStockpileAdvance();
+        }
+        pendingShortageCountering = withShortageCountering;
+        pendingDecreaseToLimit = withDecreaseToLimit;
+        pendingCargoUpdate = withCargoUpdate;
+        pendingStockpileAmount += amount;
+        if (pendingStockpileAmount >= nextStockpileAdvance) {
+            final float interval = STOCKPILE_ADVANCE_INTERVAL_DAYS * Global.getSector().getClock().getSecondsPerDay();
+            nextStockpileAdvance = stockpileAdvanceStarted ? interval : interval * (0.25f + 0.75f * (float) Math.random());
+            stockpileAdvanceStarted = true;
+            flushPendingStockpileAdvance();
+        }
+    }
+
+    private boolean hasCounterableDeficit() {
+        if (!market.isUseStockpilesForShortages()) return false;
+        for (CommodityOnMarketAPI com : market.getCommoditiesCopy()) {
+            if (com instanceof AoTDCommodityOnMarket commodity && commodity.getDeficitQuantity() > 0
+                    && (cargo.getCommodityQuantity(com.getId()) > 0 || getStockpileLimit(commodity) > 0)) return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void commodityUpdated(String commodityId) {
+        flushPendingStockpileAdvance();
+        super.commodityUpdated(commodityId);
+    }
+
+    @Override
+    public void updateCargoPrePlayerInteraction() {
+        flushPendingStockpileAdvance();
+        super.updateCargoPrePlayerInteraction();
+    }
+
+    private void flushPendingStockpileAdvance() {
+        if (pendingStockpileAmount <= 0f) return;
+        final float amount = pendingStockpileAmount;
+        pendingStockpileAmount = 0f;
+        super.addAndRemoveStockpiledResources(amount, pendingShortageCountering, pendingDecreaseToLimit, pendingCargoUpdate);
+        perFrameStockpiles = hasCounterableDeficit();
+    }
+
     @Override
     public int getStockpileLimit(CommodityOnMarketAPI com) {
         if (com instanceof AoTDCommodityOnMarket commodity) {
