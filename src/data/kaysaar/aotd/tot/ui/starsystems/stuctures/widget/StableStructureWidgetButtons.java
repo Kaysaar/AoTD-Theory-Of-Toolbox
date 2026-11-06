@@ -146,7 +146,7 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
                 if (impl == null) return;
 
                 if (AI_CORE.equals(optionId)) {
-                    tooltip.addPara("Assign or manage the AI core installed in this structure.", 0f);
+                    tooltip.addPara("Assign or manage this structure's AI core using storage at any player-owned market in this star system.", 0f);
                 } else if (UPGRADE.equals(optionId)) {
                     tooltip.addPara("Choose an available upgrade for this structure.", 0f);
                 } else if (CANCEL_UPGRADE.equals(optionId)) {

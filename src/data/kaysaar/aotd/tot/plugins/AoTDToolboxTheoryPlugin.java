@@ -72,6 +72,7 @@ import data.kaysaar.aotd.tot.scripts.trade.contracts.rewards.creators.impl.rewar
 import data.kaysaar.aotd.tot.scripts.trade.route.AoTDEconomyRouteManager;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureAdvanceScript;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.strings.AoTDIndTags;
 import data.kaysaar.aotd.tot.strings.AoTDTradeTags;
@@ -358,14 +359,24 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
     public void onGameLoad(boolean newGame) {
         AoTDStableStructureAdvanceScript.install();
         if (newGame) {
+            Set<String> missingStructureSpecs = new LinkedHashSet<>();
             for (StarSystemAPI systemsWithPlayerColony : getSystemsWithColonies()) {
                 for (CustomCampaignEntityAPI customCampaignEntityAPI : systemsWithPlayerColony.getCustomEntitiesWithTag(AoTDTags.AOTD_OBJECTIVE)) {
-                    if (!customCampaignEntityAPI.getMemoryWithoutUpdate().contains(AoTDStableStructureSpecManager.memKeyInEntities)) {
-                        AoTDStableStructureImpl impl = AoTDStableStructureSpecManager.getSpec(customCampaignEntityAPI.getCustomEntitySpec().getId()).getImplClassInstance();
-                        impl.init(customCampaignEntityAPI.getCustomEntitySpec().getId());
-                        impl.setCurrentlyAssignedToken(customCampaignEntityAPI);
-                        customCampaignEntityAPI.getMemoryWithoutUpdate().set(AoTDStableStructureSpecManager.memKeyInEntities, impl);
+                    if (customCampaignEntityAPI.isExpired() || customCampaignEntityAPI.getMemoryWithoutUpdate().contains(AoTDStableStructureSpecManager.memKeyInEntities)) continue;
+
+                    String entityId = customCampaignEntityAPI.getCustomEntityType();
+                    AoTDStableStructureSpec spec = AoTDStableStructureSpecManager.getSpec(entityId);
+                    if (spec == null) {
+                        if (missingStructureSpecs.add(entityId)) {
+                            log.warn("Skipping unregistered system objective " + entityId + " in " + systemsWithPlayerColony.getName()
+                                    + ". No matching specification in " + AoTDStableStructureSpecManager.filePath);
+                        }
+                        continue;
                     }
+
+                    AoTDStableStructureImpl impl = spec.getImplClassInstance();
+                    impl.init(entityId);
+                    impl.setCurrentlyAssignedToken(customCampaignEntityAPI);
                 }
             }
         }

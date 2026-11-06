@@ -1,7 +1,6 @@
 package data.kaysaar.aotd.tot.stablestructures;
 
 import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.campaign.SpecialItemSpecAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Factions;
@@ -136,13 +135,11 @@ public class AoTDStableStructureConstructionContract extends AoTDTradeContract {
         tooltip.addPara("Construction materials are supplied from %s each month.", 3f,
                 Color.ORANGE, "faction production capacity");
 
-        MarketAPI storage = site.getConstructionStorage();
-        if (storage != null) {
-            tooltip.addPara("Special items are withdrawn directly from storage at %s.", 3f,
-                    Color.ORANGE, storage.getName());
-        } else {
-            tooltip.addPara("Special items are withdrawn directly from the selected construction storage.", 3f);
-        }
+        tooltip.addPara(
+                "Special items are automatically withdrawn from storage at any player-owned market " +
+                        "in this star system. Multiple colonies can contribute to the same construction stage.",
+                Misc.getGrayColor(), 3f
+        );
 
         if (site.isDisrupted()) {
             tooltip.addPara("Construction and deliveries are currently suspended due to disruption.",

@@ -265,9 +265,7 @@ public class AoTDStableStructureConstruction {
 
         if (impl.getAICoreId() != null) {
             CargoAPI cargo = Global.getSector().getPlayerFleet().getCargo();
-            for (MarketAPI market : Global.getSector().getEconomy().getMarkets(location)) {
-                if (!market.getFactionId().equals(current.getFaction().getId())) continue;
-                if (market.getSubmarket(Submarkets.SUBMARKET_STORAGE) == null) continue;
+            for (MarketAPI market : AoTDStableStructureImpl.getSystemStorageMarkets(current.getStarSystem())) {
                 cargo = market.getSubmarket(Submarkets.SUBMARKET_STORAGE).getCargo();
                 break;
             }
