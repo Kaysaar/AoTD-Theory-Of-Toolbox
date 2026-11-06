@@ -380,6 +380,17 @@ public class AoTDStableStructureImpl {
                 ? (AoTDStableStructureConstructionContract) contract : null;
     }
 
+    public static LinkedList<MarketAPI> getSystemStorageMarkets(StarSystemAPI system) {
+        LinkedList<MarketAPI> result = new LinkedList<>();
+        if (system == null) return result;
+        for (MarketAPI market : Global.getSector().getEconomy().getMarkets(system)) {
+            if (market == null || market.getFaction() == null || !market.getFaction().isPlayerFaction()) continue;
+            if (!market.hasSubmarket(Submarkets.SUBMARKET_STORAGE)) continue;
+            if (market.getSubmarket(Submarkets.SUBMARKET_STORAGE).getCargo() != null) result.add(market);
+        }
+        return result;
+    }
+
     public void deliverSpecialItemsFromStorage() {
         if (!isBuilding || !isCurrentImplementation() || !isPlayerOwned() || isDisrupted()) return;
         boolean needsItems = false;
@@ -391,17 +402,16 @@ public class AoTDStableStructureImpl {
             }
         }
         if (!needsItems) return;
-        MarketAPI storage = getConstructionStorage();
-        if (storage == null || !storage.getFaction().isPlayerFaction()
-                || !storage.hasSubmarket(Submarkets.SUBMARKET_STORAGE)) return;
-        CargoAPI cargo = storage.getSubmarket(Submarkets.SUBMARKET_STORAGE).getCargo();
-        for (CargoStackAPI stack : cargo.getStacksCopy()) {
-            if (!stack.isSpecialStack()) continue;
-            String resource = stack.getSpecialDataIfSpecial().getId();
-            if (Global.getSettings().getCommoditySpec(resource) != null) continue;
-            int amount = Math.min((int) stack.getSize(), getRemainingResourceAmount(resource));
-            if (amount > 0 && cargo.removeItems(stack.getType(), stack.getData(), amount)) {
-                addResourcesToConstruction(resource, amount);
+        for (MarketAPI market : getSystemStorageMarkets(currentlyAssignedToken.getStarSystem())) {
+            CargoAPI cargo = market.getSubmarket(Submarkets.SUBMARKET_STORAGE).getCargo();
+            for (CargoStackAPI stack : cargo.getStacksCopy()) {
+                if (!stack.isSpecialStack()) continue;
+                String resource = stack.getSpecialDataIfSpecial().getId();
+                if (Global.getSettings().getCommoditySpec(resource) != null) continue;
+                int amount = Math.min((int) stack.getSize(), getRemainingResourceAmount(resource));
+                if (amount > 0 && cargo.removeItems(stack.getType(), stack.getData(), amount)) {
+                    addResourcesToConstruction(resource, amount);
+                }
             }
         }
     }
@@ -450,9 +460,9 @@ public class AoTDStableStructureImpl {
     }
 
     public MarketAPI getConstructionStorage() {
-        if (constructionStorage != null) return constructionStorage;
-        FactionProductionAPI production = Global.getSector().getPlayerFaction().getProduction();
-        return production == null ? null : production.getGatheringPoint();
+        if (currentlyAssignedToken == null) return null;
+        LinkedList<MarketAPI> markets = getSystemStorageMarkets(currentlyAssignedToken.getStarSystem());
+        return markets.isEmpty() ? null : markets.getFirst();
     }
 
     public void setConstructionStorage(MarketAPI market) {
@@ -703,7 +713,7 @@ public class AoTDStableStructureImpl {
         if (!immediateItems.isEmpty()) {
             tooltip.addSectionHeading("Other construction costs", color, dark, Alignment.MID, 10f);
             tooltip.addPara(
-                    "Unlike regular construction materials, these items are drawn directly from construction storage, through trade contract.",
+                    "Special items are automatically drawn from storage at any player-owned market in this star system. Multiple markets may contribute.",
                     Misc.getGrayColor(), 5f
             );
             CustomPanelAPI immediatePanel = AoTDToolboxMisc.createCostSection(
@@ -776,8 +786,8 @@ public class AoTDStableStructureImpl {
         }
 
         tooltip.addPara(
-                "Unlike monthly construction materials, special items are drawn directly from construction storage " +
-                        "when their respective stage begins.",
+                "Unlike monthly construction materials, special items are drawn from storage at any player-owned " +
+                        "market in this star system when their respective stage begins or when items become available.",
                 Misc.getGrayColor(), 5f
         );
     }
@@ -801,7 +811,7 @@ public class AoTDStableStructureImpl {
     public void addAICoreSection(TooltipMakerAPI tooltip, String coreId, AICoreDescriptionMode mode) {
         if (coreId == null) {
             if (mode == AICoreDescriptionMode.MANAGE_CORE_TOOLTIP) {
-                tooltip.addPara("No AI core currently assigned. Click to assign an AI core from your cargo.", 0f);
+                tooltip.addPara("No AI core currently assigned. Click to assign a core from storage at any player-owned market in this star system.", 0f);
             }
             return;
         }

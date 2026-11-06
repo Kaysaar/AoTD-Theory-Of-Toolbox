@@ -9,6 +9,7 @@ import com.fs.starfarer.api.campaign.StarSystemAPI;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
@@ -114,6 +115,11 @@ public class StableStructureConstructionDialog extends BasePopUpDialog {
         FactionAPI claiming = AshMisc.getClaimingFaction(currentStarSystem.getCenter());
         if (claiming == null || !claiming.isPlayerFaction()) return false;
         if (!impl.isAvailableToBuild(currentStarSystem, Global.getSector().getPlayerFaction())) return false;
+
+        // Selecting a higher-tier structure still starts at its base stage.
+        // It therefore needs a free stable point even though upgrades themselves do not.
+        AoTDStableStructureImpl base = AoTDStableStructureConstruction.getBaseStructure(impl);
+        if (!base.isAvailableToBuild(currentStarSystem, Global.getSector().getPlayerFaction())) return false;
 
         float credits = Global.getSector().getPlayerFleet().getCargo().getCredits().get();
         return credits >= Math.max(0f, detailedPanel.getInitialStageCost());

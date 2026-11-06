@@ -12,6 +12,7 @@ import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpec;
 
 import java.awt.Color;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -109,17 +110,17 @@ public class StableStructureTable extends UITableImpl {
         Color bright = Misc.getBrightPlayerColor();
 
         buttonName = tooltipOfButtons.addAreaCheckbox(
-                "Name", "name", base, bg, bright,
+                "Name", SortingState.NON_INITIALIZED, base, bg, bright,
                 widthMap.get("name"), 20, 0f
         );
 
         buttonBuildingTime = tooltipOfButtons.addAreaCheckbox(
-                "Build time", "buildingTime", base, bg, bright,
+                "Build time", SortingState.NON_INITIALIZED, base, bg, bright,
                 widthMap.get("buildingTime"), 20, 0f
         );
 
         buttonBuildCost = tooltipOfButtons.addAreaCheckbox(
-                "Build Cost", "buildCost", base, bg, bright,
+                "Build Cost", SortingState.NON_INITIALIZED, base, bg, bright,
                 widthMap.get("buildCost"), 20, 0f
         );
 
@@ -146,20 +147,36 @@ public class StableStructureTable extends UITableImpl {
             currYPos = tooltipOfImpl.getExternalScroller().getYOffset();
         }
 
+        Comparator<DropDownButton> byName = Comparator.comparing(
+                button -> ((StableStructureDropDownButton) button).spec.getImplClassInstance().getName(),
+                String.CASE_INSENSITIVE_ORDER
+        );
+
         if (buttonName != null && buttonName.isChecked()) {
             buttonName.setChecked(false);
-            // TODO: Sort structures by name
+            sortStructures(buttonName, byName);
         }
 
         if (buttonBuildingTime != null && buttonBuildingTime.isChecked()) {
             buttonBuildingTime.setChecked(false);
-            // TODO: Sort structures by building time
+            sortStructures(buttonBuildingTime, Comparator.<DropDownButton>comparingInt(
+                    button -> ((StableStructureDropDownButton) button).spec.getDaysToBuild()
+            ).thenComparing(byName));
         }
 
         if (buttonBuildCost != null && buttonBuildCost.isChecked()) {
             buttonBuildCost.setChecked(false);
-            // TODO: Sort structures by build cost
+            sortStructures(buttonBuildCost, Comparator.<DropDownButton>comparingDouble(
+                    button -> ((StableStructureDropDownButton) button).spec.getImplClassInstance().getBuildCostCredits()
+            ).thenComparing(byName));
         }
+    }
+
+    private void sortStructures(ButtonAPI button, Comparator<DropDownButton> comparator) {
+        SortingState state = switchState((SortingState) button.getCustomData());
+        button.setCustomData(state);
+        dropDownButtons.sort(state == SortingState.ASCENDING ? comparator : comparator.reversed());
+        recreateTable();
     }
 
     @Override

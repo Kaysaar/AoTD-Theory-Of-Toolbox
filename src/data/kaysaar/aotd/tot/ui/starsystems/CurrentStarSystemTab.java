@@ -3,14 +3,15 @@ package data.kaysaar.aotd.tot.ui.starsystems;
 import ashlib.data.plugins.misc.AshMisc;
 import ashlib.data.plugins.ui.models.ExtendedUIPanelPlugin;
 import ashlib.data.plugins.ui.models.resizable.map.MapMainComponent;
+import ashlib.data.plugins.ui.models.resizable.map.MapZoomableComponent;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
 import data.kaysaar.aotd.tot.ui.starsystems.stuctures.StarSystemStructuresUI;
-
 
 import java.util.List;
 
@@ -20,6 +21,9 @@ public class CurrentStarSystemTab implements ExtendedUIPanelPlugin {
     MapMainComponent mapMainComponent;
     StarSystemStructuresUI struct;
     ButtonAPI claim;
+    long displayedStructureVersion = -1L;
+    StarSystemAPI displayedMapSystem;
+
     public CurrentStarSystemTab(float width,float height){
         this.mainPanel = Global.getSettings().createCustom(width,height,this);
     }
@@ -36,6 +40,17 @@ public class CurrentStarSystemTab implements ExtendedUIPanelPlugin {
 
     @Override
     public void createUI() {
+        float previousScale = -1f;
+        float previousOffsetX = 0f;
+        float previousOffsetY = 0f;
+        if (mapMainComponent != null && displayedMapSystem == currStarSystem) {
+            MapZoomableComponent previousMap = mapMainComponent.getMapZoom();
+            previousScale = previousMap.currScale;
+            previousOffsetX = previousMap.getData().getCurrentOffsetX();
+            previousOffsetY = previousMap.getData().getCurrentOffsetY();
+        }
+
+        displayedStructureVersion = AoTDStableStructureConstruction.getUIRefreshVersion(currStarSystem);
         if(contentPanel!=null){
             mainPanel.removeComponent(contentPanel);
         }
@@ -46,6 +61,13 @@ public class CurrentStarSystemTab implements ExtendedUIPanelPlugin {
         contentPanel = Global.getSettings().createCustom(mainPanel.getPosition().getWidth(),mainPanel.getPosition().getHeight(),null);
         if(currStarSystem!=null){
             mapMainComponent = new MapMainComponent(contentPanel.getPosition().getWidth()-5,contentPanel.getPosition().getHeight()*0.4f,currStarSystem);
+            displayedMapSystem = currStarSystem;
+            if (previousScale > 0f) {
+                MapZoomableComponent map = mapMainComponent.getMapZoom();
+                map.setCurrScale(previousScale);
+                map.getData().setCurrentOffsetX(previousOffsetX);
+                map.getData().setCurrentOffsetY(previousOffsetY);
+            }
             TooltipMakerAPI tooltip = contentPanel.createUIElement(mapMainComponent.getMainPanel().getPosition().getWidth(),mapMainComponent.getMainPanel().getPosition().getHeight()+40,false);
             tooltip.setParaFont(Fonts.ORBITRON_20AA);
             FactionAPI faction = AshMisc.getClaimingFaction(currStarSystem.getCenter());
@@ -53,12 +75,10 @@ public class CurrentStarSystemTab implements ExtendedUIPanelPlugin {
             tooltip.addCustom(mapMainComponent.getMainPanel(),3f);
             contentPanel.addUIElement(tooltip).inTL(0,0);
             createStarSystemInfoSection();
-
-
         }
-
         mainPanel.addComponent(contentPanel).inTL(0,0);
     }
+
     public void createStarSystemInfoSection(){
         float heightLeft = contentPanel.getPosition().getHeight()-mapMainComponent.getMainPanel().getPosition().getHeight()-60;
         float startingY = contentPanel.getPosition().getHeight()-heightLeft-30;
@@ -116,7 +136,9 @@ public class CurrentStarSystemTab implements ExtendedUIPanelPlugin {
 
     @Override
     public void advance(float amount) {
-
+        if (currStarSystem != null && displayedStructureVersion != AoTDStableStructureConstruction.getUIRefreshVersion(currStarSystem)) {
+            createUI();
+        }
     }
 
     @Override

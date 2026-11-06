@@ -44,15 +44,20 @@ public class StarSystemHoldingDropDown extends DropDownButton {
             if (this.mainButton.isChecked()) {
                 this.mainButton.setChecked(false);
                 if (this.droppableMode) {
-                    this.isDropped = !this.isDropped;
+                    if (this.tableOfReference instanceof StarSystemHoldingTable table && table.forceUnfold) {
+                        this.isDropped = true;
+                    } else {
+                        this.isDropped = !this.isDropped;
+                        this.tableOfReference.recreateTable();
+                    }
                     this.tableOfReference.reportButtonPressed(this.mainButton);
-                    this.tableOfReference.recreateTable();
                 } else {
                     this.tableOfReference.reportButtonPressed(this.mainButton);
                 }
             }
             if (this.droppableMode&&isDropped) {
-                if(this.tableOfReference instanceof StarSystemHoldingTable table && table.currSystem.getId().equals(this.getStarSystem().getId())){
+                if(this.tableOfReference instanceof StarSystemHoldingTable table && table.currSystem != null
+                        && table.currSystem.getId().equals(this.getStarSystem().getId())){
                     this.mainButton.mainButton.highlight();
                 }
             }

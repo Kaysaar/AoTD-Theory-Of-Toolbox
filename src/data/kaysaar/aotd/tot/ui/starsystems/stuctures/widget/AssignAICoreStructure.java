@@ -56,25 +56,12 @@ public class AssignAICoreStructure extends BasePopUpDialog {
     public List<CargoAPI> getLocalStorages() {
         List<CargoAPI> storages = new ArrayList<>();
         SectorEntityToken entity = structure.getCurrentlyTiedEntity();
+        if (entity == null || entity.getStarSystem() == null) return storages;
 
-        if (entity == null || entity.getContainingLocation() == null) {
-            return storages;
-        }
-
-        for (MarketAPI market : Global.getSector().getEconomy().getMarkets(entity.getContainingLocation())) {
-            if (!Objects.equals(market.getFactionId(), entity.getFaction().getId())) {
-                continue;
-            }
-            if (market.getSubmarket(Submarkets.SUBMARKET_STORAGE) == null) {
-                continue;
-            }
-
+        for (MarketAPI market : AoTDStableStructureImpl.getSystemStorageMarkets(entity.getStarSystem())) {
             CargoAPI cargo = market.getSubmarket(Submarkets.SUBMARKET_STORAGE).getCargo();
-            if (cargo != null && !storages.contains(cargo)) {
-                storages.add(cargo);
-            }
+            if (!storages.contains(cargo)) storages.add(cargo);
         }
-
         return storages;
     }
 
@@ -194,6 +181,8 @@ public class AssignAICoreStructure extends BasePopUpDialog {
 
         body = listOfAICores.createUIElement(width, height - 25f, true);
         body.addSpacer(0f).getPosition().inTL(0f, 0f);
+        body.addPara("AI cores are drawn from storage at any player-owned market in this star system. " +
+                "Replaced cores are returned to local storage.", Misc.getGrayColor(), 3f);
 
         List<CargoAPI> storages = getLocalStorages();
         boolean hasCores = false;

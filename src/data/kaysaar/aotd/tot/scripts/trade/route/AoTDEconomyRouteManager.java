@@ -8,650 +8,275 @@ import com.fs.starfarer.api.campaign.econ.CommodityOnMarketAPI;
 import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.impl.campaign.command.WarSimScript;
-import com.fs.starfarer.api.impl.campaign.econ.ShippingDisruption;
 import com.fs.starfarer.api.impl.campaign.fleets.*;
+import com.fs.starfarer.api.impl.campaign.fleets.EconomyFleetAssignmentAI.CargoQuantityData;
+import com.fs.starfarer.api.impl.campaign.fleets.EconomyFleetAssignmentAI.EconomyRouteData;
 import com.fs.starfarer.api.impl.campaign.ids.Commodities;
 import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.api.impl.campaign.ids.MemFlags;
 import com.fs.starfarer.api.impl.campaign.intel.events.PiracyRespiteScript;
-import com.fs.starfarer.api.impl.campaign.intel.misc.TradeFleetDepartureIntel;
 import com.fs.starfarer.api.impl.campaign.rulecmd.KantaCMD;
 import com.fs.starfarer.api.impl.campaign.shared.SharedData;
 import com.fs.starfarer.api.util.Misc;
 import com.fs.starfarer.api.util.WeightedRandomPicker;
-import com.fs.starfarer.campaign.econ.Market;
 import data.kaysaar.aotd.tot.intel.AoTDTradeFleetDepartureIntel;
-import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
+import data.kaysaar.aotd.tot.plugins.AoTDBaseDemSupCalc;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
-import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
+import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDSupplyDemandData;
 import data.kaysaar.aotd.tot.scripts.economy.AoTdMainWorkTask2;
+import data.kaysaar.aotd.tot.scripts.trade.route.AoTDEconomyFleetAssigmentAI.AoTDCargoQuantityData;
+import data.kaysaar.aotd.tot.scripts.trade.route.AoTDEconomyFleetAssigmentAI.AoTDEconomyRouteData;
 
 import java.util.*;
 
 public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
-
-    public MarketAPI pickDestMarket(MarketAPI from) {
-        if (from == null) return null;
-
-        WeightedRandomPicker<MarketAPI> markets = new WeightedRandomPicker<MarketAPI>();
-
-        for (MarketAPI market : Global.getSector().getEconomy().getMarketsInGroup(from.getEconGroup())) {
-            if (market == null || market == from) continue;
-            if (market.isHidden()) continue;
-            if (!market.hasSpaceport()) continue;
-            if (SharedData.getData().getMarketsWithoutTradeFleetSpawn().contains(market.getId())) continue;
-            if (market.getAccessibilityMod().computeEffective(0f) <= 0f) continue;
-
-            float weight = 0f;
-
-            for (CommodityOnMarketAPI commodity : from.getAllCommodities()) {
-                if (commodity == null || commodity.isNonEcon()) continue;
-
-                String commodityId = commodity.getId();
-
-                // Outbound leg: from exports its actual excess to market's actual deficit.
-                int outbound = getTransferAmount(from, market, commodityId);
-
-                // Return leg: market exports its actual excess to from's actual deficit.
-                int inbound = getTransferAmount(market, from, commodityId);
-
-                weight += outbound;
-                weight += inbound;
-            }
-
-            if (weight <= 0f) continue;
-
-            if (from.getFaction().isHostileTo(Factions.INDEPENDENT)
-                    || market.getFaction().isHostileTo(Factions.INDEPENDENT)
-                    || from.getFaction().isHostileTo(market.getFaction())) {
-                weight *= 0.01f;
-            }
-
-            if (Misc.getDistanceLY(from.getPrimaryEntity(), market.getPrimaryEntity()) >= 15f) {
-                weight *= 0.7f;
-            }
-
-            if (from.getFactionId().equals(market.getFactionId())) {
-                weight *= 1.25f;
-            }
-
-            if (weight > 0f) {
-                markets.add(market, weight);
-            }
+    @Override
+    public MarketAPI pickSourceMarket() {
+        WeightedRandomPicker<MarketAPI> markets = new WeightedRandomPicker<>();
+        for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
+            if (!canTrade(market)) continue;
+            if (recentlySentTradeFleet.contains(market.getId())) continue;
+            markets.add(market, market.getSize());
         }
-
         return markets.pick();
     }
 
-    /**
-     * Returns how much of a commodity may actually move from source to destination.
-     *
-     * A route is valid only when:
-     * - source currently has real excess;
-     * - destination currently has real deficit;
-     * - source is capable of shipping it;
-     * - destination is capable of importing it.
-     */
-    private static int getTransferAmount(MarketAPI source, MarketAPI destination, String commodityId) {
-        if (source == null || destination == null || commodityId == null) return 0;
-        if (source == destination) return 0;
+    private static boolean canTrade(MarketAPI market) {
+        return market != null && !market.isHidden() && market.hasSpaceport()
+                && market.getPrimaryEntity() != null
+                && market.getAccessibilityMod().computeEffective(0f) > 0f
+                && !SharedData.getData().getMarketsWithoutTradeFleetSpawn().contains(market.getId());
+    }
 
-        AoTDCommodityOnMarket sourceCommodity =
-                AoTDCommodityOnMarket.getComMarketInstanceSave(source, commodityId);
-        AoTDCommodityOnMarket destinationCommodity =
-                AoTDCommodityOnMarket.getComMarketInstanceSave(destination, commodityId);
+    private static Set<String> getCommodityIds(MarketAPI from, MarketAPI to) {
+        Set<String> ids = new LinkedHashSet<>();
+        for (CommodityOnMarketAPI com : from.getAllCommodities()) {
+            if (!com.isNonEcon()) ids.add(com.getId());
+        }
+        for (CommodityOnMarketAPI com : to.getAllCommodities()) {
+            if (!com.isNonEcon()) ids.add(com.getId());
+        }
+        return ids;
+    }
 
-        if (sourceCommodity == null || destinationCommodity == null) return 0;
-        if (sourceCommodity.isNonEcon() || destinationCommodity.isNonEcon()) return 0;
+    @Override
+    public MarketAPI pickDestMarket(MarketAPI from) {
+        if (!canTrade(from)) return null;
+        WeightedRandomPicker<MarketAPI> markets = new WeightedRandomPicker<>();
+        for (MarketAPI market : Global.getSector().getEconomy().getMarketsInGroup(from.getEconGroup())) {
+            if (market == from || !canTrade(market)) continue;
+            float weight = 0f;
+            for (String id : getCommodityIds(from, market)) {
+                int deliver = getTransferAmount(from, market, id);
+                int returning = getTransferAmount(market, from, id);
+                weight += getCargoTier(from, market, id, deliver);
+                weight += getCargoTier(market, from, id, returning);
+            }
+            if (from.getFaction().isHostileTo(market.getFaction())) weight *= 0.25f;
+            if (weight > 0f) markets.add(market, weight);
+        }
+        return markets.pick();
+    }
 
-        int sourceExcess = Math.max(0, (int) Math.floor(sourceCommodity.getExcessQuantity()));
-        int destinationDeficit = Math.max(0, (int) Math.floor(destinationCommodity.getDeficitQuantity()));
+    private static int getTransferAmount(MarketAPI source, MarketAPI destination, String id) {
+        AoTDCommodityOnMarket from = AoTDCommodityOnMarket.getComMarketInstanceSave(source, id);
+        AoTDCommodityOnMarket to = AoTDCommodityOnMarket.getComMarketInstanceSave(destination, id);
+        if (from == null || to == null || from.isNonEcon() || to.isNonEcon()) return 0;
+        AoTDSupplyDemandData supply = from.getSupplyDemandData();
+        AoTDSupplyDemandData demand = to.getSupplyDemandData();
 
-        // This is the important guard. A self-sufficient or excess market cannot import.
-        if (sourceExcess <= 0 || destinationDeficit <= 0) return 0;
+        // Imports already assigned by the economy must not erase the need for a trade fleet.
+        int exported = Math.max(0, supply.getTotalRawUnitsFromSupply() - supply.getTotalRawUnitsFromDemand());
+        int imported = Math.max(0, demand.getTotalRawUnitsFromDemand() - demand.getTotalRawUnitsFromSupply());
+        return Math.min(exported, imported);
+    }
 
-        int shippingCapacity = Math.max(
-                0,
-                AoTDToolboxMisc.getMaxShipped(source, destination, commodityId)
-        );
+    static void refreshCargo(List<CargoQuantityData> list, MarketAPI source, MarketAPI destination) {
+        if (!canTrade(source) || !canTrade(destination)) {
+            list.clear();
+            return;
+        }
+        Iterator<CargoQuantityData> iterator = list.iterator();
+        while (iterator.hasNext()) {
+            CargoQuantityData cargo = iterator.next();
+            cargo.units = Math.min(cargo.units, getTransferAmount(source, destination, cargo.cargo));
+            if (cargo.units <= 0) iterator.remove();
+        }
+    }
 
-        // getMaxImported(importer, exporter, commodityId)
-        int importCapacity = Math.max(
-                0,
-                AoTDToolboxMisc.getMaxImported(destination, source, commodityId)
-        );
+    private static float getCargoTier(MarketAPI source, MarketAPI destination, String id, int amount) {
+        if (amount <= 0) return 0f;
+        AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(source, id);
+        AoTDSupplyDemandData data = com.getSupplyDemandData();
+        AoTDBaseDemSupCalc calc = data.getEconSpec().getCalculationScript();
+        int supply = Math.max(1, calc.convertRawUnitsToSupply(data.getTotalRawUnitsFromSupply(), source, id));
+        int demand = Math.max(1, calc.convertRawUnitsToDemand(amount, destination, id));
+        boolean sameFaction = source.getFaction() == destination.getFaction();
+        int shipping = Math.min(Misc.getShippingCapacity(source, sameFaction), Misc.getShippingCapacity(destination, sameFaction));
+        return Math.max(0, Math.min(shipping, Math.min(supply, demand)));
+    }
 
-        return Math.min(
-                Math.min(sourceExcess, destinationDeficit),
-                Math.min(shippingCapacity, importCapacity)
-        );
+    static float getCargoTier(CargoQuantityData cargo, MarketAPI source, MarketAPI destination) {
+        if (cargo instanceof AoTDCargoQuantityData) return ((AoTDCargoQuantityData) cargo).tier;
+        return getCargoTier(source, destination, cargo.cargo, cargo.units);
+    }
+
+    private static boolean isIllegal(MarketAPI from, MarketAPI to, String id) {
+        CommodityOnMarketAPI com = from.getCommodityData(id);
+        return from.getFaction().isHostileTo(to.getFaction())
+                || com.getCommodityMarketData().getMarketShareData(from).isSourceIsIllegal()
+                || com.getCommodityMarketData().getMarketShareData(to).isSourceIsIllegal();
+    }
+
+    public static AoTDEconomyRouteData createData(MarketAPI from, MarketAPI to) {
+        if (from == to || !canTrade(from) || !canTrade(to)) return null;
+        AoTDEconomyRouteData legal = new AoTDEconomyRouteData();
+        legal.from = from;
+        legal.to = to;
+        AoTDEconomyRouteData smuggling = new AoTDEconomyRouteData();
+        smuggling.from = from;
+        smuggling.to = to;
+        smuggling.smuggling = true;
+        float legalTotal = 0f;
+        float smugglingTotal = 0f;
+
+        for (String id : getCommodityIds(from, to)) {
+            int deliver = getTransferAmount(from, to, id);
+            int returning = getTransferAmount(to, from, id);
+            float deliverTier = getCargoTier(from, to, id, deliver);
+            float returnTier = getCargoTier(to, from, id, returning);
+            if (deliverTier <= 0f && returnTier <= 0f) continue;
+            boolean illegal = isIllegal(from, to, id);
+            AoTDEconomyRouteData data = illegal ? smuggling : legal;
+            if (deliverTier > 0f) data.addDeliver(id, capGeneratedCargoAmount(deliver), deliverTier);
+            if (returnTier > 0f) data.addReturn(id, capGeneratedCargoAmount(returning), returnTier);
+            if (illegal) smugglingTotal += deliverTier + returnTier;
+            else legalTotal += deliverTier + returnTier;
+        }
+
+        if (legalTotal <= 0f && smugglingTotal <= 0f) return null;
+        AoTDEconomyRouteData data = Math.random() * (legalTotal + smugglingTotal) < smugglingTotal ? smuggling : legal;
+        Comparator<CargoQuantityData> comp = (first, second) -> {
+            if (first.getCommodity().isPersonnel() != second.getCommodity().isPersonnel()) {
+                return first.getCommodity().isPersonnel() ? 1 : -1;
+            }
+            return Float.compare(((AoTDCargoQuantityData) second).tier, ((AoTDCargoQuantityData) first).tier);
+        };
+        data.cargoDeliver.sort(comp);
+        data.cargoReturn.sort(comp);
+        while (data.cargoDeliver.size() > 4) data.cargoDeliver.remove(4);
+        while (data.cargoReturn.size() > 4) data.cargoReturn.remove(4);
+        for (CargoQuantityData cargo : data.cargoDeliver) data.size = Math.max(data.size, getCargoTier(cargo, from, to));
+        for (CargoQuantityData cargo : data.cargoReturn) data.size = Math.max(data.size, getCargoTier(cargo, to, from));
+        return data;
+    }
+
+    private static int capGeneratedCargoAmount(int amount) {
+        if (amount <= 1500) return amount;
+        return Math.min(amount, 1000 + Misc.random.nextInt(1001));
     }
 
     @Override
     protected void addRouteFleetIfPossible() {
         MarketAPI from = pickSourceMarket();
         MarketAPI to = pickDestMarket(from);
-        if (from != null && to != null) {
+        if (from == null || to == null) return;
+        AoTDEconomyRouteData data = createData(from, to);
+        if (data == null) return;
+        RouteManager.OptionalFleetData extra = new RouteManager.OptionalFleetData(from);
+        String factionId = from.getFactionId();
+        if (!from.getFaction().isHostileTo(Factions.INDEPENDENT) && !to.getFaction().isHostileTo(Factions.INDEPENDENT)) {
+            if (Math.random() * 10f > from.getStabilityValue() + data.size) factionId = Factions.INDEPENDENT;
+        }
+        if (data.smuggling) factionId = Factions.INDEPENDENT;
+        extra.factionId = factionId;
 
-            EconomyFleetAssignmentAI.EconomyRouteData data = createData(from, to);
-            if (data == null) return;
-
-            log.info("Added trade fleet route from " + from.getName() + " to " + to.getName());
-
-            Long seed = Misc.genRandomSeed();
-            String id = getRouteSourceId();
-
-            RouteManager.OptionalFleetData extra = new RouteManager.OptionalFleetData(from);
-            float tier = data.size;
-            float stability = from.getStabilityValue();
-            String factionId = from.getFactionId();
-            if (!from.getFaction().isHostileTo(Factions.INDEPENDENT) &&
-                    !to.getFaction().isHostileTo(Factions.INDEPENDENT)) {
-                if ((float) Math.random() * 10f > stability + tier) {
-                    factionId = Factions.INDEPENDENT;
-                }
+        RouteManager.RouteData route = RouteManager.getInstance().addRoute(getRouteSourceId(), from, Misc.genRandomSeed(), extra, this);
+        route.setCustom(data);
+        StarSystemAPI sysFrom = from.getStarSystem();
+        StarSystemAPI sysTo = to.getStarSystem();
+        WarSimScript.LocationDanger danger;
+        try {
+            if (PiracyRespiteScript.playerHasPiracyRespite()
+                    && (from.getFaction().isPlayerFaction() || to.getFaction().isPlayerFaction())) {
+                ENEMY_STRENGTH_CHECK_EXCLUDE_PIRATES = true;
             }
-            if(from.getFaction().equals(to.getFaction())){
-                factionId = from.getFactionId();
-            }
-            else{
-                factionId = Factions.INDEPENDENT;
-            }
-            if (data.smuggling) {
-                factionId = Factions.INDEPENDENT;
-            }
-
-            extra.factionId = factionId;
-
-            RouteManager.RouteData route = RouteManager.getInstance().addRoute(id, from, seed, extra, this);
-            route.setCustom(data);
-
-
-            StarSystemAPI sysFrom = data.from.getStarSystem();
-            StarSystemAPI sysTo = data.to.getStarSystem();
-
-//			if (sysFrom.getName().startsWith("Rama") ||
-//					sysTo.getName().startsWith("Rama")) {
-//				System.out.println("32ff32f23");
-//			}
-
-            if (PiracyRespiteScript.playerHasPiracyRespite()) {
-                if (from.getFaction().isPlayerFaction() || to.getFaction().isPlayerFaction()) {
-                    ENEMY_STRENGTH_CHECK_EXCLUDE_PIRATES = true;
-                }
-            }
-
             WarSimScript.LocationDanger dFrom = WarSimScript.getDangerFor(factionId, sysFrom);
             WarSimScript.LocationDanger dTo = WarSimScript.getDangerFor(factionId, sysTo);
-
+            danger = dFrom.ordinal() > dTo.ordinal() ? dFrom : dTo;
+        } finally {
             ENEMY_STRENGTH_CHECK_EXCLUDE_PIRATES = false;
-
-            WarSimScript.LocationDanger danger = dFrom.ordinal() > dTo.ordinal() ? dFrom : dTo;
-
-            if (sysFrom != null && sysFrom.isCurrentLocation()) {
-                // the player is in the from location, don't auto-lose the trade fleet
-                // let it get destroyed by actual fleets, if it does
-                danger = WarSimScript.LocationDanger.NONE;
-            }
-
-//			if (danger != LocationDanger.NONE) {
-//				System.out.println("efwe234523fwe " + danger.name());
-//				dFrom = WarSimScript.getDangerFor(factionId, sysFrom);
-//				dTo = WarSimScript.getDangerFor(factionId, sysTo);
-//			}
-            float pLoss = DANGER_LOSS_PROB.get(danger);
-            if (data.smuggling) pLoss *= 0.5;
-            if ((float) Math.random() < pLoss) {
-                boolean returning = (float) Math.random() < 0.5f;
-//                applyLostShipping(data, returning, true, true, true);
-                RouteManager.getInstance().removeRoute(route);
-                return;
-            }
-
-
-            //float distLY = Misc.getDistanceLY(from.getLocationInHyperspace(), to.getLocation());
-
-            float orbitDays = 2f + (float) Math.random() * 3f;
-            //float endDays = 8f + (float) Math.random() * 3f; // longer since includes time from jump-point to source
-
-            //orbitDays = 1f;
-            orbitDays = data.size * (0.75f + (float) Math.random() * 0.5f);
-
-//			endDays = 0.5f;
-//			float totalTravelTime = orbitDays + endDays + travelDays * 2f;
-
-            //boolean inSystem = from.getContainingLocation() == to.getContainingLocation();
-
-//			WaystationBonus ws = Misc.getWaystation(from, to);
-//			if (ws != null && !data.smuggling) {
-//				route.addSegment(new RouteSegment(ROUTE_SRC_LOAD, orbitDays, from.getPrimaryEntity()));
-//				route.addSegment(new RouteSegment(ROUTE_TRAVEL_WS, from.getPrimaryEntity(), ws.market.getPrimaryEntity()));
-//				route.addSegment(new RouteSegment(ROUTE_RESUPPLY_WS, orbitDays, ws.market.getPrimaryEntity()));
-//				route.addSegment(new RouteSegment(ROUTE_TRAVEL_DST, ws.market.getPrimaryEntity(), to.getPrimaryEntity()));
-//				route.addSegment(new RouteSegment(ROUTE_DST_UNLOAD, orbitDays * 0.5f, to.getPrimaryEntity()));
-//				route.addSegment(new RouteSegment(ROUTE_DST_LOAD, orbitDays * 0.5f, to.getPrimaryEntity()));
-//				route.addSegment(new RouteSegment(ROUTE_TRAVEL_BACK_WS, to.getPrimaryEntity(), ws.market.getPrimaryEntity()));
-//				route.addSegment(new RouteSegment(ROUTE_RESUPPLY_BACK_WS, orbitDays, ws.market.getPrimaryEntity()));
-//				route.addSegment(new RouteSegment(ROUTE_TRAVEL_SRC, ws.market.getPrimaryEntity(), from.getPrimaryEntity()));
-//				route.addSegment(new RouteSegment(ROUTE_SRC_UNLOAD, orbitDays, from.getPrimaryEntity()));
-//			} else {
-            route.addSegment(new RouteManager.RouteSegment(ROUTE_SRC_LOAD, orbitDays, from.getPrimaryEntity()));
-            route.addSegment(new RouteManager.RouteSegment(ROUTE_TRAVEL_DST, from.getPrimaryEntity(), to.getPrimaryEntity()));
-            route.addSegment(new RouteManager.RouteSegment(ROUTE_DST_UNLOAD, orbitDays * 0.5f, to.getPrimaryEntity()));
-            route.addSegment(new RouteManager.RouteSegment(ROUTE_DST_LOAD, orbitDays * 0.5f, to.getPrimaryEntity()));
-            route.addSegment(new RouteManager.RouteSegment(ROUTE_TRAVEL_SRC, to.getPrimaryEntity(), from.getPrimaryEntity()));
-            route.addSegment(new RouteManager.RouteSegment(ROUTE_SRC_UNLOAD, orbitDays, from.getPrimaryEntity()));
-//			}
-
-            setDelayAndSendMessage(route,from.getFactionId());
-
-            recentlySentTradeFleet.add(from.getId(), Global.getSettings().getFloat("minEconSpawnIntervalPerMarket"));
         }
-    }
-    public static void applyLostShipping(EconomyFleetAssignmentAI.EconomyRouteData data, boolean returning, boolean cargo, boolean fuel, boolean personnel) {
-        if (!cargo && !fuel && !personnel) return;
-
-        int penalty = 1;
-        int penalty2 = 2;
-        if (!returning) {
-            for (EconomyFleetAssignmentAI.CargoQuantityData curr : data.cargoDeliver) {
-                CommodityOnMarketAPI com = data.to.getCommodityData(curr.cargo);
-                if (!fuel && com.isFuel()) continue;
-                if (!personnel && com.isPersonnel()) continue;
-                if (!cargo && !com.isFuel() && !com.isPersonnel()) continue;
-
-                com.getAvailableStat().addTemporaryModFlat(
-                        ShippingDisruption.ACCESS_LOSS_DURATION,
-                        ShippingDisruption.COMMODITY_LOSS_PREFIX + Misc.genUID(), "Recent incoming shipment lost", -penalty2);
-
-                ShippingDisruption.getDisruption(data.to).notifyDisrupted(ShippingDisruption.ACCESS_LOSS_DURATION);
-            }
-        }
-        for (EconomyFleetAssignmentAI.CargoQuantityData curr : data.cargoReturn) {
-            CommodityOnMarketAPI com = data.from.getCommodityData(curr.cargo);
-            if (!fuel && com.isFuel()) continue;
-            if (!personnel && com.isPersonnel()) continue;
-            if (!cargo && !com.isFuel() && !com.isPersonnel()) continue;
-
-            com.getAvailableStat().addTemporaryModFlat(
-                    ShippingDisruption.ACCESS_LOSS_DURATION,
-                    ShippingDisruption.COMMODITY_LOSS_PREFIX + Misc.genUID(), "Recent incoming shipment lost", -penalty2);
-
-            ShippingDisruption.getDisruption(data.from).notifyDisrupted(ShippingDisruption.ACCESS_LOSS_DURATION);
-        }
-    }
-    public static AoTDEconomyFleetAssigmentAI.AoTDEconomyRouteData createData(MarketAPI from, MarketAPI to) {
-        if (from == null || to == null || from == to) return null;
-
-        AoTDEconomy.pruneCommoditiesThatMightAppear((Market) from);
-        AoTDEconomy.pruneCommoditiesThatMightAppear((Market) to);
-
-        AoTDEconomyFleetAssigmentAI.AoTDEconomyRouteData smuggling =
-                new AoTDEconomyFleetAssigmentAI.AoTDEconomyRouteData();
-        smuggling.from = from;
-        smuggling.to = to;
-        smuggling.smuggling = true;
-
-        AoTDEconomyFleetAssigmentAI.AoTDEconomyRouteData legal =
-                new AoTDEconomyFleetAssigmentAI.AoTDEconomyRouteData();
-        legal.from = from;
-        legal.to = to;
-        legal.smuggling = false;
-
-        float legalTotal = 0f;
-        float smugglingTotal = 0f;
-
-        Set<String> commodityIds = new LinkedHashSet<String>();
-
-        for (CommodityOnMarketAPI commodity : from.getAllCommodities()) {
-            if (commodity != null && !commodity.isNonEcon()) {
-                commodityIds.add(commodity.getId());
-            }
+        if (sysFrom != null && sysFrom.isCurrentLocation()) danger = WarSimScript.LocationDanger.NONE;
+        float pLoss = DANGER_LOSS_PROB.get(danger);
+        if (data.smuggling) pLoss *= 0.5f;
+        if (Math.random() < pLoss) {
+            // No fleet was generated, so there is no capacity-limited cargo to lose yet.
+            RouteManager.getInstance().removeRoute(route);
+            return;
         }
 
-        for (CommodityOnMarketAPI commodity : to.getAllCommodities()) {
-            if (commodity != null && !commodity.isNonEcon()) {
-                commodityIds.add(commodity.getId());
-            }
-        }
-
-        for (String commodityId : commodityIds) {
-            AoTDCommodityOnMarket fromCommodity =
-                    AoTDCommodityOnMarket.getComMarketInstanceSave(from, commodityId);
-            AoTDCommodityOnMarket toCommodity =
-                    AoTDCommodityOnMarket.getComMarketInstanceSave(to, commodityId);
-
-            if (fromCommodity == null || toCommodity == null) continue;
-
-            int fromRawActivity = Math.max(
-                    fromCommodity.getSupplyDemandData().getTotalRawUnitsFromSupply(),
-                    fromCommodity.getSupplyDemandData().getTotalRawUnitsFromDemand()
-            );
-            int toRawActivity = Math.max(
-                    toCommodity.getSupplyDemandData().getTotalRawUnitsFromSupply(),
-                    toCommodity.getSupplyDemandData().getTotalRawUnitsFromDemand()
-            );
-
-            if (fromRawActivity < 10 && toRawActivity < 10) continue;
-
-            // Outbound cargo: from -> to.
-            int deliverAmount = getTransferAmount(from, to, commodityId);
-
-            // Return cargo: to -> from.
-            int returnAmount = getTransferAmount(to, from, commodityId);
-
-            if (deliverAmount <= 0 && returnAmount <= 0) continue;
-
-            boolean illegal =
-                    fromCommodity.getCommodityMarketData().getMarketShareData(from).isSourceIsIllegal()
-                            || fromCommodity.getCommodityMarketData().getMarketShareData(to).isSourceIsIllegal();
-
-            if (deliverAmount > 0) {
-                deliverAmount = capGeneratedCargoAmount(deliverAmount);
-
-                if (illegal) {
-                    smuggling.addDeliver(commodityId, deliverAmount);
-                    smugglingTotal += deliverAmount;
-                } else {
-                    legal.addDeliver(commodityId, deliverAmount);
-                    legalTotal += deliverAmount;
-                }
-            }
-
-            if (returnAmount > 0) {
-                returnAmount = capGeneratedCargoAmount(returnAmount);
-
-                if (illegal) {
-                    smuggling.addReturn(commodityId, returnAmount);
-                    smugglingTotal += returnAmount;
-                } else {
-                    legal.addReturn(commodityId, returnAmount);
-                    legalTotal += returnAmount;
-                }
-            }
-        }
-
-        Comparator<EconomyFleetAssignmentAI.CargoQuantityData> comp =
-                new Comparator<EconomyFleetAssignmentAI.CargoQuantityData>() {
-                    @Override
-                    public int compare(
-                            EconomyFleetAssignmentAI.CargoQuantityData o1,
-                            EconomyFleetAssignmentAI.CargoQuantityData o2
-                    ) {
-                        if (o1.getCommodity().isPersonnel() && !o2.getCommodity().isPersonnel()) {
-                            return 1;
-                        }
-                        if (o2.getCommodity().isPersonnel() && !o1.getCommodity().isPersonnel()) {
-                            return -1;
-                        }
-                        return Integer.compare(o2.units, o1.units);
-                    }
-                };
-
-        Collections.sort(legal.cargoDeliver, comp);
-        Collections.sort(legal.cargoReturn, comp);
-        Collections.sort(smuggling.cargoDeliver, comp);
-        Collections.sort(smuggling.cargoReturn, comp);
-
-        if (smugglingTotal <= 0f && legalTotal <= 0f) return null;
-
-        AoTDEconomyFleetAssigmentAI.AoTDEconomyRouteData data;
-        if ((float) Math.random() * (smugglingTotal + legalTotal) < smugglingTotal) {
-            data = smuggling;
-        } else {
-            data = legal;
-        }
-
-        while (data.cargoDeliver.size() > 4) {
-            data.cargoDeliver.remove(4);
-        }
-        while (data.cargoReturn.size() > 4) {
-            data.cargoReturn.remove(4);
-        }
-
-        float max = 0f;
-
-        for (EconomyFleetAssignmentAI.CargoQuantityData current : data.cargoDeliver) {
-            max = Math.max(max, current.units);
-        }
-
-        for (EconomyFleetAssignmentAI.CargoQuantityData current : data.cargoReturn) {
-            max = Math.max(max, current.units);
-        }
-
-        data.size = Math.max(0.1f, max / 1000f);
-
-        int types = Math.max(data.cargoDeliver.size(), data.cargoReturn.size());
-        if (types >= 3) {
-            data.size += 1f;
-        }
-        if (types >= 4) {
-            data.size += 1f;
-        }
-
-        return data;
-    }
-
-    private static int capGeneratedCargoAmount(int amount) {
-        if (amount <= 1500) return amount;
-        return 1000 + Misc.random.nextInt(1001);
+        float orbitDays = data.size * (0.75f + (float) Math.random() * 0.5f);
+        route.addSegment(new RouteManager.RouteSegment(ROUTE_SRC_LOAD, orbitDays, from.getPrimaryEntity()));
+        route.addSegment(new RouteManager.RouteSegment(ROUTE_TRAVEL_DST, from.getPrimaryEntity(), to.getPrimaryEntity()));
+        route.addSegment(new RouteManager.RouteSegment(ROUTE_DST_UNLOAD, orbitDays * 0.5f, to.getPrimaryEntity()));
+        route.addSegment(new RouteManager.RouteSegment(ROUTE_DST_LOAD, orbitDays * 0.5f, to.getPrimaryEntity()));
+        route.addSegment(new RouteManager.RouteSegment(ROUTE_TRAVEL_SRC, to.getPrimaryEntity(), from.getPrimaryEntity()));
+        route.addSegment(new RouteManager.RouteSegment(ROUTE_SRC_UNLOAD, orbitDays, from.getPrimaryEntity()));
+        setDelayAndSendMessage(route, factionId);
+        recentlySentTradeFleet.add(from.getId(), Global.getSettings().getFloat("minEconSpawnIntervalPerMarket"));
     }
 
     @Override
     public CampaignFleetAPI spawnFleet(RouteManager.RouteData route) {
-        Random random = new Random();
-        if (route.getSeed() != null) {
-            random = new Random(route.getSeed());
-        }
-
+        Random random = route.getSeed() == null ? new Random() : new Random(route.getSeed());
         CampaignFleetAPI fleet = createTradeRouteFleet(route, random);
-        if (fleet == null) return null;;
-
-        //fleet.getMemoryWithoutUpdate().set(MemFlags.MEMORY_KEY_TRADE_FLEET, true);
-
-        if (KantaCMD.playerHasProtection() && route.getCustom() instanceof EconomyFleetAssignmentAI.EconomyRouteData) {
-            EconomyFleetAssignmentAI.EconomyRouteData data = (EconomyFleetAssignmentAI.EconomyRouteData) route.getCustom();
-            if (data.from != null && data.to != null) {
-                if (data.from.getFaction().isPlayerFaction() || data.to.getFaction().isPlayerFaction()) {
-                    fleet.getMemoryWithoutUpdate().set(MemFlags.FLEET_IGNORED_BY_FACTION, Factions.PIRATES);
-                }
-            }
+        if (fleet == null) return null;
+        EconomyRouteData data = (EconomyRouteData) route.getCustom();
+        if (KantaCMD.playerHasProtection() && (data.from.getFaction().isPlayerFaction() || data.to.getFaction().isPlayerFaction())) {
+            fleet.getMemoryWithoutUpdate().set(MemFlags.FLEET_IGNORED_BY_FACTION, Factions.PIRATES);
         }
-
         fleet.addEventListener(this);
-
         fleet.addScript(new AoTDEconomyFleetAssigmentAI(fleet, route));
         return fleet;
     }
 
-    public void reportBattleOccurred(CampaignFleetAPI fleet, CampaignFleetAPI primaryWinner, BattleAPI battle) {
-        // already reduced by losses taken
-        //System.out.println("Cargo: " + fleet.getCargo().getMaxCapacity());
-
-        RouteManager.RouteData route = RouteManager.getInstance().getRoute(getRouteSourceId(), fleet);
-        if (route == null || !(route.getCustom() instanceof EconomyFleetAssignmentAI.EconomyRouteData)) return;
-
-        if (route.isExpired()) return;
-
-        EconomyFleetAssignmentAI.EconomyRouteData data = (EconomyFleetAssignmentAI.EconomyRouteData) route.getCustom();
-
-        float cargoCap = fleet.getCargo().getMaxCapacity();
-        float fuelCap = fleet.getCargo().getMaxFuel();
-        float personnelCap = fleet.getCargo().getMaxPersonnel();
-
-        float lossFraction = 0.34f;
-
-        //boolean returning = route.getCurrentIndex() >= 3;
-        boolean returning = false;
-        if (route.getCurrent() != null && route.getCurrentSegmentId() >= ROUTE_DST_LOAD) {
-            returning = true;
-        }
-
-        // whether it lost enough carrying capacity to count as an economic loss
-        // of that commodity at destination markets
-        boolean lostCargo = data.cargoCap * lossFraction > cargoCap;
-        boolean lostFuel = data.fuelCap * lossFraction > fuelCap;
-        boolean lostPersonnel = data.personnelCap * lossFraction > personnelCap;
-
-        // set to 0f so that the loss doesn't happen multiple times for a commodity
-        if (lostCargo) data.cargoCap = 0f;
-        if (lostFuel) data.fuelCap = 0f;
-        if (lostPersonnel) data.personnelCap = 0f;
-
-//        applyLostShipping(data, returning, lostCargo, lostFuel, lostPersonnel);
-
-        // if it's lost all 3 capacities, also trigger a general shipping capacity loss at market
-        boolean allThreeLost = true;
-        allThreeLost &= data.cargoCap <= 0f || lostCargo;
-        allThreeLost &= data.fuelCap <= 0f || lostFuel;
-        allThreeLost &= data.personnelCap <= 0f || lostPersonnel;
-//		if (fullyLost) {
-
-        boolean applyAccessLoss = allThreeLost;
-        if (applyAccessLoss) {
-            MarketAPI from = data.from;
-            MarketAPI to = data.to;
-            for (EconomyFleetAssignmentAI.CargoQuantityData cargoQuantityData : data.cargoReturn) {
-                AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(from,cargoQuantityData.getCommodity().getId());
-                com.getExcDefData().deficit.addTemporaryModFlat(60,fleet.getId()+"_aotd_lost_trade","Recent Shipment Lost",cargoQuantityData.units);
-                AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getSpec());
-            }
-            if(!returning){
-                for (EconomyFleetAssignmentAI.CargoQuantityData cargoQuantityData : data.cargoDeliver) {
-                    AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(to,cargoQuantityData.getCommodity().getId());
-                    com.getExcDefData().deficit.addTemporaryModFlat(60,fleet.getId()+"_aotd_lost_trade","Recent Shipment Lost",cargoQuantityData.units);
-                    AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getSpec());
-                }
-                for (EconomyFleetAssignmentAI.CargoQuantityData cargoQuantityData : data.cargoReturn) {
-                    AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(to,cargoQuantityData.getCommodity().getId());
-                    com.getExcDefData().excess.addTemporaryModFlat(60,fleet.getId()+"_aotd_lost_trade","Recent Shipment Lost",cargoQuantityData.units);
-                    AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(),com.getSpec());
-                }
-            }
-
-
-        }
-
-    }
-
-
     public static CampaignFleetAPI createTradeRouteFleet(RouteManager.RouteData route, Random random) {
-        EconomyFleetAssignmentAI.EconomyRouteData data = (EconomyFleetAssignmentAI.EconomyRouteData) route.getCustom();
-
-        MarketAPI from = data.from;
-        MarketAPI to = data.to;
-
-//		if (from.getId().equals("umbra")) {
-//			System.out.println("wefwefw");
-//		}
-
-        float tier = data.size;
-
-        if (data.smuggling && tier > 4) {
-            tier = 4;
-        }
-        if(data.cargoDeliver.stream().anyMatch(x->x.getCommodity().getId().equals(Commodities.SHIPS)||x.getCommodity().getId().equals(Commodities.HAND_WEAPONS))){
-            tier = Math.min(data.size*3,8);
-        }
-
-//		data.smuggling = false;
-//		tier = 4;
-
-//		float stability = from.getStabilityValue();
-//		String factionId = from.getFactionId();
-//		if (!from.getFaction().isHostileTo(Factions.INDEPENDENT) &&
-//				!to.getFaction().isHostileTo(Factions.INDEPENDENT)) {
-//			if ((float) Math.random() * 10f > stability + tier) {
-//				factionId = Factions.INDEPENDENT;
-//			}
-//		}
-//
-//		if (data.smuggling) {
-//			factionId = Factions.INDEPENDENT;
-//		}
-        String factionId = from.getFactionId();
-
-
-        float total = 0f;
+        EconomyRouteData data = (EconomyRouteData) route.getCustom();
         float fuel = 0f;
         float cargo = 0f;
         float personnel = 0f;
-        //float ships = 0f;
-
-        List<EconomyFleetAssignmentAI.CargoQuantityData> all = new ArrayList<EconomyFleetAssignmentAI.CargoQuantityData>();
-        all.addAll(data.cargoDeliver);
-        all.addAll(data.cargoReturn);
-        for (EconomyFleetAssignmentAI.CargoQuantityData curr : all) {
-            CommoditySpecAPI spec = curr.getCommodity();
-//			if (spec.getId().equals(Commodities.SHIPS)) {
-//				ships = Math.max(ships, curr.units);
-//			}
-            if (spec.isMeta()) continue;
-
-            total += curr.units;
-            if (spec.hasTag(Commodities.TAG_PERSONNEL)) {
-                personnel += curr.units;
-            } else if (spec.getId().equals(Commodities.FUEL)) {
-                fuel += curr.units;
-            } else {
-                cargo += curr.units;
+        float tier = data.size;
+        for (int i = 0; i < 2; i++) {
+            MarketAPI source = i == 0 ? data.from : data.to;
+            MarketAPI destination = i == 0 ? data.to : data.from;
+            List<CargoQuantityData> list = i == 0 ? data.cargoDeliver : data.cargoReturn;
+            for (CargoQuantityData curr : list) {
+                float units = getCargoTier(curr, source, destination);
+                tier = Math.max(tier, units);
+                CommoditySpecAPI spec = curr.getCommodity();
+                if (spec.isMeta()) continue;
+                if (spec.hasTag(Commodities.TAG_PERSONNEL)) personnel += units;
+                else if (Commodities.FUEL.equals(curr.cargo)) fuel += units;
+                else cargo += units;
             }
         }
-
-//		System.out.println("Ships: " + ships);
-        if (total < 1f) total = 1f;
-
-        float fuelFraction = fuel / total;
-        float personnelFraction = personnel / total;
-        float cargoFraction = cargo / total;
-
-//		fuelFraction = 0.33f;
-//		personnelFraction = 0.33f;
-//		cargoFraction = 0.33f;
-
-        if (fuelFraction + personnelFraction + cargoFraction > 0) {
-            float mult = 1f / (fuelFraction + personnelFraction + cargoFraction);
-            fuelFraction *= mult;
-            personnelFraction *= mult;
-            cargoFraction *= mult;
-        }
-
-        log.info("Creating trade fleet of tier " + tier + " for market [" + from.getName() + "]");
-
-        float stabilityFactor = 1f + from.getStabilityValue() / 20f;
-
-        float combat = Math.max(1f, tier * stabilityFactor * 0.5f) * 15f;
-        float freighter = tier * 2f * cargoFraction * 3f;
-        float tanker = tier * 2f * fuelFraction * 3f;
-        float transport = tier * 2f * personnelFraction * 3f;
-        float liner = 0f;
-
-        //float utility = 1f + tier * 0.25f;
-        float utility = 0f;
-
-        String type = getFleetTypeIdForTier(tier, data.smuggling);
+        data.size = Math.max(1f, tier);
+        tier = data.smuggling ? Math.min(data.size, 4f) : data.size;
+        float total = Math.max(1f, fuel + cargo + personnel);
+        float stabilityFactor = 1f + data.from.getStabilityValue() / 20f;
+        float combat = Math.max(1f, tier * stabilityFactor * 0.5f) * 10f;
+        float freighter = tier * 6f * cargo / total;
+        float tanker = tier * 6f * fuel / total;
+        float transport = tier * 6f * personnel / total;
         if (data.smuggling) {
-            //combat *= 2f;
             freighter *= 0.5f;
             tanker *= 0.5f;
             transport *= 0.5f;
-            liner *= 0.5f;
         }
 
-        FleetParamsV3 params = new FleetParamsV3(
-                from,
-                null, // locInHyper
-                factionId,
-                route.getQualityOverride(), // qualityOverride
-                type,
-                combat, // combatPts
-                freighter, // freighterPts
-                tanker, // tankerPts
-                transport, // transportPts
-                liner, // linerPts
-                utility, // utilityPts
-                0f //-0.5f // qualityBonus
-        );
+        FleetParamsV3 params = new FleetParamsV3(data.from, null, route.getFactionId(), route.getQualityOverride(),
+                getFleetTypeIdForTier(tier, data.smuggling), combat, freighter, tanker, transport, 0f, 0f, 0f);
         params.timestamp = route.getTimestamp();
         params.onlyApplyFleetSizeToCombatShips = true;
         params.maxShipSize = 3;
@@ -659,13 +284,10 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
         params.officerNumberMult = 0.5f;
         params.random = random;
         CampaignFleetAPI fleet = FleetFactoryV3.createFleet(params);
-
         if (fleet == null || fleet.isEmpty()) return null;
-
         if (Misc.isPirateFaction(fleet.getFaction())) {
             fleet.getMemoryWithoutUpdate().set(MemFlags.MEMORY_KEY_FORCE_TRANSPONDER_OFF, true);
         }
-
         if (data.smuggling) {
             fleet.getMemoryWithoutUpdate().set(MemFlags.MEMORY_KEY_SMUGGLER, true);
             Misc.makeLowRepImpact(fleet, "smuggler");
@@ -673,36 +295,64 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
             fleet.getMemoryWithoutUpdate().set(MemFlags.MEMORY_KEY_TRADE_FLEET, true);
         }
 
-        //cargoCap, fuelCap, personnelCap;
+        // Tier controls the ships. Raw cargo is limited separately, for each leg.
+        AoTDEconomyFleetAssigmentAI.limitCargoToCapacity(data.cargoDeliver, fleet.getCargo());
+        AoTDEconomyFleetAssigmentAI.limitCargoToCapacity(data.cargoReturn, fleet.getCargo());
         data.cargoCap = fleet.getCargo().getMaxCapacity();
         data.fuelCap = fleet.getCargo().getMaxFuel();
         data.personnelCap = fleet.getCargo().getMaxPersonnel();
-        ;
-        //ShippingDisruption.getShippingDisruption(from).getShippingPenalty().addTemporaryModFlat(1f, "fwefwe", 1f);
-
         return fleet;
-
-    }
-    protected void setDelayAndSendMessage(RouteManager.RouteData route, String from) {
-        EconomyFleetAssignmentAI.EconomyRouteData data = (EconomyFleetAssignmentAI.EconomyRouteData) route.getCustom();
-
-        float delay = 0.1f;
-        delay = 10f;
-        if (data.size <= 4f) {
-            delay = 5f;
-        } else if (data.size <= 6f) {
-            delay = 10f;
-        } else {
-            delay = 15f;
-        }
-        delay *= 0.75f + (float) Math.random() * 0.5f;
-        delay = (int) delay;
-        route.setDelay(delay);
-
-        if (!Factions.PLAYER.equals(from)) {
-            // queues itself
-            new AoTDTradeFleetDepartureIntel(route);
-        }
     }
 
+    @Override
+    public void reportBattleOccurred(CampaignFleetAPI fleet, CampaignFleetAPI primaryWinner, BattleAPI battle) {
+        RouteManager.RouteData route = RouteManager.getInstance().getRoute(getRouteSourceId(), fleet);
+        if (route == null || route.isExpired() || !(route.getCustom() instanceof EconomyRouteData)) return;
+        EconomyRouteData data = (EconomyRouteData) route.getCustom();
+        boolean returning = route.getCurrent() != null && route.getCurrentSegmentId() >= ROUTE_DST_LOAD;
+        boolean cargo = data.cargoCap * 0.34f > fleet.getCargo().getMaxCapacity();
+        boolean fuel = data.fuelCap * 0.34f > fleet.getCargo().getMaxFuel();
+        boolean personnel = data.personnelCap * 0.34f > fleet.getCargo().getMaxPersonnel();
+        if (!cargo && !fuel && !personnel) return;
+        if (cargo) data.cargoCap = 0f;
+        if (fuel) data.fuelCap = 0f;
+        if (personnel) data.personnelCap = 0f;
+        applyLostShipping(data, returning, cargo, fuel, personnel);
+    }
+
+    public static void applyLostShipping(EconomyRouteData data, boolean returning, boolean cargo, boolean fuel, boolean personnel) {
+        if (!cargo && !fuel && !personnel) return;
+        String id = Misc.genUID() + "_aotd_lost_trade";
+        if (!returning) applyLostCargo(data.to, data.cargoDeliver, cargo, fuel, personnel, false, id);
+        applyLostCargo(data.from, data.cargoReturn, cargo, fuel, personnel, false, id);
+        if (!returning) applyLostCargo(data.to, data.cargoReturn, cargo, fuel, personnel, true, id);
+    }
+
+    private static void applyLostCargo(MarketAPI market, List<CargoQuantityData> list, boolean cargo, boolean fuel,
+                                      boolean personnel, boolean excess, String id) {
+        for (CargoQuantityData curr : list) {
+            CommoditySpecAPI spec = curr.getCommodity();
+            if (Commodities.FUEL.equals(curr.cargo)) {
+                if (!fuel) continue;
+            } else if (spec.isPersonnel()) {
+                if (!personnel) continue;
+            } else if (!cargo) continue;
+            AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(market, curr.cargo);
+            if (excess) com.getExcDefData().excess.addTemporaryModFlat(60f, id, "Recent Shipment Lost", curr.units);
+            else com.getExcDefData().deficit.addTemporaryModFlat(60f, id, "Recent Shipment Lost", curr.units);
+            AoTdMainWorkTask2.aotdUpdateStockpileAndPrice(com.getMarket(), com.getSpec());
+        }
+    }
+
+    @Override
+    protected void setDelayAndSendMessage(RouteManager.RouteData route) {
+        setDelayAndSendMessage(route, route.getFactionId());
+    }
+
+    protected void setDelayAndSendMessage(RouteManager.RouteData route, String factionId) {
+        EconomyRouteData data = (EconomyRouteData) route.getCustom();
+        float delay = data.size <= 4f ? 5f : data.size <= 6f ? 10f : 15f;
+        route.setDelay((int) (delay * (0.75f + (float) Math.random() * 0.5f)));
+        if (!Factions.PLAYER.equals(factionId)) new AoTDTradeFleetDepartureIntel(route);
+    }
 }

@@ -159,7 +159,38 @@ public class AoTDToolboxMisc {
                 || AoTDStableStructureConstruction.SCAFFOLD.equals(token.getCustomEntityType())
                 || token.getMemoryWithoutUpdate().contains(AoTDStableStructureSpecManager.memKeyInEntities);
     }
+    public static String getDisplayNameForResource(String commodityId) {
+        if (commodityId == null) return "";
 
+        if (Global.getSettings().getCommoditySpec(commodityId) != null) {
+            return Global.getSettings().getCommoditySpec(commodityId).getName();
+        }
+        if (Global.getSettings().getSpecialItemSpec(commodityId) != null) {
+            return Global.getSettings().getSpecialItemSpec(commodityId).getName();
+        }
+
+        return commodityId;
+    }
+    public static LinkedHashMap<String, Integer> getOrderedResourceMap(Map<String, Integer> input) {
+        LinkedHashMap<String, Integer> ordered = new LinkedHashMap<>();
+        if (input == null || input.isEmpty()) return ordered;
+
+        // First: explicitly ordered items
+
+
+        // Then: everything else, stable and predictable
+        input.entrySet().stream()
+                .filter(e -> e.getValue() != null && e.getValue() > 0)
+                .filter(e -> !ordered.containsKey(e.getKey()))
+                .sorted((a, b) -> {
+                    String nameA = getDisplayNameForResource(a.getKey());
+                    String nameB = getDisplayNameForResource(b.getKey());
+                    return nameA.compareToIgnoreCase(nameB);
+                })
+                .forEach(e -> ordered.put(e.getKey(), e.getValue()));
+
+        return ordered;
+    }
     public static List<SectorEntityToken> getSystemStructureEntities(StarSystemAPI system) {
         List<SectorEntityToken> result = new ArrayList<>();
         for (SectorEntityToken token : system.getAllEntities()) {

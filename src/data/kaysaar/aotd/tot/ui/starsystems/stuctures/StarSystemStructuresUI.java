@@ -30,10 +30,12 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
     IntervalUtil refresh = new IntervalUtil(0.25f, 0.25f);
     List<SectorEntityToken> displayedEntities = new ArrayList<>();
     int displayedCapacity;
+    int displayedUsedSlots;
     boolean refreshRequested;
 
     public void requestRefresh() {
         refreshRequested = true;
+        AoTDStableStructureConstruction.requestUIRefresh(system);
     }
 
     public List<SectorEntityToken> getStructureEntities() {
@@ -137,6 +139,7 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
         displayedEntities = new ArrayList<>(objs);
         int total = objs.size();
         int structuresUsed = AoTDToolboxMisc.getUsedSystemStructureSlots(system);
+        displayedUsedSlots = structuresUsed;
 
         int perRow = (int) Math.floor((availableWidth + separator) / (widgetW + separator));
         perRow = Math.max(1, perRow);
@@ -230,8 +233,10 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
         }
         refresh.advance(amount);
         if (refresh.intervalElapsed()) {
-            if (!displayedEntities.equals(getStructureEntities())
-                    || displayedCapacity != AoTDToolboxMisc.getSystemStructureCapacityStat(system).getModifiedInt()) createUI();
+            boolean changed = !displayedEntities.equals(getStructureEntities());
+            if (changed) AoTDStableStructureConstruction.requestUIRefresh(system);
+            if (changed || displayedCapacity != AoTDToolboxMisc.getSystemStructureCapacityStat(system).getModifiedInt()
+                    || displayedUsedSlots != AoTDToolboxMisc.getUsedSystemStructureSlots(system)) createUI();
             manageButton.setEnabled(AshMisc.getClaimingFaction(system.getCenter()).isPlayerFaction()
                     && AoTDToolboxMisc.getUsedSystemStructureSlots(system) < displayedCapacity);
         }
