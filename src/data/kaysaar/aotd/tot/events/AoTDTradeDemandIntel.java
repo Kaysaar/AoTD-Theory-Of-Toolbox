@@ -49,9 +49,20 @@ public class AoTDTradeDemandIntel extends AshlibBaseEventIntel {
         }
     }
 
+    protected boolean hasExpired() {
+        if (order == null) return getRemainingDays() <= 0;
+        return order.status == AoTDTradeDemandOrder.Status.EXPIRED
+                || order.status == AoTDTradeDemandOrder.Status.CANCELLED;
+    }
+
     @Override
     public boolean shouldRemoveIntel() {
-        return super.shouldRemoveIntel();
+        return super.shouldRemoveIntel() || hasExpired();
+    }
+
+    @Override
+    protected void advanceImpl(float amount) {
+        if (hasExpired() && !isEnding()) endImmediately();
     }
 
     @Override

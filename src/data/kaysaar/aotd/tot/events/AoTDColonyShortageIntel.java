@@ -44,6 +44,19 @@ public class AoTDColonyShortageIntel extends AoTDTradeDemandIntel {
     }
 
     @Override
+    protected boolean hasExpired() {
+        if (orders.isEmpty()) {
+            return Global.getSector().getClock().getElapsedDaysSince(getOccurredAt())
+                    >= TradeVolatilitySettings.daysPerMonth;
+        }
+        for (AoTDTradeDemandOrder order : orders.values()) {
+            if (order.status == AoTDTradeDemandOrder.Status.PENDING
+                    || order.status == AoTDTradeDemandOrder.Status.ACTIVE) return false;
+        }
+        return true;
+    }
+
+    @Override
     protected Color getEventColor() {
         return Misc.getButtonTextColor();
     }

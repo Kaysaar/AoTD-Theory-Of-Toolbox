@@ -1,6 +1,5 @@
 package data.kaysaar.aotd.tot.ui.starsystems.stuctures.widget;
 
-import com.fs.starfarer.api.ui.ButtonAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
@@ -15,11 +14,9 @@ public class ShutdownInfoPopUp extends DowngradeInfoPopUp {
     }
 
     @Override
-    public ButtonAPI generateConfirmButton(TooltipMakerAPI tooltip) {
-        ButtonAPI bt = super.generateConfirmButton(tooltip);
-        bt.setEnabled(AoTDStableStructureConstruction.canShutDown(widget.getStructure())
-                && !AoTDStableStructureConstruction.canCancelConstruction(widget.getStructure()));
-        return bt;
+    protected boolean canExecuteAction(AoTDStableStructureImpl impl) {
+        return AoTDStableStructureConstruction.canShutDown(impl)
+                && !AoTDStableStructureConstruction.canCancelConstruction(impl);
     }
 
     @Override
@@ -50,20 +47,9 @@ public class ShutdownInfoPopUp extends DowngradeInfoPopUp {
     }
 
     @Override
-    public void advance(float amount) {
-        super.advance(amount);
-        if (confirmButton != null) {
-            boolean can = AoTDStableStructureConstruction.canShutDown(widget.getStructure())
-                    && !AoTDStableStructureConstruction.canCancelConstruction(widget.getStructure());
-            if (confirmButton.isEnabled() != can) confirmButton.setEnabled(can);
-        }
-    }
-
-    @Override
     public void applyConfirmScript() {
         AoTDStableStructureImpl impl = widget.getStructure();
-        if (AoTDStableStructureConstruction.canShutDown(impl)
-                && !AoTDStableStructureConstruction.canCancelConstruction(impl)) {
+        if (canExecuteAction(impl)) {
             AoTDStableStructureConstruction.shutDown(impl);
         }
     }

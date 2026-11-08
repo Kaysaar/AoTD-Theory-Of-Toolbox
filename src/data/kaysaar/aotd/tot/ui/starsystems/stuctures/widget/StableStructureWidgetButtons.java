@@ -251,13 +251,17 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
 
             button.createUI();
             if (data != null) {
-                button.mainButton.setEnabled(data.enabled);
-                button.mainButton.setClickable(data.enabled);
+                if (button.mainButton.isEnabled() != data.enabled) {
+                    button.mainButton.setEnabled(data.enabled);
+                    button.mainButton.setClickable(data.enabled);
+                }
             }
             if (AI_CORE.equals(id)) {
                 boolean enabled = AssignAICoreStructure.canAssignAICore(widget.getStructure());
-                button.mainButton.setEnabled(enabled);
-                button.mainButton.setClickable(enabled);
+                if (button.mainButton.isEnabled() != enabled) {
+                    button.mainButton.setEnabled(enabled);
+                    button.mainButton.setClickable(enabled);
+                }
             }
 
             tooltip.addCustom(button.getMainPanel(), 0f)
@@ -286,20 +290,24 @@ public class StableStructureWidgetButtons extends InstantPopUpUI {
 
             if (AI_CORE.equals(entry.getKey())) {
                 boolean enabled = AssignAICoreStructure.canAssignAICore(widget.getStructure());
-                button.mainButton.setEnabled(enabled);
-                button.mainButton.setClickable(enabled);
+                if (button.mainButton.isEnabled() != enabled) {
+                    button.mainButton.setEnabled(enabled);
+                    button.mainButton.setClickable(enabled);
+                }
                 if (!enabled) {
-                    button.setChecked(false);
+                    if (button.isChecked()) button.setChecked(false);
                     continue;
                 }
             }
 
             StructureOptionData data = customOptions.get(entry.getKey());
             if (data != null) {
-                button.mainButton.setEnabled(data.enabled);
-                button.mainButton.setClickable(data.enabled);
+                if (button.mainButton.isEnabled() != data.enabled) {
+                    button.mainButton.setEnabled(data.enabled);
+                    button.mainButton.setClickable(data.enabled);
+                }
                 if (!data.enabled) {
-                    button.setChecked(false);
+                    if (button.isChecked()) button.setChecked(false);
                     continue;
                 }
             }

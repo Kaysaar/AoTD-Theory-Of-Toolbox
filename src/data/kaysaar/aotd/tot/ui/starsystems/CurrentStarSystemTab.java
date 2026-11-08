@@ -7,6 +7,7 @@ import ashlib.data.plugins.ui.models.resizable.map.MapZoomableComponent;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
+import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
@@ -85,26 +86,45 @@ public class CurrentStarSystemTab implements ExtendedUIPanelPlugin {
         TooltipMakerAPI tooltipFirst = contentPanel.createUIElement(contentPanel.getPosition().getWidth(),heightLeft,false);
         tooltipFirst.setParaFont(Fonts.ORBITRON_16);
         claim=tooltipFirst.addButton("Claim Star System Ownership",null,Misc.getBasePlayerColor(),Misc.getDarkPlayerColor(),Alignment.MID,CutStyle.TL_BR,contentPanel.getPosition().getWidth()-5,30,5f);
-        FactionAPI factionAPI = AshMisc.getClaimingFaction(currStarSystem.getCenter());
-        if(factionAPI.isPlayerFaction()){
-            claim.setEnabled(false);
-            tooltipFirst.addTooltipTo(new TooltipMakerAPI.TooltipCreator() {
-                @Override
-                public boolean isTooltipExpandable(Object tooltipParam) {
-                    return false;
+        claim.setEnabled(ClaimStarSystemOwnershipDialog.canClaim(currStarSystem));
+        tooltipFirst.addTooltipTo(new TooltipMakerAPI.TooltipCreator() {
+            @Override
+            public boolean isTooltipExpandable(Object tooltipParam) {
+                return false;
+            }
+
+            @Override
+            public float getTooltipWidth(Object tooltipParam) {
+                return 440;
+            }
+
+            @Override
+            public void createTooltip(TooltipMakerAPI tooltip, boolean expanded, Object tooltipParam) {
+                FactionAPI owner = AshMisc.getClaimingFaction(currStarSystem.getCenter());
+                if (owner != null && owner.isPlayerFaction()) {
+                    tooltip.addPara("You already own this star system.", 3f);
+                    return;
                 }
 
-                @Override
-                public float getTooltipWidth(Object tooltipParam) {
-                    return 400;
-                }
+                tooltip.addPara("Your faction must have the largest combined market size in this star system to claim ownership. Ties do not qualify.", 3f);
+                tooltip.addPara("Your combined market size: %s. Largest competing faction: %s.", 5f,
+                        Misc.getHighlightColor(),
+                        String.valueOf(ClaimStarSystemOwnershipDialog.getPlayerCombinedMarketSize(currStarSystem)),
+                        String.valueOf(ClaimStarSystemOwnershipDialog.getLargestOtherCombinedMarketSize(currStarSystem)));
 
-                @Override
-                public void createTooltip(TooltipMakerAPI tooltip, boolean expanded, Object tooltipParam) {
-                    tooltip.addPara("You are already owner of this star system!",3f);
+                if (owner != null && !Factions.NEUTRAL.equals(owner.getId())) {
+                    tooltip.addPara("Claiming the system reduces your relationship with %s by %s points.", 5f,
+                            Misc.getNegativeHighlightColor(), owner.getDisplayName(), "70");
+                } else {
+                    tooltip.addPara("There is no recognized faction owner, so claiming does not reduce relationships.", 5f);
                 }
-            },claim, TooltipMakerAPI.TooltipLocation.BELOW,false);
-        }
+                if (!ClaimStarSystemOwnershipDialog.canClaim(currStarSystem)) {
+                    tooltip.addPara("You do not currently meet the ownership requirement.", Misc.getNegativeHighlightColor(), 5f);
+                }
+                tooltip.addPara("This mechanic will be fully overhauled / expanded with Seats of Power 4.0 Update",Misc.getGrayColor(),15f);
+            }
+        },claim, TooltipMakerAPI.TooltipLocation.BELOW,false);
+
         tooltipFirst.addPara("System Structures", AshMisc.getClaimingFaction(currStarSystem.getCenter()).getBaseUIColor(),17f).setAlignment(Alignment.MID);
         if(struct==null){
             struct = new StarSystemStructuresUI(contentPanel.getPosition().getWidth(),heightLeft,currStarSystem);
@@ -138,6 +158,15 @@ public class CurrentStarSystemTab implements ExtendedUIPanelPlugin {
     public void advance(float amount) {
         if (currStarSystem != null && displayedStructureVersion != AoTDStableStructureConstruction.getUIRefreshVersion(currStarSystem)) {
             createUI();
+        }
+
+        if (claim != null && currStarSystem != null) {
+            boolean can = ClaimStarSystemOwnershipDialog.canClaim(currStarSystem);
+            if (claim.isEnabled() != can) claim.setEnabled(can);
+            if (claim.isChecked()) {
+                claim.setChecked(false);
+                if (can) AshMisc.initPopUpDialog(new ClaimStarSystemOwnershipDialog(currStarSystem), 750, 260);
+            }
         }
     }
 

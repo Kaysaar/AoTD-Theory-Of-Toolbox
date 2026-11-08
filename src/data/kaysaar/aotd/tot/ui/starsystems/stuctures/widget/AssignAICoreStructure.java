@@ -260,8 +260,9 @@ public class AssignAICoreStructure extends BasePopUpDialog {
     @Override
     public void advance(float amount) {
         if (confirmButton != null) {
-            confirmButton.setEnabled(canConfirm());
-            if (!confirmButton.isEnabled()) confirmButton.setChecked(false);
+            boolean enabled = canConfirm();
+            if (confirmButton.isEnabled() != enabled) confirmButton.setEnabled(enabled);
+            if (!enabled && confirmButton.isChecked()) confirmButton.setChecked(false);
         }
         if (unassign != null && unassign.isChecked()) {
             unassign.setChecked(false);

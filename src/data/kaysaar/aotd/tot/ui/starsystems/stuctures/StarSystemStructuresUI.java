@@ -9,6 +9,7 @@ import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.*;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.listeners.AoTDSystemStructureColonizationListener;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureImpl;
@@ -106,6 +107,8 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
 
     @Override
     public void createUI() {
+        // Also fixes unclaimed pre-existing structures when this UI is opened.
+        AoTDSystemStructureColonizationListener.claimUnownedStructures(system);
         AoTDSystemStructureCapacityManager.update(system);
         if (contentPanel != null) {
             mainPanel.removeComponent(contentPanel);
@@ -237,8 +240,9 @@ public class StarSystemStructuresUI implements ExtendedUIPanelPlugin {
             if (changed) AoTDStableStructureConstruction.requestUIRefresh(system);
             if (changed || displayedCapacity != AoTDToolboxMisc.getSystemStructureCapacityStat(system).getModifiedInt()
                     || displayedUsedSlots != AoTDToolboxMisc.getUsedSystemStructureSlots(system)) createUI();
-            manageButton.setEnabled(AshMisc.getClaimingFaction(system.getCenter()).isPlayerFaction()
-                    && AoTDToolboxMisc.getUsedSystemStructureSlots(system) < displayedCapacity);
+            boolean canManage = AshMisc.getClaimingFaction(system.getCenter()).isPlayerFaction()
+                    && AoTDToolboxMisc.getUsedSystemStructureSlots(system) < displayedCapacity;
+            if (manageButton != null && manageButton.isEnabled() != canManage) manageButton.setEnabled(canManage);
         }
         if (manageButton != null && manageButton.isChecked()) {
             manageButton.setChecked(false);

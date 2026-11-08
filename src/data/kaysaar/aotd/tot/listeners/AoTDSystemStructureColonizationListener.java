@@ -13,24 +13,33 @@ import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureSpecManager;
 
 public class AoTDSystemStructureColonizationListener implements PlayerColonizationListener {
 
-    @Override
-    public void reportPlayerColonizedPlanet(PlanetAPI planet) {
-        if (planet == null || planet.getStarSystem() == null || planet.getMarket() == null
-                || !planet.getMarket().getFaction().isPlayerFaction()) return;
+    public static boolean canClaimUnownedStructures(StarSystemAPI system) {
+        if (system == null || Global.getSector() == null) return false;
 
-        StarSystemAPI system = planet.getStarSystem();
-
-        // Only claim neutral structures when establishing the first player colony
-        // in a system that does not already belong to another faction.
+        boolean hasPlayerColony = false;
         for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
-            if (market.getStarSystem() != system || market == planet.getMarket()) continue;
-            if (!Factions.DERELICT.equals(market.getFactionId())) return;
-        }
+            if (market.getStarSystem() != system) continue;
 
+            if (market.getFaction() != null && market.getFaction().isPlayerFaction()) {
+                hasPlayerColony = true;
+            } else if (!Factions.NEUTRAL.equals(market.getFactionId())
+                    && !Factions.DERELICT.equals(market.getFactionId())) {
+                return false;
+            }
+        }
+        return hasPlayerColony;
+    }
+
+    public static int claimUnownedStructures(StarSystemAPI system) {
+        if (!canClaimUnownedStructures(system)) return 0;
+
+        int claimed = 0;
         for (SectorEntityToken token : system.getAllEntities()) {
             if (token.isExpired() || token.getFaction() == null
-                    || !Factions.DERELICT.equals(token.getFaction().getId())
                     || AoTDToolboxMisc.isSystemStableLocation(token)) continue;
+
+            String factionId = token.getFaction().getId();
+            if (!Factions.NEUTRAL.equals(factionId) && !Factions.DERELICT.equals(factionId)) continue;
 
             String id = token.getCustomEntityType();
             if (AoTDStableStructureConstruction.SCAFFOLD.equals(id)
@@ -41,7 +50,18 @@ public class AoTDSystemStructureColonizationListener implements PlayerColonizati
             if (!AoTDToolboxMisc.isSystemStructure(token) && !registered) continue;
 
             token.setFaction(Factions.PLAYER);
+            claimed++;
         }
+        return claimed;
+    }
+
+    @Override
+    public void reportPlayerColonizedPlanet(PlanetAPI planet) {
+        if (planet == null || planet.getStarSystem() == null || planet.getMarket() == null
+                || planet.getMarket().getFaction() == null
+                || !planet.getMarket().getFaction().isPlayerFaction()) return;
+
+        claimUnownedStructures(planet.getStarSystem());
     }
 
     @Override

@@ -26,6 +26,18 @@ public class AoTDStableStructureConstruction {
     public static final String WIDGET_ORDER = "$aotd_structure_widget_order";
     public static final float DOWNGRADE_REFUND_MULT = 0.4f;
     public static final float SHUTDOWN_REFUND_MULT = 0.4f;
+    public static final String UI_REFRESH_VERSION = "$aotd_system_structure_ui_refresh_version";
+
+    public static long getUIRefreshVersion(StarSystemAPI system) {
+        if (system == null) return 0L;
+        Object version = system.getMemoryWithoutUpdate().get(UI_REFRESH_VERSION);
+        return version instanceof Number ? ((Number) version).longValue() : 0L;
+    }
+
+    public static void requestUIRefresh(StarSystemAPI system) {
+        if (system == null) return;
+        system.getMemoryWithoutUpdate().set(UI_REFRESH_VERSION, getUIRefreshVersion(system) + 1L);
+    }
 
     public static AoTDStableStructureImpl getBaseStructure(AoTDStableStructureImpl selected) {
         return selected.getConstructionStagesFromBase().getFirst().getImplClassInstance();
@@ -87,6 +99,7 @@ public class AoTDStableStructureConstruction {
             new Objectives().updateOrbitingEntities(system, focus, scaffold);
         }
         if (base instanceof AoTDLinkedStructureImpl linked) linked.onConstructionStarted();
+        requestUIRefresh(system);
         return base;
     }
 
@@ -144,6 +157,7 @@ public class AoTDStableStructureConstruction {
     public static void replaceEntity(AoTDStableStructureImpl previous, AoTDStableStructureImpl next, SectorEntityToken built) {
         SectorEntityToken current = previous.currentlyAssignedToken;
         LocationAPI location = current.getContainingLocation();
+        StarSystemAPI system = current.getStarSystem();
         current.getMemoryWithoutUpdate().unset(AoTDStableStructureSpecManager.memKeyInEntities);
         // Controlled handoff only: ordinary setCurrentlyAssignedToken still rejects accidental moves.
         next.currentlyAssignedToken = null;
@@ -151,6 +165,7 @@ public class AoTDStableStructureConstruction {
         location.removeEntity(current);
         new Objectives().updateOrbitingEntities(location, current, built);
         current.setExpired(true);
+        requestUIRefresh(system);
     }
 
     public static boolean canDowngrade(AoTDStableStructureImpl impl) {
@@ -257,6 +272,7 @@ public class AoTDStableStructureConstruction {
 
         SectorEntityToken current = impl.currentlyAssignedToken;
         LocationAPI location = current.getContainingLocation();
+        StarSystemAPI system = current.getStarSystem();
         if (location == null) return false;
 
         long refund = Math.max(0L, Math.round(impl.getCumulativeCreditCost() * (double) SHUTDOWN_REFUND_MULT));
@@ -281,6 +297,7 @@ public class AoTDStableStructureConstruction {
         location.removeEntity(current);
         current.setExpired(true);
         if (refund > 0L) Global.getSector().getPlayerFleet().getCargo().getCredits().add(refund);
+        requestUIRefresh(system);
         return true;
     }
 
@@ -288,10 +305,12 @@ public class AoTDStableStructureConstruction {
         SectorEntityToken current = impl.currentlyAssignedToken;
         if (!SCAFFOLD.equals(current.getCustomEntityType())) return;
         LocationAPI location = current.getContainingLocation();
+        StarSystemAPI system = current.getStarSystem();
         restoreStableLocation(current);
         current.getMemoryWithoutUpdate().unset(AoTDStableStructureSpecManager.memKeyInEntities);
         location.removeEntity(current);
         current.setExpired(true);
+        requestUIRefresh(system);
     }
 
     private static void restoreStableLocation(SectorEntityToken current) {

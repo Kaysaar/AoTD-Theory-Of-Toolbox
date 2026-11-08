@@ -24,12 +24,17 @@ public class DowngradeInfoPopUp extends BasePopUpDialog {
         confirmButtonText = "Downgrade";
     }
 
+    protected boolean canExecuteAction(AoTDStableStructureImpl impl) {
+        return AoTDStableStructureConstruction.canDowngrade(impl);
+    }
+
     @Override
     public ButtonAPI generateConfirmButton(TooltipMakerAPI tooltip) {
         ButtonAPI bt = super.generateConfirmButton(tooltip);
         bt.setButtonPressedSound("ui_downgrade_industry");
         bt.setShortcut(Keyboard.KEY_G, false);
-        bt.setEnabled(AoTDStableStructureConstruction.canDowngrade(widget.getStructure()));
+        boolean can = canExecuteAction(widget.getStructure());
+        if (bt.isEnabled() != can) bt.setEnabled(can);
         return bt;
     }
 
@@ -56,7 +61,7 @@ public class DowngradeInfoPopUp extends BasePopUpDialog {
     public void advance(float amount) {
         super.advance(amount);
         if (confirmButton != null) {
-            boolean can = AoTDStableStructureConstruction.canDowngrade(widget.getStructure());
+            boolean can = canExecuteAction(widget.getStructure());
             if (confirmButton.isEnabled() != can) confirmButton.setEnabled(can);
         }
     }

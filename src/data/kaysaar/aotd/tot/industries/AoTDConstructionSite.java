@@ -41,6 +41,7 @@ public class AoTDConstructionSite extends BaseIndustry {
     }
 
     public void addResourcesToBeSpentOnRestoration(String resource, int value) {
+        if (value <= 0) return;
         int curr = delivered.getOrDefault(resource, 0);
         delivered.put(resource, curr + value);
     }
@@ -57,60 +58,50 @@ public class AoTDConstructionSite extends BaseIndustry {
         super.buildingFinished();
     }
 
-    public float getAllowedProgressOnRestoration() {
+    public LinkedHashMap<String, Integer> getTotalResourcesNeeded() {
         LinkedHashMap<String, Integer> required = new LinkedHashMap<>();
-        for (Map.Entry<String, Integer> entry : wonderAPI.getDemandCostForRestoration().entrySet()) {
-            required.put(entry.getKey(), (int) (AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(entry.getValue(), true, entry.getKey())*Math.ceil(wonderAPI.getSpec().getBuildTime()/30f)));
-        }
+        if (wonderAPI == null) return required;
 
-        if (required == null || required.isEmpty()) {
-            return 1f;
+        int months = Math.max(1, (int) Math.ceil(wonderAPI.getSpec().getBuildTime() / 30f));
+        for (Map.Entry<String, Integer> entry : wonderAPI.getDemandCostForRestoration().entrySet()) {
+            int units = (int) (AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(
+                    entry.getValue(), true, entry.getKey()) * months);
+            if (units > 0) required.put(entry.getKey(), units);
         }
+        return required;
+    }
+
+    public float getAllowedProgressOnRestoration() {
+        LinkedHashMap<String, Integer> required = getTotalResourcesNeeded();
+        if (required.isEmpty()) return 1f;
 
         float allowedProgress = 1f;
-
-        for (String commodityId : required.keySet()) {
-            int requiredAmount = required.get(commodityId);
-            if (requiredAmount <= 0) {
-                continue;
-            }
-
-            int spentAmount = delivered.getOrDefault(commodityId, 0);
-            float ratio = (float) spentAmount / (float) requiredAmount;
-
+        for (Map.Entry<String, Integer> entry : required.entrySet()) {
+            int spentAmount = delivered.getOrDefault(entry.getKey(), 0);
+            float ratio = (float) spentAmount / (float) entry.getValue();
             allowedProgress = Math.min(allowedProgress, ratio);
         }
-
         return Math.max(0f, Math.min(1f, allowedProgress));
     }
 
     LinkedHashMap<String, Integer> delivered = new LinkedHashMap<>();
 
     public HashMap<String, Integer> getMonthlyResNeeded() {
-        HashMap<String, Integer> commodities = new HashMap<>();
+        HashMap<String, Integer> commodities = new LinkedHashMap<>();
+        if (wonderAPI == null) return commodities;
 
-        int months = Math.max(1, (int) Math.ceil((wonderAPI.getSpec().getBuildTime()-daysPassedOnConstruction) / 30f));// prevent division by 0
-        LinkedHashMap<String, Integer> required = new LinkedHashMap<>();
-        for (Map.Entry<String, Integer> entry : wonderAPI.getDemandCostForRestoration().entrySet()) {
-            required.put(entry.getKey(), (int) (AoTDCommodityEconSpecManager.getCargoAmountFromSupplyOrDemand(entry.getValue(), true, entry.getKey())*Math.ceil(wonderAPI.getSpec().getBuildTime()/30f)));
+        // Keep the installment fixed, just like stable structure construction.
+        // Missing deliveries stay in the remaining total, rather than lowering future quotas.
+        int months = Math.max(1, (int) Math.ceil(wonderAPI.getSpec().getBuildTime() / 30f));
+        for (Map.Entry<String, Integer> entry : getTotalResourcesNeeded().entrySet()) {
+            int remaining = Math.max(0, entry.getValue() - delivered.getOrDefault(entry.getKey(), 0));
+            if (remaining <= 0) continue;
+
+            int monthly = (int) Math.ceil(entry.getValue() / (double) months);
+            putCommoditiesIntoMap(commodities, entry.getKey(), Math.min(remaining, monthly));
         }
-
-        required.forEach((key, totalRequired) -> {
-            int alreadySpent = delivered.getOrDefault(key, 0);
-
-            int remaining = Math.max(0, totalRequired - alreadySpent);
-
-            if (remaining <= 0) return;
-
-            // ceil division so we don't "lose" resources over time
-            int perMonth = (int) Math.ceil((float) remaining / (float) months);
-
-            putCommoditiesIntoMap(commodities, key, perMonth);
-        });
-
         return commodities;
     }
-
 
     public String getUniqueIdForContract() {
         if (uniqueIdForContract == null) uniqueIdForContract = Misc.genUID();
@@ -128,17 +119,16 @@ public class AoTDConstructionSite extends BaseIndustry {
         return resolved;
     }
 
-
     public void setAssignedWonder(String assignedWonder) {
-
         this.assignedWonder = assignedWonder;
         building = true;
+        daysPassedOnConstruction = 0f;
+        delivered.clear();
         uniqueIdForContract = "aotd_gw_construction_site_" + Misc.genUID();
         this.id = "aotd_gw_construction_site_" + assignedWonder;
         wonderAPI = (GrandWonderAPI) market.instantiateIndustry(assignedWonder);
         GrandWonderContract contract = new GrandWonderContract(this);
         AoTDTradeContractManager.getInstance().addContract(contract);
-        daysPassedOnConstruction = 0f;
     }
 
     @Override
@@ -178,7 +168,8 @@ public class AoTDConstructionSite extends BaseIndustry {
 
     @Override
     public boolean isUpgrading() {
-        return wonderAPI!=null&& assignedWonder != null && daysPassedOnConstruction <= wonderAPI.getSpec().getBuildTime();
+        return building && wonderAPI != null && assignedWonder != null
+                && daysPassedOnConstruction <= wonderAPI.getSpec().getBuildTime();
     }
 
     @Override
@@ -206,7 +197,9 @@ public class AoTDConstructionSite extends BaseIndustry {
 
     @Override
     public boolean isAvailableToBuild() {
-        return !GrandWonderTypeManager.getWondersVisibleForMarket(market).isEmpty() && market.getFaction().isPlayerFaction() && GrandWonderManager.canBuiltAdditionalWonderDueToSlots(market);
+        return !GrandWonderTypeManager.getWondersVisibleForMarket(market).isEmpty()
+                && market.getFaction().isPlayerFaction()
+                && GrandWonderManager.canBuiltAdditionalWonderDueToSlots(market);
     }
 
     @Override
@@ -233,19 +226,20 @@ public class AoTDConstructionSite extends BaseIndustry {
     }
 
     public void applyImpl() {
-
     }
 
     public void unapplyImpl() {
-
     }
-
 
     @Override
     public void advance(float amount) {
-
         if (assignedWonder != null) {
             if (isUpgrading()) {
+                // Stable structures pause both progress and resource deliveries when disrupted
+                // or no longer owned by the player. Wonder construction follows the same rule.
+                if (Global.getSector().isPaused() || isDisrupted()
+                        || !market.getFaction().isPlayerFaction()) return;
+
                 float days = Global.getSector().getClock().convertToDays(amount);
                 if (Global.getSettings().isDevMode()) {
                     days *= 30;
@@ -276,7 +270,6 @@ public class AoTDConstructionSite extends BaseIndustry {
                     GrandWonderManager.getInstance().addBuiltSoFar(wonderAPI1.getId(), 1);
                     market.removeIndustry(this.getId(), MarketAPI.MarketInteractionMode.REMOTE, false);
                 }
-
             }
         } else {
             super.advance(amount);
@@ -307,25 +300,18 @@ public class AoTDConstructionSite extends BaseIndustry {
         if (daysLeft <= 0f) return 0;
 
         GregorianCalendar cal = (GregorianCalendar) Global.getSector().getClock().getCal().clone();
-
-        // Move to first day of NEXT month (skip current month entirely)
         cal.add(GregorianCalendar.MONTH, 1);
         cal.set(GregorianCalendar.DAY_OF_MONTH, 1);
 
         int months = 0;
         float remainingDays = daysLeft;
-
         while (remainingDays > 0f) {
             int daysInMonth = cal.getActualMaximum(GregorianCalendar.DAY_OF_MONTH);
-
             remainingDays -= daysInMonth;
             months++;
-
-            // Move to next month
             cal.add(GregorianCalendar.MONTH, 1);
             cal.set(GregorianCalendar.DAY_OF_MONTH, 1);
         }
-
         return months;
     }
 }

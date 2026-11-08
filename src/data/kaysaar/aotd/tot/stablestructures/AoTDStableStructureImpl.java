@@ -207,13 +207,16 @@ public class AoTDStableStructureImpl {
         ultimateUpgradeId = ultimateTargetId.equals(id) ? null : ultimateTargetId;
         updateNextUpgradeId();
         maintenanceDays = 0f;
-        return !isBuilding && startNextUpgrade();
+        boolean started = !isBuilding && startNextUpgrade();
+        AoTDStableStructureConstruction.requestUIRefresh(currentlyAssignedToken.getStarSystem());
+        return started;
     }
 
     public void clearQueuedUpgrades() {
         requireCurrentImplementation();
         ultimateUpgradeId = isUpgrading() ? constructionTargetId : null;
         updateNextUpgradeId();
+        AoTDStableStructureConstruction.requestUIRefresh(currentlyAssignedToken.getStarSystem());
     }
 
     protected void updateNextUpgradeId() {
@@ -271,12 +274,14 @@ public class AoTDStableStructureImpl {
         deliverSpecialItemsFromStorage();
         if (isUpgrading()) upgradeScaffold = AoTDStableStructureConstruction.showUpgradeScaffold(this);
         sendConstructionMessage(target.getName(), "Construction started");
+        AoTDStableStructureConstruction.requestUIRefresh(currentlyAssignedToken.getStarSystem());
         return true;
     }
 
     public void finishBuildingOrUpgrading() {
         requireCurrentImplementation();
         if (!isBuilding) return;
+        StarSystemAPI system = currentlyAssignedToken.getStarSystem();
         boolean upgrading = isUpgrading();
         AoTDStableStructureImpl next = upgrading
                 ? AoTDStableStructureSpecManager.getSpec(constructionTargetId).getImplClassInstance() : null;
@@ -314,6 +319,7 @@ public class AoTDStableStructureImpl {
             updateNextUpgradeId();
             startNextUpgrade();
         }
+        AoTDStableStructureConstruction.requestUIRefresh(system);
     }
 
     protected void updateEntityPresentation(AoTDStableStructureImpl previous) {
@@ -362,7 +368,9 @@ public class AoTDStableStructureImpl {
         delivered.clear();
         if (refund > 0f) Global.getSector().getPlayerFleet().getCargo().getCredits().add(refund);
         sendConstructionMessage(cancelledName, "Construction aborted");
+        StarSystemAPI system = currentlyAssignedToken.getStarSystem();
         if (cancelledBase) AoTDStableStructureConstruction.cancelScaffold(this);
+        AoTDStableStructureConstruction.requestUIRefresh(system);
     }
 
     public String getUniqueIdForContract() {
@@ -591,6 +599,10 @@ public class AoTDStableStructureImpl {
 
     public int getSystemStructureCapacityBonus() {
         return 0;
+    }
+
+    public String getSystemStructureCapacityModifierName() {
+        return "Mobile structures";
     }
 
     public boolean canMountAICores() {
@@ -917,7 +929,7 @@ public class AoTDStableStructureImpl {
                 : getSpecEntity().getCustomDescriptionId();
         if (descriptionId != null) {
             tooltip.addPara(Global.getSettings().getDescription(
-                    descriptionId, Description.Type.CUSTOM).getText1FirstPara(), 10f);
+                    descriptionId, Description.Type.CUSTOM).getText1(), 10f);
         }
 
         FactionAPI faction = currentlyAssignedToken != null
@@ -1013,7 +1025,8 @@ public class AoTDStableStructureImpl {
                 addBaseConstructionCostsToTooltip(tooltip, color, dark);
             }
         }
-        tooltip.addSectionHeading(mode == AoTDStableStructureTooltipMode.PANEL && !canBeShutDown() ? "Effects" : "Effects after construction", color, dark, Alignment.MID, 10f);
+        tooltip.addSectionHeading(mode == AoTDStableStructureTooltipMode.PANEL && isFunctional() && (!isBuilding() || isUpgrading())
+                ? "Current effects" : "Effects after construction", color, dark, Alignment.MID, 10f);
         createTooltipForEffectSection(tooltip,mode);
         if (getAICoreId() != null) {
             addAICoreSection(tooltip, AICoreDescriptionMode.INDUSTRY_TOOLTIP);
