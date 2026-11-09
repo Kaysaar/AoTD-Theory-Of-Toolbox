@@ -11,6 +11,7 @@ import com.fs.starfarer.api.impl.campaign.shared.SharedData;
 import com.fs.starfarer.api.util.Misc;
 import com.fs.starfarer.api.util.WeightedRandomPicker;
 
+import data.kaysaar.aotd.tot.scripts.trade.AoTDIsolationUtils;
 import data.kaysaar.aotd.tot.intel.AoTDContractFinished;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDSectorProductionDemandDataUtils;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.rewards.TradeContractRewardDataAPI;
@@ -78,8 +79,10 @@ public class AoTDTradeContractManager {
     }
     public void terminateContract(String contractId) {
         if (contractId == null) return;
-        if(activeContracts.get(contractId) != null) {
-            activeContracts.get(contractId).terminateContract();
+        AoTDTradeContract contract = activeContracts.get(contractId);
+        if (contract != null) {
+            if (!contract.canTerminateContract()) return;
+            contract.terminateContract();
         }
         if (activeContracts.remove(contractId) != null) {
             invalidatePredictions();
@@ -136,6 +139,17 @@ public class AoTDTradeContractManager {
         lastPredictedMonth = month;
     }
 
+    public int getPredictedDelivery(String contractId, String commodityId) {
+        ensurePredictionsUpToDate();
+        int delivered = 0;
+        AoTDFactionTradeData trade = AoTDTradeManager.getInstance().getPlayerManager();
+        if (trade == null) return 0;
+        for (AoTDMarketData data : trade.getTradeData().values()) {
+            delivered += data.getPredictedContractExported(contractId, commodityId);
+        }
+        return delivered;
+    }
+
     private void rebuildPredictions() {
         String playerFactionId = Global.getSector().getPlayerFaction().getId();
         AoTDFactionTradeData playerTrade = AoTDTradeManager.getInstance().getFactionTradeData(playerFactionId);
@@ -167,6 +181,8 @@ public class AoTDTradeContractManager {
         Map<String, Map<String, Integer>> available = new HashMap<>();
         for (AoTDMarketData md : playerTrade.getTradeData().values()) {
             if (md == null) continue;
+            MarketAPI market = Global.getSector().getEconomy().getMarket(md.marketId);
+            if (!AoTDIsolationUtils.canSupplyContract(market)) continue;
             for (String commodityId : contractCommodities) {
                 int avail = md.getRemainingNet(commodityId);
                 if (avail > 0) {
@@ -243,7 +259,7 @@ public class AoTDTradeContractManager {
             Map.Entry<String, AoTDTradeContract> entry = it.next();
             AoTDTradeContract c = entry.getValue();
 
-            if (c == null || c.getContractData() == null || c.getContractData().isEmpty()||c.isTerminated()||c.isExpired()) {
+            if (c == null || c.getContractData() == null || (c.getContractData().isEmpty() && !(c instanceof AoTDIsolatedColonySupplyContract)) || c.isTerminated() || c.isExpired()) {
                 it.remove();
                 removed = true;
             }
@@ -280,12 +296,14 @@ public class AoTDTradeContractManager {
                 toRemove.add(c.getId());
                 continue;
             }
+            if (c instanceof AoTDIsolatedColonySupplyContract supply) supply.beginDeliveryMonth();
             if(c.isContractFrozen()) continue;
             if(c.isIssuedByPlayer()&& AoTDPlayerContractCreatorManager.getCreator(c.getContractTypeId())!=null){
                 PlayerContractCreatorAPI creatorAPI = AoTDPlayerContractCreatorManager.getCreator(c.getContractTypeId());
                 creatorAPI.applyChangesToContractIfNecessary(c);
             }
             if(c.getContractData().isEmpty()){
+                if (c instanceof AoTDIsolatedColonySupplyContract) continue;
                 toRemove.add(c.getId());
                 continue;
             }
@@ -340,7 +358,7 @@ public class AoTDTradeContractManager {
                     distributeToFactionEqually(c.getFactionId(), commodityId, delivered);
                 }
             }
-            c.executeMonthEnd(contractProgressMonth/pointsOfProgress);
+            c.executeMonthEnd(pointsOfProgress == 0 ? 1f : contractProgressMonth/pointsOfProgress);
             if (missedThisMonth&&!c.isIssuedByPlayer()) {
                 c.addMiss();
                 if (c.isTerminated()) {
@@ -386,7 +404,7 @@ public class AoTDTradeContractManager {
             if (md == null) continue;
             MarketAPI market = Global.getSector().getEconomy().getMarket(md.marketId);
             if(market==null)continue;
-            if(!market.hasSpaceport()||market.getAccessibilityMod().computeEffective(0f)<=0f)continue;
+            if (!AoTDIsolationUtils.canSupplyContract(market)) continue;
             int avail = md.getRemainingNet(commodityId);
             if (avail > 0) exporters.add(md);
         }
@@ -426,7 +444,11 @@ public class AoTDTradeContractManager {
         AoTDFactionTradeData facTrade = AoTDTradeManager.getInstance().getFactionTradeData(factionId);
         if (facTrade == null) return;
 
-        ArrayList<AoTDMarketData> markets = new ArrayList<>(facTrade.getTradeData().values());
+        ArrayList<AoTDMarketData> markets = new ArrayList<>();
+        for (AoTDMarketData data : facTrade.getTradeData().values()) {
+            MarketAPI market = Global.getSector().getEconomy().getMarket(data.marketId);
+            if (market != null && !AoTDIsolationUtils.isIsolated(market)) markets.add(data);
+        }
         if (markets.isEmpty()) return;
 
         int n = markets.size();

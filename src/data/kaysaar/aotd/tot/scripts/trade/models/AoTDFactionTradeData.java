@@ -5,6 +5,7 @@ import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.util.Misc;
 
+import data.kaysaar.aotd.tot.scripts.trade.AoTDIsolationUtils;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDEconomy;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDSectorProductionDemandDataUtils;
@@ -244,7 +245,8 @@ public class AoTDFactionTradeData {
 
     private static boolean eligibleForInternalTrade(AoTDMarketData md, MarketAPI market) {
         return !md.netProductionValues.isEmpty() && market != null && market.hasSpaceport()
-                && !(market.getAccessibilityMod().computeEffective(0f) <= 0f);
+                && !(market.getAccessibilityMod().computeEffective(0f) <= 0f)
+                && !AoTDIsolationUtils.isIsolated(market);
     }
 
     private static boolean sameOrderedMap(Map<String, Integer> a, Map<String, Integer> b) {
@@ -338,7 +340,7 @@ public class AoTDFactionTradeData {
 
             MarketAPI market = marketsById.get(md.marketId);
             if (market == null) continue;
-            if (!market.hasSpaceport()) continue;
+            if (!market.hasSpaceport() || AoTDIsolationUtils.isIsolated(market)) continue;
             if (market.getAccessibilityMod().computeEffective(0f) <= 0f) continue;
 
             eligibleMarkets.add(md);
@@ -353,6 +355,13 @@ public class AoTDFactionTradeData {
             return;
         }
 
+        allocateInternalTrade(eligibleMarkets);
+        rememberInternalAllocation(marketsById);
+        if (refreshContractPredictions) refreshContractPredictionsIfPlayerFaction();
+    }
+
+    public static void allocateInternalTrade(ArrayList<AoTDMarketData> eligibleMarkets) {
+        if (eligibleMarkets.size() <= 1) return;
         LinkedHashMap<String, CommodityBucket> buckets = new LinkedHashMap<>();
 
         // Preserve original first-seen commodity order independently of market priority.
@@ -425,10 +434,6 @@ public class AoTDFactionTradeData {
             }
         }
 
-        rememberInternalAllocation(marketsById);
-        if (refreshContractPredictions) {
-            refreshContractPredictionsIfPlayerFaction();
-        }
     }
 
     public void refreshContractPredictionsIfPlayerFaction() {

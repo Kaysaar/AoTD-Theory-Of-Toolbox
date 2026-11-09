@@ -104,7 +104,13 @@ public class AccessibilityOnHover implements TooltipMakerAPI.TooltipCreator {
 
         tooltip.addSectionHeading("Trade Priority", baseColor, darkColor, Alignment.MID, paddingLarge);
 
-
+        if (market.getStarSystem() != null && market.getStarSystem().hasTag("aotd_isolated_system")) {
+            tooltip.addPara(
+                    "This star system is isolated and cannot participate in regular trade outside this star system. " +
+                            "Imports and exports are restricted to local trade within the system.",
+                    negativeColor, paddingMedium
+            );
+        }
 
         tooltip.addPara(
                 "Colonies with higher accessibility are more likely to participate in %s, allowing them to more reliably %s and %s.",

@@ -46,6 +46,7 @@ public class AoTDSectorExternalIndex {
     public final Map<String, ArrayList<Offer>> importersByCommodity = new HashMap<>();
 
     public void addMarket(MarketAPI market, AoTDMarketData md) {
+        if (AoTDIsolationUtils.isIsolated(market)) return;
         for (Map.Entry<String, Integer> e : md.remainingNet.entrySet()) {
             String commodityId = e.getKey();
             int net = e.getValue();

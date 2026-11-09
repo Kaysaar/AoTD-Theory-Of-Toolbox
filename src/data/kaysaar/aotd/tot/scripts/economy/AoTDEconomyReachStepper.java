@@ -141,6 +141,13 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
                 last = now;
             }
 
+            Map<String, MarketAPI> monthlyMarkets = AoTDFactionTradeData.snapshotMarketsById();
+            AoTDIsolationUtils.prepareMarkets(monthlyMarkets.values());
+            for (AoTDFactionTradeData tradeData : AoTDTradeManager.getInstance().getAllFactionTradeData().values()) {
+                tradeData.computeInternalTrade(false, monthlyMarkets);
+            }
+            AoTDIsolationUtils.computeLocalTrade(monthlyMarkets);
+            AoTDTradeContractManager.getInstance().invalidatePredictions();
             AoTDTradeContractManager.getInstance().runMonthlyContracts();
             if (profile) {
                 long now = System.nanoTime();
@@ -297,6 +304,7 @@ public class AoTDEconomyReachStepper extends ReachEconomyStepper {
     }
 
     private void createTasks() {
+        AoTDIsolationUtils.prepareMarkets(AoTDEconomy.getInstance().getMarkets());
         tasks = new ArrayList<>();
         final boolean iterationsDone = iterLeft <= 0;
         final MainWorkTask.EconWorkParams mainWork = new MainWorkTask.EconWorkParams();

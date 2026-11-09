@@ -181,8 +181,6 @@ public class AssignAICoreStructure extends BasePopUpDialog {
 
         body = listOfAICores.createUIElement(width, height - 25f, true);
         body.addSpacer(0f).getPosition().inTL(0f, 0f);
-        body.addPara("AI cores are drawn from storage at any player-owned market in this star system. " +
-                "Replaced cores are returned to local storage.", Misc.getGrayColor(), 3f);
 
         List<CargoAPI> storages = getLocalStorages();
         boolean hasCores = false;

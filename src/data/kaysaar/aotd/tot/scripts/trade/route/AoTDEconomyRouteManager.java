@@ -19,6 +19,7 @@ import com.fs.starfarer.api.impl.campaign.rulecmd.KantaCMD;
 import com.fs.starfarer.api.impl.campaign.shared.SharedData;
 import com.fs.starfarer.api.util.Misc;
 import com.fs.starfarer.api.util.WeightedRandomPicker;
+import data.kaysaar.aotd.tot.scripts.trade.AoTDIsolationUtils;
 import data.kaysaar.aotd.tot.intel.AoTDTradeFleetDepartureIntel;
 import data.kaysaar.aotd.tot.plugins.AoTDBaseDemSupCalc;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
@@ -64,7 +65,7 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
         if (!canTrade(from)) return null;
         WeightedRandomPicker<MarketAPI> markets = new WeightedRandomPicker<>();
         for (MarketAPI market : Global.getSector().getEconomy().getMarketsInGroup(from.getEconGroup())) {
-            if (market == from || !canTrade(market)) continue;
+            if (market == from || !canTrade(market) || !AoTDIsolationUtils.canTradeBetween(from, market)) continue;
             float weight = 0f;
             for (String id : getCommodityIds(from, market)) {
                 int deliver = getTransferAmount(from, market, id);
@@ -79,6 +80,7 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
     }
 
     private static int getTransferAmount(MarketAPI source, MarketAPI destination, String id) {
+        if (!AoTDIsolationUtils.canTradeBetween(source, destination)) return 0;
         AoTDCommodityOnMarket from = AoTDCommodityOnMarket.getComMarketInstanceSave(source, id);
         AoTDCommodityOnMarket to = AoTDCommodityOnMarket.getComMarketInstanceSave(destination, id);
         if (from == null || to == null || from.isNonEcon() || to.isNonEcon()) return 0;
@@ -92,7 +94,7 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
     }
 
     static void refreshCargo(List<CargoQuantityData> list, MarketAPI source, MarketAPI destination) {
-        if (!canTrade(source) || !canTrade(destination)) {
+        if (!canTrade(source) || !canTrade(destination) || !AoTDIsolationUtils.canTradeBetween(source, destination)) {
             list.clear();
             return;
         }
@@ -129,7 +131,7 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
     }
 
     public static AoTDEconomyRouteData createData(MarketAPI from, MarketAPI to) {
-        if (from == to || !canTrade(from) || !canTrade(to)) return null;
+        if (from == to || !canTrade(from) || !canTrade(to) || !AoTDIsolationUtils.canTradeBetween(from, to)) return null;
         AoTDEconomyRouteData legal = new AoTDEconomyRouteData();
         legal.from = from;
         legal.to = to;
@@ -243,6 +245,7 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
 
     public static CampaignFleetAPI createTradeRouteFleet(RouteManager.RouteData route, Random random) {
         EconomyRouteData data = (EconomyRouteData) route.getCustom();
+        if (!AoTDIsolationUtils.canTradeBetween(data.from, data.to)) return null;
         float fuel = 0f;
         float cargo = 0f;
         float personnel = 0f;
@@ -322,6 +325,7 @@ public class AoTDEconomyRouteManager extends EconomyFleetRouteManager {
 
     public static void applyLostShipping(EconomyRouteData data, boolean returning, boolean cargo, boolean fuel, boolean personnel) {
         if (!cargo && !fuel && !personnel) return;
+        if (!AoTDIsolationUtils.canTradeBetween(data.from, data.to)) return;
         String id = Misc.genUID() + "_aotd_lost_trade";
         if (!returning) applyLostCargo(data.to, data.cargoDeliver, cargo, fuel, personnel, false, id);
         applyLostCargo(data.from, data.cargoReturn, cargo, fuel, personnel, false, id);

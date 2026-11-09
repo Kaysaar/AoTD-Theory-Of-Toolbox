@@ -72,12 +72,10 @@ public final class ScavengerGuildUtils {
     // Core coverage logic
     // ----------------------------
 
-    /** True if scavengers should cover some amount, given totals. */
     public static boolean doesCoverCommodity(String commodityId, int totalDemand, int totalProduction) {
         return getCoveredAmount(commodityId, totalDemand, totalProduction) > 0;
     }
 
-    /** Covered amount using already-known totals. */
     public static int getCoveredAmount(String commodityId, int totalDemand, int totalProduction) {
         if (!isEligible(commodityId, totalDemand, totalProduction)) return 0;
         if (!isHarvestMode()) {
@@ -91,14 +89,12 @@ public final class ScavengerGuildUtils {
                 settingFloat("aotd_scavenger_guild_harvest_maximum_chance", 0.02f), seed);
     }
 
-    /** Covered amount using GLOBAL sector totals (auto fetch). */
     public static int getCoveredAmountFromSector(String commodityId) {
-        int prod = AoTDSectorProductionDemandDataUtils.getTotalProductionFromSector(commodityId);
-        int dem  = AoTDSectorProductionDemandDataUtils.getTotalDemandFromSector(commodityId);
+        int prod = AoTDSectorProductionDemandDataUtils.getTotalProductionForInterstellarTrade(commodityId);
+        int dem  = AoTDSectorProductionDemandDataUtils.getTotalDemandForInterstellarTrade(commodityId);
         return getCoveredAmount(commodityId, dem, prod);
     }
 
-    /** True if scavengers should cover some amount using GLOBAL sector totals. */
     public static boolean doesCoverCommodityFromSector(String commodityId) {
         return getCoveredAmountFromSector(commodityId) > 0;
     }

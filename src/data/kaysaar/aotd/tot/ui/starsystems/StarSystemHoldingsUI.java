@@ -100,7 +100,7 @@ public class StarSystemHoldingsUI implements ExtendedUIPanelPlugin {
             unfold.unhighlight();
         }
 
-        contentPanel.addUIElement(tlButton).inTL(0, contentPanel.getPosition().getHeight() - 23);
+        contentPanel.addUIElement(tlButton).inTL(0, contentPanel.getPosition().getHeight() - 18);
         mainPanel.addComponent(contentPanel).inTL(0, 0);
     }
 

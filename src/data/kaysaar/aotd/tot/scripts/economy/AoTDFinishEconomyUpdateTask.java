@@ -8,6 +8,7 @@ import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.campaign.econ.Economy;
 import com.fs.starfarer.campaign.econ.reach.FinishEconomyUpdateTask;
 
+import data.kaysaar.aotd.tot.scripts.trade.AoTDIsolationUtils;
 import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 import data.kaysaar.aotd.tot.scripts.trade.models.AoTDFactionTradeData;
 
@@ -114,9 +115,10 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
             if (value == null) continue;
             if (profile) factions++;
             long started = profile ? System.nanoTime() : 0L;
-            value.computeInternalTrade(true, marketIndex);
+            value.computeInternalTrade(false, marketIndex);
             if (profile) workerNanos.addAndGet(System.nanoTime() - started);
         }
+        refreshPlayerContractPredictionsOnMainThread();
         notifyEconomyListeners();
         done = true;
     }
@@ -188,6 +190,10 @@ public class AoTDFinishEconomyUpdateTask extends FinishEconomyUpdateTask {
 
     private void refreshPlayerContractPredictionsOnMainThread() {
         long started = profile ? System.nanoTime() : 0L;
+        final Map<String, MarketAPI> markets = AoTDFactionTradeData.snapshotMarketsById();
+        AoTDIsolationUtils.prepareMarkets(markets.values());
+        AoTDIsolationUtils.computeLocalTrade(markets);
+        AoTDIsolationUtils.updateAvailability(markets.values());
         final AoTDFactionTradeData playerTrade = AoTDTradeManager.getInstance().getFactionTradeData(Factions.PLAYER);
         if (playerTrade != null) playerTrade.refreshContractPredictionsIfPlayerFaction();
         if (profile) predictionsNanos += System.nanoTime() - started;

@@ -22,6 +22,7 @@ import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContractManager;
 import data.kaysaar.aotd.tot.ui.starsystems.stuctures.map.ChooseStablePointForBuildingMap;
 import data.kaysaar.aotd.tot.ui.starsystems.stuctures.map.StructureLocationPicker;
+import data.kaysaar.aotd.tot.ui.starsystems.components.ConstructionResourceProgressComponent;
 
 import java.awt.Color;
 import java.util.LinkedHashMap;
@@ -963,15 +964,23 @@ public class AoTDStableStructureImpl {
                 if (!isPlayerOwned()) tooltip.addPara("Construction is paused while the structure is not player-owned.", bad, 5f);
                 if (!constructionResources.isEmpty()) {
                     tooltip.addSectionHeading("Construction resources delivered", color, dark, Alignment.MID, 10f);
-                    for (Map.Entry<String, Integer> entry : constructionResources.entrySet()) {
-                        String resource = entry.getKey();
-                        String name = Global.getSettings().getCommoditySpec(resource) != null
-                                ? Global.getSettings().getCommoditySpec(resource).getName()
-                                : Global.getSettings().getSpecialItemSpec(resource).getName();
-                        int received = delivered.getOrDefault(resource, 0);
-                        tooltip.addPara(name + ": %s / %s", 3f,
-                                received < entry.getValue() ? bad : highlight,
-                                String.valueOf(received), String.valueOf(entry.getValue()));
+                    float rowWidth = tooltip.getWidthSoFar() ;
+                    float gap = 10f;
+                    float componentWidth = (rowWidth - gap) / 2f;
+                    int index = 0;
+                    int size = constructionResources.size();
+                    CustomPanelAPI row = null;
+                    for (String resourceId : constructionResources.keySet()) {
+                        if (index % 2 == 0) {
+                            row = Global.getSettings().createCustom(rowWidth, ConstructionResourceProgressComponent.HEIGHT, null);
+                        }
+                        ConstructionResourceProgressComponent component =
+                                new ConstructionResourceProgressComponent(this, resourceId, componentWidth, color, dark);
+                        float x = index % 2 == 1 ? componentWidth + gap : 0f;
+                        if (index == size - 1 && index % 2 == 0) x = (rowWidth - componentWidth) / 2f;
+                        row.addComponent(component.getMainPanel()).inTL(x, 0f);
+                        if (index % 2 == 1 || index == size - 1) tooltip.addCustom(row, 5f);
+                        index++;
                     }
                 }
             }

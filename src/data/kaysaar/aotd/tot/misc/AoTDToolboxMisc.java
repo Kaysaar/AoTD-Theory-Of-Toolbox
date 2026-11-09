@@ -3,6 +3,7 @@ package data.kaysaar.aotd.tot.misc;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Tags;
+import data.kaysaar.aotd.tot.scripts.trade.AoTDIsolationUtils;
 import data.kaysaar.aotd.tot.ids.AoTDTags;
 import data.kaysaar.aotd.tot.stablestructures.AoTDStableStructureConstruction;
 import com.fs.starfarer.api.Global;
@@ -324,11 +325,15 @@ public class AoTDToolboxMisc {
     }
 
     public static boolean isContractMetFully(AoTDTradeContract contract) {
+        AoTDTradeContractManager manager = AoTDTradeContractManager.getInstance();
+        boolean active = manager.getActiveContracts().get(contract.getId()) == contract;
         for (AoTDTradeContract.TradeContractData value : contract.getContractData().values()) {
-            int prod = AoTDSectorProductionDemandDataUtils.getTotalProductionFromFaction(value.getCommodityId(), Factions.PLAYER);
-            int dem = AoTDSectorProductionDemandDataUtils.getTotalDemandFromFactionTillContract(value.getCommodityId(), Factions.PLAYER, contract.getId());
-            if (dem > prod) {
-                return false;
+            if (active) {
+                if (manager.getPredictedDelivery(contract.getId(), value.getCommodityId()) < value.getReqMonthly()) return false;
+            } else {
+                int prod = AoTDSectorProductionDemandDataUtils.getTotalProductionFromFaction(value.getCommodityId(), Factions.PLAYER);
+                int dem = AoTDSectorProductionDemandDataUtils.getTotalDemandFromFactionTillContract(value.getCommodityId(), Factions.PLAYER, contract.getId());
+                if (dem > prod) return false;
             }
         }
         return true;
@@ -422,6 +427,7 @@ public class AoTDToolboxMisc {
         int guaranteed = getGuaranteedExportIncome(com);
         AoTDMarketData md = AoTDTradeManager.getInstance().getMarketData(com.getMarket());
         if (md == null) return guaranteed;
+        if (AoTDIsolationUtils.isIsolated(com.getMarket())) return guaranteed;
         int exported = md.getSoldOutside(com.getSpec().getId());
         int extraExported = md.getExtraSoldOutside(com.getSpec().getId());
         float cut = AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(), false);
@@ -434,7 +440,7 @@ public class AoTDToolboxMisc {
     }
 
     public static int getSpeculatedExportIncome(AoTDCommodityOnMarket com) {
-        if (com == null || com.getMarket() == null) return 0;
+        if (com == null || com.getMarket() == null || AoTDIsolationUtils.isIsolated(com.getMarket())) return 0;
         if (!com.isSupplyLegal() || !com.isDemandLegal()) return 0;
 
         MarketAPI market = com.getMarket();
@@ -485,7 +491,7 @@ public class AoTDToolboxMisc {
         return (int) Math.floor(total);
     }
     public static int getSpeculatedExportIncomeFromContractsForUI(AoTDCommodityOnMarket com) {
-        if (com == null || com.getMarket() == null) return 0;
+        if (com == null || com.getMarket() == null || AoTDIsolationUtils.isIsolated(com.getMarket())) return 0;
 
         MarketAPI market = com.getMarket();
         AoTDMarketData md = AoTDTradeManager.getInstance().getMarketData(market);
@@ -516,7 +522,7 @@ public class AoTDToolboxMisc {
     }
 
     public static int getSpeculatedExportIncomeFromContracts(AoTDCommodityOnMarket com) {
-        if (com == null || com.getMarket() == null) return 0;
+        if (com == null || com.getMarket() == null || AoTDIsolationUtils.isIsolated(com.getMarket())) return 0;
 
         MarketAPI market = com.getMarket();
         AoTDMarketData md = AoTDTradeManager.getInstance().getMarketData(market);
@@ -561,6 +567,7 @@ public class AoTDToolboxMisc {
     }
 
     public static int getMaxShipped(MarketAPI marketFrom, MarketAPI towards, String commodityId) {
+        if (!AoTDIsolationUtils.canTradeBetween(marketFrom, towards)) return 0;
         AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(marketFrom,commodityId);
         if (marketFrom.getFaction().equals(towards.getFaction())) {
             AoTDMarketData data = AoTDTradeManager.getInstance().getMarketData(marketFrom);
@@ -580,6 +587,7 @@ public class AoTDToolboxMisc {
     }
 
     public static int getMaxImported(MarketAPI marketFrom, MarketAPI towards, String commodityId) {
+        if (!AoTDIsolationUtils.canTradeBetween(marketFrom, towards)) return 0;
         AoTDCommodityOnMarket com = (AoTDCommodityOnMarket) marketFrom.getCommodityData(commodityId);
         return com.getSupplyDemandData().getTotalRawUnitsFromDemand() - com.getSupplyDemandData().getTotalRawUnitsFromSupply();
     }

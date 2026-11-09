@@ -12,6 +12,7 @@ import com.fs.starfarer.api.loading.Description;
 import com.fs.starfarer.api.ui.Alignment;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.scripts.trade.AoTDIsolationUtils;
 import data.kaysaar.aotd.tot.misc.AoTDToolboxMisc;
 import data.kaysaar.aotd.tot.scripts.economy.AoTDIndustryData;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
@@ -64,6 +65,12 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
         tooltip.setCodexEntryId(CodexDataV2.getCommodityEntryId(spec.getId()));
         tooltip.addTitle(spec.getName());
         tooltip.addPara(Global.getSettings().getDescription(spec.getId(), Description.Type.RESOURCE).getText1(), 3f);
+        boolean isolated = AoTDIsolationUtils.isIsolated(market);
+        if (isolated) {
+            tooltip.addPara("This star system is isolated. Commodities cannot be sold outside this star system, " +
+                    "and ordinary imports from other systems are unavailable, through normal means.",
+                    Misc.getNegativeHighlightColor(), 5f);
+        }
 
         AoTDCommodityOnMarket com = AoTDCommodityOnMarket.getComMarketInstanceSave(market,spec.getId());
 
@@ -218,13 +225,24 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
 
             if (importsFromFaction > 0) {
                 float saved = importsFromFaction * spec.getBasePrice() * AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(),false);
-                tooltip.addPara("%s supplied internally from faction-trades",
+                tooltip.addPara(isolated ? "%s supplied by other colonies in this star system." : "%s supplied internally from faction-trades",
                         3f, Color.ORANGE,
                         Misc.getWithDGS(importsFromFaction),
                         Misc.getDGSCredits(saved));
             }
 
-            if (independentImports > 0) {
+            if (isolated) {
+                int delivered = Math.min(independentImports, AoTDIsolationUtils.getDelivered(market, com.getId()));
+                if (delivered > 0) {
+                    tooltip.addPara("%s supplied through the colony's supply contract this month.",
+                            3f, Color.ORANGE, Misc.getWithDGS(delivered));
+                }
+                int unmet = independentImports - delivered;
+                if (unmet > 0) {
+                    tooltip.addPara("%s remains unsupplied. Ordinary interstellar trade cannot cover this demand.",
+                            3f, Misc.getNegativeHighlightColor(), Misc.getWithDGS(unmet));
+                }
+            } else if (independentImports > 0) {
                 tooltip.addPara("%s purchased from external markets.",
                         3f, Color.ORANGE,
                         Misc.getWithDGS(independentImports));
@@ -249,7 +267,11 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
             );
 
             int totalProduced = localized + Math.max(exports, 0);
-            if (totalProduced > 0) {
+            if (isolated) {
+                tooltip.addPara("%s produces %s units of %s for local use and trade within this star system.",
+                        0f, Color.ORANGE, market.getName(), Misc.getWithDGS(supply), spec.getName());
+            }
+            if (!isolated && totalProduced > 0) {
                 if (localized > 0 && exports <= 0) {
                     tooltip.addPara("%s sells %s units of %s.",
                             0f, Color.ORANGE,
@@ -285,7 +307,7 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
                 LinkedHashMap<String, Integer> contractShipments = new LinkedHashMap<>();
                 boolean usingPredicted = false;
 
-                if (md != null) {
+                if (md != null && !isolated) {
                     AoTDTradeContractManager mgr = AoTDTradeContractManager.getInstance();
                     // This must prepare predicted allocations for the current month if contracts weren't executed yet.
                     // Implement in manager: compute predicted allocations without mutating remainingNet.
@@ -318,6 +340,11 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
                 int independentExports = exports - exportsToFaction - contractExports;
                 if (independentExports < 0) independentExports = 0;
 
+                if (isolated && independentExports > 0) {
+                    tooltip.addPara("%s remains unsold because it cannot be exported outside this star system.",
+                            3f, Misc.getNegativeHighlightColor(), Misc.getWithDGS(independentExports));
+                }
+
                 // LOCAL USE
                 if (localized > 0) {
                     float income = localized * spec.getBasePrice() * AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(),true);
@@ -333,7 +360,7 @@ public class CommodityButtonOnHover implements TooltipMakerAPI.TooltipCreator {
                 if (exportsToFaction > 0) {
                     float income = exportsToFaction * spec.getBasePrice() * AoTDCommodityEconSpecManager.getCutForCommodity(com.getSpec().getId(),true);
                     tooltip.addPara(
-                            "%s shipped to faction markets, generating roughly %s.",
+                            isolated ? "%s sold within this star system, generating roughly %s." : "%s shipped to faction markets, generating roughly %s.",
                             3f, Color.ORANGE,
                             Misc.getWithDGS(exportsToFaction),
                             Misc.getDGSCredits(income)

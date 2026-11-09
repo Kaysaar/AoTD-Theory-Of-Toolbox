@@ -5,10 +5,12 @@ import com.fs.starfarer.api.campaign.FactionAPI;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Factions;
 import com.fs.starfarer.api.util.Misc;
+import data.kaysaar.aotd.tot.scripts.trade.AoTDIsolationUtils;
 import data.kaysaar.aotd.tot.plugins.AoTDCommodityEconSpecManager;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDCommodityOnMarket;
 import data.kaysaar.aotd.tot.scripts.commoditydata.AoTDSupplyDemandData;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContract;
+import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDIsolatedColonySupplyContract;
 import data.kaysaar.aotd.tot.scripts.trade.contracts.AoTDTradeContractManager;
 import data.kaysaar.aotd.tot.scripts.trade.manager.AoTDTradeManager;
 import data.kaysaar.aotd.tot.strings.AoTDTradeTags;
@@ -24,6 +26,26 @@ import java.util.Set;
 
 public class AoTDSectorProductionDemandDataUtils {
     private AoTDSectorProductionDemandDataUtils() {}
+
+    public static int getTotalProductionForInterstellarTrade(String commodityId) {
+        int production = 0;
+        for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
+            if (AoTDIsolationUtils.isIsolated(market)) continue;
+            production += AoTDCommodityOnMarket.getComMarketInstanceSave(market, commodityId)
+                    .getSupplyDemandData().getTotalRawUnitsFromSupply();
+        }
+        return production;
+    }
+
+    public static int getTotalDemandForInterstellarTrade(String commodityId) {
+        int demand = 0;
+        for (MarketAPI market : Global.getSector().getEconomy().getMarketsCopy()) {
+            if (AoTDIsolationUtils.isIsolated(market)) continue;
+            demand += AoTDCommodityOnMarket.getComMarketInstanceSave(market, commodityId)
+                    .getSupplyDemandData().getTotalRawUnitsFromDemand();
+        }
+        return demand + getSectorContractDemand(commodityId);
+    }
 
     public static int getTotalProductionFromSector(String commodityId) {
         int prod = 0;
@@ -128,7 +150,8 @@ public class AoTDSectorProductionDemandDataUtils {
 
         if (factionId.equals(Factions.PLAYER)) {
             for (AoTDTradeContract value : AoTDTradeContractManager.getInstance().getActiveContracts().values()) {
-                if (value.isExpired() || value.isTerminated() || value.isContractFrozen()) continue;
+                if (value.isExpired() || value.isTerminated() || value.isContractFrozen()
+                        || value instanceof AoTDIsolatedColonySupplyContract) continue;
                 if (value.getContractData().containsKey(commodityId)) {
                     prod += value.getContractData().get(commodityId).getReqMonthly();
                 }
@@ -166,7 +189,8 @@ public class AoTDSectorProductionDemandDataUtils {
             boolean initalizeBreakAfter = false;
             for (AoTDTradeContract value : AoTDTradeContractManager.getInstance().getActiveContracts().values()) {
                 if (initalizeBreakAfter) break;
-                if (value.isExpired() || value.isTerminated() || value.isContractFrozen()) continue;
+                if (value.isExpired() || value.isTerminated() || value.isContractFrozen()
+                        || value instanceof AoTDIsolatedColonySupplyContract) continue;
                 if (value.getId().equals(contract)) initalizeBreakAfter = true;
 
                 if (value.getContractData().containsKey(commodityId)) {
@@ -196,7 +220,8 @@ public class AoTDSectorProductionDemandDataUtils {
         }
         if (factionId.equals(Factions.PLAYER)) {
             for (AoTDTradeContract value : AoTDTradeContractManager.getInstance().getActiveContracts().values()) {
-                if (value.isExpired() || value.isTerminated() || value.isContractFrozen()) continue;
+                if (value.isExpired() || value.isTerminated() || value.isContractFrozen()
+                        || value instanceof AoTDIsolatedColonySupplyContract) continue;
                 if (value.getId().equals(contract)) {
                     break;
                 }
@@ -225,7 +250,8 @@ public class AoTDSectorProductionDemandDataUtils {
             prod += com.getSupplyDemandData().getTotalRawUnitsFromDemand();
         }
         for (AoTDTradeContract value : AoTDTradeContractManager.getInstance().getActiveContracts().values()) {
-            if (value.isExpired() || value.isTerminated() || value.isContractFrozen()) continue;
+            if (value.isExpired() || value.isTerminated() || value.isContractFrozen()
+                        || value instanceof AoTDIsolatedColonySupplyContract) continue;
             if (value.isPrivate() || value.isIssuedByPlayer()) {
                 if (value.getContractData().containsKey(commodityId)) {
                     prod += value.getContractData().get(commodityId).getReqMonthly();
@@ -274,6 +300,7 @@ public class AoTDSectorProductionDemandDataUtils {
         int sectorProduction = 0;
         int sectorDemand = 0;
         for (MarketAPI market : markets) {
+            if (AoTDIsolationUtils.isIsolated(market)) continue;
             final boolean counted = countedFactionIds.contains(market.getFactionId());
             if (!counted && !countsSector) continue;
             final AoTDSupplyDemandData data = AoTDCommodityOnMarket.getComMarketInstanceSave(market, commodityId).getSupplyDemandData();
