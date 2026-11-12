@@ -161,8 +161,35 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         return specs.get(positionOnList).getId();
     }
 
+    private static void renameObjectiveSpec(String entityId, String displayName) {
+        CustomEntitySpecAPI spec = Global.getSettings().getCustomEntitySpec(entityId);
+        if (spec == null) {
+            log.warn("Could not rename objective: missing spec " + entityId);
+            return;
+        }
+
+        String previousName = spec.getDefaultName();
+        if (displayName.equals(previousName)) return;
+
+        // Prefer the named spec field; fall back to the existing value-based utility.
+        ReflectionUtilis.setPrivateVariableFromSuperclass("defaultName", spec, displayName);
+        if (!displayName.equals(spec.getDefaultName()) && previousName != null) {
+            ReflectionUtilis.replaceFirstStringFieldWithValue(spec, previousName, displayName, false);
+        }
+        if (!displayName.equals(spec.getDefaultName())) {
+            log.warn("Could not rename objective spec " + entityId + " to " + displayName);
+        }
+    }
+
     @Override
     public void onAboutToStartGeneratingCodex() {
+        // Vanilla objective names: Domain-era originals and standard Sector-made versions.
+        renameObjectiveSpec(Entities.COMM_RELAY, "Domain-Era Comm Relay");
+        renameObjectiveSpec(Entities.NAV_BUOY, "Domain-Era Nav Buoy");
+        renameObjectiveSpec(Entities.SENSOR_ARRAY, "Domain-Era Sensor Array");
+        renameObjectiveSpec(Entities.COMM_RELAY_MAKESHIFT, "Comm Relay");
+        renameObjectiveSpec(Entities.NAV_BUOY_MAKESHIFT, "Nav Buoy");
+        renameObjectiveSpec(Entities.SENSOR_ARRAY_MAKESHIFT, "Sensor Array");
         Global.getSettings().getCustomEntitySpec(Entities.STABLE_LOCATION).getTags().remove(Tags.STABLE_LOCATION);
         Global.getSettings().getCustomEntitySpec(Entities.STABLE_LOCATION).getTags().add("aotd_stable_location");
         for (CustomEntitySpecAPI allSpec : Global.getSettings().getAllSpecs(Global.getSettings().getCustomEntitySpec(Entities.STABLE_LOCATION).getClass())) {
@@ -292,6 +319,7 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
 
     @Override
     public void onNewGameAfterEconomyLoad() {
+        Global.getSector().getListenerManager().addListener(new AoTDEconomyDeficitListener());
         Economy econ = (Economy) Global.getSector().getEconomy();
         ReflectionUtilis.setPrivateVariableFromSuperclass("economy", Global.getSector(), new AoTDEconomy(econ.isSimMode(), econ));
         AoTDEconomy econ2 = (AoTDEconomy) Global.getSector().getEconomy();
@@ -457,9 +485,3 @@ public class AoTDToolboxTheoryPlugin extends BaseModPlugin implements MarketCont
         ColonyUIListener.addMarketListener(new GrandProjectLabelInjector());
     }
 }
-
-
-
-
-
-
